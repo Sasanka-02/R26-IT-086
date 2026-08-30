@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-paper text-ink font-sans antialiased;
+}
+
+h1, h2, h3, h4 {
+  @apply font-display;
+}
+
+.waveform-divider {
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    theme('colors.teal.500') 0px,
+    theme('colors.teal.500') 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  opacity: 0.35;
+}
