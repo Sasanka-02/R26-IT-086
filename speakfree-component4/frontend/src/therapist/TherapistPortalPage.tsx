@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { CaseloadOverview, StudentRow, StudentStatusKey } from "../types/therapist";
 import { getCaseloadOverview, getStudents } from "./therapistApi";
 import { ColumnChart, HorizontalBars } from "./charts";
+import UsabilitySurvey from "../components/UsabilitySurvey";
 import {
   formatDate,
   formatRelative,
@@ -110,6 +111,8 @@ export default function TherapistPortalPage() {
             Refresh
           </button>
         </div>
+
+        <UsabilitySurvey />
 
         {error && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-ink" role="alert">

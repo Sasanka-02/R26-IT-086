@@ -195,6 +195,80 @@ function AssistantEvaluation({ assistant }: Pick<EvidenceReport, "assistant">) {
   );
 }
 
+function UsabilityEvaluation({ usability }: Pick<EvidenceReport, "usability">) {
+  const { overall, by_role, benchmark } = usability;
+  return (
+    <Panel
+      title="6 · Usability (System Usability Scale)"
+      subtitle={`Standard 10-item SUS questionnaire, scored 0–100. ${benchmark} is the commonly used average benchmark. Students are invited after 3 exercises; therapists can respond from the portal.`}
+    >
+      {overall.n === 0 ? (
+        <p className="rounded-xl bg-paper p-4 text-sm text-ink-soft">
+          No responses yet. Ask testers to complete a few exercises — the survey invitation appears on their
+          Practice tab — and ask therapists to use the card at the top of the portal.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <StatTile
+              label="Average SUS score"
+              value={overall.mean ?? "—"}
+              hint={`${overall.band} · ${overall.mean !== null && overall.mean >= benchmark ? "above" : "below"} the ${benchmark} benchmark`}
+            />
+            <StatTile
+              label="95% confidence interval"
+              value={overall.ci95 ? `${overall.ci95[0]}–${overall.ci95[1]}` : "—"}
+              hint={overall.ci95 ? `SD ${overall.sd}` : "needs 2+ responses"}
+            />
+            <StatTile label="Student responses" value={by_role.student.n} hint={by_role.student.mean !== null ? `mean ${by_role.student.mean}` : undefined} />
+            <StatTile label="Therapist responses" value={by_role.therapist.n} hint={by_role.therapist.mean !== null ? `mean ${by_role.therapist.mean}` : undefined} />
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left text-sm tabular-nums">
+              <thead className="text-xs text-ink-soft">
+                <tr className="border-b border-teal-100">
+                  <th className="py-2 pr-3 font-medium">#</th>
+                  <th className="py-2 pr-3 font-medium">Statement</th>
+                  <th className="py-2 text-right font-medium">Mean answer (1–5)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usability.items.map((item) => (
+                  <tr key={item.number} className="border-b border-teal-50 last:border-0">
+                    <td className="py-2 pr-3 text-ink-soft">{item.number}</td>
+                    <td className="py-2 pr-3 text-ink">
+                      {item.text}
+                      <span className="block text-xs text-ink-soft">
+                        {item.positive ? "Positive statement — higher is better" : "Negative statement — lower is better"}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right font-semibold text-ink">{item.mean_answer ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {usability.comments.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-medium text-ink">Comments</p>
+              <ul className="mt-2 space-y-2">
+                {usability.comments.map((c) => (
+                  <li key={c.submitted_at} className="rounded-lg bg-paper px-3 py-2 text-sm">
+                    <p className="text-ink">“{c.comment}”</p>
+                    <p className="text-xs text-ink-soft">
+                      {c.role} · SUS {c.score} · {formatDate(c.submitted_at)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+}
+
 function PrivateCohortReport() {
   const [epsilon, setEpsilon] = useState(1.0);
   const [report, setReport] = useState<CohortReport | null>(null);
@@ -216,7 +290,7 @@ function PrivateCohortReport() {
 
   return (
     <Panel
-      title="5 · Shareable cohort report (differential privacy)"
+      title="7 · Shareable cohort report (differential privacy)"
       subtitle="Statistics that leave the clinic are released with Laplace noise. Smaller ε = stronger privacy, more noise."
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -326,6 +400,7 @@ export default function EvidencePage() {
             <Constants scoring={evidence.scoring} />
             <AdaptiveEvaluation adaptive={evidence.adaptive} />
             <AssistantEvaluation assistant={evidence.assistant} />
+            <UsabilityEvaluation usability={evidence.usability} />
           </>
         )}
         <PrivateCohortReport />

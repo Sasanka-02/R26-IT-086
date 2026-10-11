@@ -195,7 +195,25 @@ noisy value = true value + Laplace(0, sensitivity / ε)
   the noise away or drain the budget.
 * The page shows the privacy/accuracy trade-off for ε = 0.25 … 5.
 
-### 3.7 Security (`auth.py`)
+### 3.7 Usability evaluation (`survey.py`)
+
+The System Usability Scale (SUS): 10 standard statements answered 1–5.
+
+```
+item score = answer − 1   (odd, positive statements)
+           = 5 − answer   (even, negative statements)
+SUS        = 2.5 × Σ item scores        (0–100; 68 = common average benchmark)
+```
+
+* Students are invited on the Practice tab after 3 exercises; therapists see an
+  invitation at the top of the portal. One response per person.
+* The evidence page (§6) reports the mean, standard deviation, 95% confidence
+  interval (mean ± 1.96·SD/√n), student vs therapist scores, per-statement
+  means and comments.
+* **For the report:** ask 5–10 testers to use the app, then quote the mean SUS
+  score, its confidence interval and how it compares with 68.
+
+### 3.8 Security (`auth.py`)
 
 * Passwords: PBKDF2-HMAC-SHA256, 200 000 iterations, random 16-byte salt.
 * Tokens: `base64(payload).HMAC-SHA256(payload)`, 7-day expiry; tampering
@@ -245,7 +263,7 @@ real validation results.
 5. **Therapist (dr.silva@demo.local)** — alerts, student table; open Nimali:
    assign an exercise, add a goal, rate an attempt.
 6. **Model evidence** — expert agreement before/after calibration, learned
-   constants, LinUCB vs random, assistant accuracy, DP trade-off.
+   constants, LinUCB vs random, assistant accuracy, usability (SUS), DP trade-off.
 
 ---
 

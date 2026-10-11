@@ -116,6 +116,7 @@ export interface EvidenceReport {
     expert_score: number;
   }[];
   assistant: { examples: number; intents: number; accuracy: number; confidence_threshold: number };
+  usability: UsabilitySummary;
   adaptive: {
     students: number;
     rounds: number;
@@ -131,6 +132,22 @@ export interface EvidenceReport {
       best_exercise_rate: number;
     }[];
   };
+}
+
+export interface SusStats {
+  n: number;
+  mean: number | null;
+  sd: number | null;
+  ci95: [number, number] | null;
+  band: string | null;
+}
+
+export interface UsabilitySummary {
+  overall: SusStats;
+  by_role: { student: SusStats; therapist: SusStats };
+  benchmark: number;
+  items: { number: number; text: string; positive: boolean; mean_answer: number | null }[];
+  comments: { role: string; score: number; comment: string; submitted_at: string }[];
 }
 
 export interface CohortReport {

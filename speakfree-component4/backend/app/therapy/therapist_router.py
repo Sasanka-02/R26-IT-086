@@ -11,6 +11,7 @@ from app.therapy.intent_classifier import leave_one_out_accuracy
 from app.therapy.progress_store import get_records, update_record
 from app.therapy.scoring import calibrate, model_report, rated_attempts
 from app.therapy.simulation import evaluate
+from app.therapy import survey
 from app.therapy.therapist import caseload_overview, list_students, student_detail
 from app.therapy.therapist_store import (
     GOAL_METRICS,
@@ -80,6 +81,36 @@ async def me(user: dict = Depends(auth.current_user)):
     if account is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account not found.")
     return public(account)
+
+
+# --- Usability survey (SUS) -----------------------------------------------------
+
+class SurveyRequest(BaseModel):
+    answers: list[int] = Field(min_length=10, max_length=10)
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+@router.get("/survey/status")
+async def survey_status(user: dict = Depends(auth.current_user)):
+    sessions = len(get_records(user["email"]))
+    responded = survey.has_responded(user["email"])
+    eligible = user["role"] == "therapist" or sessions >= survey.SESSIONS_BEFORE_INVITE
+    return {
+        "items": survey.ITEMS,
+        "responded": responded,
+        "eligible": eligible,
+        "invite": eligible and not responded,
+        "sessions": sessions,
+        "sessions_needed": survey.SESSIONS_BEFORE_INVITE,
+    }
+
+
+@router.post("/survey")
+async def submit_survey(payload: SurveyRequest, user: dict = Depends(auth.current_user)):
+    try:
+        return survey.submit(user["email"], user["role"], payload.answers, payload.comment)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
 
 
 # --- Therapist: caseload --------------------------------------------------------
@@ -202,6 +233,7 @@ async def evidence(_: dict = Depends(auth.require_therapist)):
         ],
         "assistant": leave_one_out_accuracy(),
         "adaptive": evaluate(),
+        "usability": survey.summary(),
     }
 
 

@@ -13,6 +13,7 @@ import ProgressDashboard from "../therapy/ProgressDashboard";
 import WeeklyPlan from "../therapy/WeeklyPlan";
 import PrivacyPanel from "../therapy/PrivacyPanel";
 import AssistantPanel from "../therapy/AssistantPanel";
+import UsabilitySurvey from "../components/UsabilitySurvey";
 
 type Tab = "practice" | "assistant" | "dashboard" | "plan" | "privacy";
 
@@ -221,6 +222,7 @@ export default function TherapyPage() {
 
             {!loading && !selected && (
               <>
+                <UsabilitySurvey refreshKey={version} />
                 <div>
                   <h1 className="font-display text-xl font-semibold text-ink">
                     Choose a practice exercise

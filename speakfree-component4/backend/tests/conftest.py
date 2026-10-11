@@ -8,6 +8,7 @@ import app.therapy.cohort_report as cohort_report
 import app.therapy.privacy as privacy
 import app.therapy.progress_store as progress_store
 import app.therapy.scoring as scoring
+import app.therapy.survey as survey
 import app.therapy.therapist_store as therapist_store
 import app.therapy.user_store as user_store
 from app.main import app
@@ -23,6 +24,7 @@ def isolated_data(tmp_path, monkeypatch):
     monkeypatch.setattr(therapist_store, "STORE_FILE", tmp_path / "settings.json")
     monkeypatch.setattr(scoring, "CALIBRATION_FILE", tmp_path / "calibration.json")
     monkeypatch.setattr(auth, "SECRET_FILE", tmp_path / "secret.key")
+    monkeypatch.setattr(survey, "SURVEY_FILE", tmp_path / "surveys.json")
     monkeypatch.setattr(cohort_report, "_cache", {})
     monkeypatch.setattr(privacy, "budget_ledger", privacy.PrivacyBudgetLedger())
     monkeypatch.setattr(cohort_report, "budget_ledger", privacy.budget_ledger)
