@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2 } from "lucide-react";
-import { TherapyExercise } from "../types/therapy";
+import { TherapyExercise, SessionSummary } from "../types/therapy";
 import { useLiveFeedback } from "./useLiveFeedback";
-import { usePracticeHistory } from "../context/PracticeHistoryContext";
+import { endTherapySession } from "./therapyApi";
+import CompletionPanel from "./CompletionPanel";
+import BreathingWarmup from "./BreathingWarmup";
 
 interface PacingExerciseProps {
   sessionId: string;
@@ -15,16 +16,26 @@ const FEEDBACK_STYLES: Record<string, string> = {
   info: "bg-teal-50 border-teal-100 text-ink-soft",
 };
 
+const LEVEL_BADGES: Record<string, string> = {
+  beginner: "Beginner",
+  intermediate: "Intermediate",
+  advanced: "Advanced · Final stage",
+};
+
+/** Used for both pacing and graded reading — both follow a highlighted passage. */
 export default function PacingExercise({ sessionId, exercise }: PacingExerciseProps) {
+  // A separate live session per attempt, so its summary covers only this exercise.
+  const [attemptId] = useState(() => `${sessionId}-${exercise.id}-${Date.now()}`);
   const { isActive, feedback, permissionError, start, stop } = useLiveFeedback(
-    sessionId,
+    attemptId,
     "pacing"
   );
-  const { recordCompletion } = usePracticeHistory();
   const words = (exercise.passage ?? "").split(/\s+/).filter(Boolean);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [hasStopped, setHasStopped] = useState(false);
-  const [markedDone, setMarkedDone] = useState(false);
+  const [summary, setSummary] = useState<SessionSummary | null>(null);
+  const [warmingUp, setWarmingUp] = useState(false);
+  const startedAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -43,22 +54,63 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
     };
   }, [isActive, exercise.target_wpm, words.length]);
 
-  const handleStop = () => {
-    stop();
-    setHasStopped(true);
+  const handleStart = () => {
+    startedAtRef.current = Date.now();
+    start();
   };
 
-  const handleMarkDone = () => {
-    recordCompletion(exercise);
-    setMarkedDone(true);
+  const handleStop = async () => {
+    stop();
+    setHasStopped(true);
+    const elapsed = (Date.now() - startedAtRef.current) / 1000;
+    try {
+      const s = await endTherapySession(attemptId);
+      setSummary({ ...s, duration_seconds: s.duration_seconds || elapsed });
+    } catch {
+      setSummary({
+        session_id: attemptId,
+        duration_seconds: elapsed,
+        speaking_ratio: 0,
+        pause_count: 0,
+        quiet_warnings: 0,
+        syllables: 0,
+      });
+    }
   };
 
   return (
     <div className="space-y-4 rounded-2xl border border-teal-100 bg-white p-6">
       <div>
+        {exercise.level && (
+          <span className="mb-2 inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700">
+            {LEVEL_BADGES[exercise.level]}
+          </span>
+        )}
+        {exercise.assigned && (
+          <span className="mb-2 ml-2 inline-flex rounded-full bg-gold-400/20 px-3 py-1 text-xs font-medium text-gold-600">
+            Assigned by your therapist
+          </span>
+        )}
         <h2 className="font-display text-lg font-semibold text-ink">{exercise.title}</h2>
         <p className="text-sm text-ink-soft">{exercise.description}</p>
+        {exercise.target_wpm && (
+          <p className="mt-1 text-xs text-ink-soft">
+            Highlight speed: <strong className="text-ink">{exercise.target_wpm} words/min</strong>
+            {exercise.base_wpm && exercise.base_wpm !== exercise.target_wpm
+              ? ` — adapted for you from ${exercise.base_wpm} based on your earlier attempts`
+              : ""}
+          </p>
+        )}
       </div>
+
+      {warmingUp && (
+        <BreathingWarmup
+          onDone={() => {
+            setWarmingUp(false);
+            handleStart();
+          }}
+        />
+      )}
 
       <div className="rounded-xl border border-teal-100 bg-paper p-6 text-lg leading-relaxed">
         {words.map((word, i) => (
@@ -77,7 +129,7 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
         ))}
       </div>
 
-      {feedback && (
+      {feedback && !hasStopped && (
         <div
           className={`rounded-lg border px-4 py-2 text-sm ${
             FEEDBACK_STYLES[feedback.severity] ?? FEEDBACK_STYLES.info
@@ -89,15 +141,23 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
 
       {permissionError && <p className="text-sm text-red-600">{permissionError}</p>}
 
-      {!hasStopped && (
-        <div className="flex gap-3">
+      {!hasStopped && !warmingUp && (
+        <div className="flex flex-wrap gap-3">
           {!isActive ? (
-            <button
-              onClick={start}
-              className="rounded-full bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700"
-            >
-              Start Exercise
-            </button>
+            <>
+              <button
+                onClick={handleStart}
+                className="rounded-full bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700"
+              >
+                Start Exercise
+              </button>
+              <button
+                onClick={() => setWarmingUp(true)}
+                className="rounded-full border border-teal-200 px-5 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50"
+              >
+                Warm up first (36 s)
+              </button>
+            </>
           ) : (
             <button
               onClick={handleStop}
@@ -109,21 +169,20 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
         </div>
       )}
 
-      {hasStopped && !markedDone && (
-        <button
-          onClick={handleMarkDone}
-          className="flex items-center gap-2 rounded-full bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700"
-        >
-          <CheckCircle2 size={16} />
-          Mark Complete
-        </button>
-      )}
+      {hasStopped && !summary && <p className="text-sm text-ink-soft">Working out your result...</p>}
 
-      {markedDone && (
-        <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
-          <CheckCircle2 size={18} />
-          Nice work — this exercise is complete.
-        </div>
+      {summary && (
+        <CompletionPanel
+          metrics={{
+            exercise_id: exercise.id,
+            duration_seconds: summary.duration_seconds,
+            speaking_ratio: summary.speaking_ratio,
+            long_pauses: summary.pause_count,
+            quiet_warnings: summary.quiet_warnings,
+            syllables: summary.syllables,
+            target_wpm: exercise.target_wpm,
+          }}
+        />
       )}
 
       <p className="text-xs text-ink-soft">

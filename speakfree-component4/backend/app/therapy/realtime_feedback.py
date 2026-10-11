@@ -12,6 +12,7 @@ LONG_PAUSE_FRAMES = 6  # ~3 seconds at 500ms cadence
 
 def process_metric(state: LiveSessionState, metric: LiveMetric) -> FeedbackMessage | None:
     state.energy_samples.append(metric.rms_energy)
+    state.syllables += max(0, metric.syllables)
     state.speaking_flags.append(metric.is_speaking)
 
     if not metric.is_speaking:
@@ -32,6 +33,7 @@ def process_metric(state: LiveSessionState, metric: LiveMetric) -> FeedbackMessa
 
     if metric.rms_energy < QUIET_THRESHOLD:
         state.feedback_events += 1
+        state.quiet_warnings += 1
         return FeedbackMessage(
             type="too_quiet",
             message="Try speaking a little louder — the mic is picking up very little sound.",
@@ -71,4 +73,6 @@ def summarize(state: LiveSessionState) -> dict:
         "avg_energy": avg_energy,
         "pause_count": state.pause_count,
         "feedback_events": state.feedback_events,
+        "quiet_warnings": state.quiet_warnings,
+        "syllables": state.syllables,
     }

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { HeartPulse, LogOut, Play, History, ShieldCheck, Activity } from "lucide-react";
+import { HeartPulse, LogOut, Play, History, Target, Award } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useSession } from "../context/SessionContext";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
@@ -19,7 +19,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { resetSession } = useSession();
-  const { history, totalCompleted } = usePracticeHistory();
+  const { progress } = usePracticeHistory();
+  const recent = progress?.recent ?? [];
 
   const handleLogout = () => {
     logout();
@@ -60,7 +61,9 @@ export default function DashboardPage() {
             Welcome back, {user?.name ?? "friend"}
           </h1>
           <p className="mt-1 text-teal-50">
-            Pick up your practice — pacing, DAF, or picture description.
+            {progress?.has_data
+              ? `${progress.trend.label}. Reading level: ${progress.level.label}.`
+              : "Start with a Beginner reading — your plan will adapt as you practise."}
           </p>
           <button
             onClick={handleStartTherapy}
@@ -75,40 +78,44 @@ export default function DashboardPage() {
           <div className="rounded-2xl border border-teal-100 bg-white p-5">
             <History className="text-teal-600" size={20} />
             <p className="mt-3 font-display text-2xl font-semibold text-ink">
-              {totalCompleted}
+              {progress?.total_sessions ?? 0}
             </p>
-            <p className="text-sm text-ink-soft">Sessions completed</p>
+            <p className="text-sm text-ink-soft">Exercises completed</p>
           </div>
           <div className="rounded-2xl border border-teal-100 bg-white p-5">
-            <ShieldCheck className="text-teal-600" size={20} />
-            <p className="mt-3 font-display text-2xl font-semibold text-ink">Private</p>
-            <p className="text-sm text-ink-soft">Audio never uploaded</p>
+            <Target className="text-teal-600" size={20} />
+            <p className="mt-3 font-display text-2xl font-semibold text-ink">
+              {progress?.level.label ?? "Beginner"}
+            </p>
+            <p className="text-sm text-ink-soft">Reading level</p>
           </div>
           <div className="rounded-2xl border border-teal-100 bg-white p-5">
-            <Activity className="text-teal-600" size={20} />
-            <p className="mt-3 font-display text-2xl font-semibold text-ink">3 exercises</p>
-            <p className="text-sm text-ink-soft">Pacing, DAF, picture description</p>
+            <Award className="text-teal-600" size={20} />
+            <p className="mt-3 font-display text-2xl font-semibold text-ink">
+              {progress?.average_score ?? "—"}
+            </p>
+            <p className="text-sm text-ink-soft">Average score out of 100</p>
           </div>
         </div>
 
         <div className="rounded-2xl border border-teal-100 bg-white p-6">
           <h2 className="font-display font-semibold text-ink">Recent activity</h2>
 
-          {history.length === 0 ? (
+          {recent.length === 0 ? (
             <p className="mt-2 text-sm text-ink-soft">
               No sessions yet — your practice history will appear here once you
               complete one.
             </p>
           ) : (
             <ul className="mt-4 space-y-2">
-              {history.slice(0, 8).map((entry) => (
+              {recent.map((entry) => (
                 <li
                   key={entry.id}
                   className="flex items-center justify-between rounded-xl bg-paper px-4 py-3 text-sm"
                 >
                   <span className="text-ink">{entry.title}</span>
                   <span className="text-xs text-ink-soft">
-                    {formatRelativeTime(entry.completedAt)}
+                    Score {entry.score} · {formatRelativeTime(entry.completed_at)}
                   </span>
                 </li>
               ))}

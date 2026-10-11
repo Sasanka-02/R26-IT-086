@@ -13,7 +13,7 @@ backend, frontend, ports, and fake auth/dashboard shell.
   actual Web Audio delay-node exercise.
 - **SO3 — Dashboard & adaptive plans**: a working (simplified) LinUCB
   contextual bandit selects next week's exercises from real reward
-  signals; dashboard shows charted weekly trends.
+  signals; the dashboard summarises each user's own results in plain language.
 - **SO4 — Federated learning**: presented as an architecture design
   (`federated_stub.py`), not a live training loop — accurately reflects
   that this requires real multi-device rollout, not fakeable in a demo.
@@ -23,8 +23,37 @@ backend, frontend, ports, and fake auth/dashboard shell.
 - **6th capability — biomarker comparison**: compares patient metrics
   (as Component 1 would produce them) against a normative profile,
   producing a delta vector and progress score.
-- **Bonus — simple picture description**: an extra practice exercise
-  (record → review → mark complete), reusing the same recorder pattern.
+- **Picture description**: three illustrated scenes (park, kitchen, beach)
+  with guiding questions (record → review → rate → save).
+- **Graded reading**: Beginner, Intermediate and Advanced (final stage)
+  passages with live pacing highlight and feedback.
+- **Adaptive learning**: every saved exercise gets a 0–100 score from
+  on-device metrics plus the user's "easy / okay / hard" rating. Two strong
+  readings in a row unlock the next level; two hard ones move back a level.
+  The weekly plan is a per-user LinUCB bandit replayed from that user's own
+  results, with a plain-language reason for each pick.
+- **Therapy Assistant**: a personal briefing (progress, today's focus,
+  recommended next exercise) and a rule-based chat that answers from the
+  user's own data.
+- **Per-user progress**: results are stored per account (by email) in
+  `backend/data/user_progress.json` — never audio. The "My Progress" tab
+  shows them as cards, tables and plain-language highlights instead of charts.
+
+- **Expert validation & calibration**: therapists rate attempts 1–5; the app
+  reports agreement (MAE, r, leave-one-out) and re-estimates every scoring
+  weight and threshold from those ratings (ridge regression).
+- **Therapist controls**: assign exercises, override level, measurable goals,
+  clinical notes, printable report, alerts, and a *Model evidence* page.
+- **Security**: hashed passwords, signed tokens, role checks on every endpoint,
+  invite code for therapist accounts.
+
+**Viva / report guide:** see [docs/VIVA_GUIDE.md](docs/VIVA_GUIDE.md) — every
+equation, where each constant comes from, evaluation results and a demo script.
+
+**Demo data:** `python -m scripts.seed_demo` (from `backend/`), logins in the guide.
+**Tests:** `python -m pytest -q` (from `backend/`).
+**Optional AI model for the assistant:** set `ANTHROPIC_API_KEY` before starting
+the backend; only a summary of the student's own practice numbers is sent.
 
 ## Structure
 

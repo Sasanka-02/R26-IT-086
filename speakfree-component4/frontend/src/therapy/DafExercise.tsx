@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import { CheckCircle2 } from "lucide-react";
 import { TherapyExercise } from "../types/therapy";
-import { usePracticeHistory } from "../context/PracticeHistoryContext";
+import CompletionPanel from "./CompletionPanel";
 
 interface DafExerciseProps {
   exercise: TherapyExercise;
@@ -9,12 +8,11 @@ interface DafExerciseProps {
 }
 
 export default function DafExercise({ exercise, initialDelayMs = 150 }: DafExerciseProps) {
-  const { recordCompletion } = usePracticeHistory();
   const [isActive, setIsActive] = useState(false);
   const [delayMs, setDelayMs] = useState(initialDelayMs);
   const [permissionError, setPermissionError] = useState<string | null>(null);
-  const [hasStopped, setHasStopped] = useState(false);
-  const [markedDone, setMarkedDone] = useState(false);
+  const [practisedSeconds, setPractisedSeconds] = useState<number | null>(null);
+  const startedAtRef = useRef(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const delayNodeRef = useRef<DelayNode | null>(null);
@@ -29,8 +27,12 @@ export default function DafExercise({ exercise, initialDelayMs = 150 }: DafExerc
     audioContextRef.current = null;
     delayNodeRef.current = null;
     setIsActive(false);
-    setHasStopped(true);
   }, []);
+
+  const handleStop = () => {
+    stop();
+    setPractisedSeconds((Date.now() - startedAtRef.current) / 1000);
+  };
 
   const start = useCallback(async () => {
     setPermissionError(null);
@@ -48,6 +50,8 @@ export default function DafExercise({ exercise, initialDelayMs = 150 }: DafExerc
 
       audioContextRef.current = audioContext;
       delayNodeRef.current = delayNode;
+      startedAtRef.current = Date.now();
+      setPractisedSeconds(null);
       setIsActive(true);
     } catch (err) {
       setPermissionError(err instanceof Error ? err.message : "Microphone access failed.");
@@ -59,11 +63,6 @@ export default function DafExercise({ exercise, initialDelayMs = 150 }: DafExerc
     if (delayNodeRef.current) {
       delayNodeRef.current.delayTime.value = value / 1000;
     }
-  };
-
-  const handleMarkDone = () => {
-    recordCompletion(exercise);
-    setMarkedDone(true);
   };
 
   return (
@@ -92,46 +91,34 @@ export default function DafExercise({ exercise, initialDelayMs = 150 }: DafExerc
 
       {permissionError && <p className="text-sm text-red-600">{permissionError}</p>}
 
-      {!hasStopped && (
-        <div className="flex gap-3">
-          {!isActive ? (
-            <button
-              onClick={start}
-              className="rounded-full bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700"
-            >
-              Start Speaking
-            </button>
-          ) : (
-            <button
-              onClick={stop}
-              className="rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700"
-            >
-              Stop
-            </button>
-          )}
-        </div>
-      )}
+      <div className="flex gap-3">
+        {!isActive ? (
+          <button
+            onClick={start}
+            className="rounded-full bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700"
+          >
+            Start Speaking
+          </button>
+        ) : (
+          <button
+            onClick={handleStop}
+            className="rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700"
+          >
+            Stop
+          </button>
+        )}
+      </div>
 
-      {hasStopped && !markedDone && (
-        <button
-          onClick={handleMarkDone}
-          className="flex items-center gap-2 rounded-full bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-700"
-        >
-          <CheckCircle2 size={16} />
-          Mark Complete
-        </button>
-      )}
-
-      {markedDone && (
-        <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
-          <CheckCircle2 size={18} />
-          Nice work — this exercise is complete.
-        </div>
+      {practisedSeconds !== null && !isActive && (
+        <CompletionPanel
+          key={practisedSeconds}
+          metrics={{ exercise_id: exercise.id, duration_seconds: practisedSeconds }}
+        />
       )}
 
       <p className="text-xs text-ink-soft">
-        Privacy: this exercise runs entirely in your browser — no audio or
-        data is sent to any server.
+        Privacy: this exercise runs entirely in your browser — no audio
+        is sent to any server. Only your practice time and rating are saved.
       </p>
     </div>
   );

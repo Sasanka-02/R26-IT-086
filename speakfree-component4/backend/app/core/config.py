@@ -6,7 +6,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "SpeakFree Component 4 — Therapy Assistant API"
-    cors_origins: tuple[str, ...] = ("http://localhost:5174", "http://localhost:5173")
+    cors_origins: tuple[str, ...] = (
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:5173",
+    )
 
 
 @lru_cache

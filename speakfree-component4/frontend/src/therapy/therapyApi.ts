@@ -1,15 +1,20 @@
-import axios from "axios";
+import { api as client, API_BASE_URL } from "../api/client";
 import {
+  AssistantBriefing,
+  AssistantReply,
   DafTrial,
-  DashboardResponse,
-  PlanExercise,
+  ExerciseResultInput,
+  ExerciseResultResponse,
   PrivacyBudget,
+  ProgressSummary,
+  SessionSummary,
   SeverityLevel,
   TherapyExercise,
+  UserExercisesResponse,
+  WeeklyPlanResponse,
 } from "../types/therapy";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
-const client = axios.create({ baseURL: API_BASE_URL });
+const user = (userId: string) => encodeURIComponent(userId);
 
 export async function startTherapySession(
   sessionId: string,
@@ -22,7 +27,7 @@ export async function startTherapySession(
   return res.data.recommended_exercises;
 }
 
-export async function endTherapySession(sessionId: string) {
+export async function endTherapySession(sessionId: string): Promise<SessionSummary> {
   const res = await client.post("/api/v1/therapy/session/end", {
     session_id: sessionId,
   });
@@ -42,30 +47,54 @@ export async function calibrateDaf(sessionId: string, trials: DafTrial[]) {
   return res.data as { recommended_delay_ms: number; trials_evaluated: number };
 }
 
-export async function getDashboard(sessionId: string): Promise<DashboardResponse> {
-  const res = await client.get(`/api/v1/therapy/dashboard/${sessionId}`);
+export async function getUserExercises(userId: string): Promise<UserExercisesResponse> {
+  const res = await client.get(`/api/v1/therapy/exercises/user/${user(userId)}`);
   return res.data;
 }
 
-export async function getWeeklyPlan(
-  sessionId: string,
-  severityLevel = 2,
-  avgStutterFreq = 5.0,
-  trend = 0.0,
-  comfortScore = 0.5
-): Promise<PlanExercise[]> {
-  const res = await client.post("/api/v1/therapy/plan/weekly", {
-    session_id: sessionId,
-    severity_level: severityLevel,
-    avg_stutter_freq: avgStutterFreq,
-    trend,
-    comfort_score: comfortScore,
-  });
-  return res.data.exercises;
+export async function submitResult(
+  userId: string,
+  result: ExerciseResultInput
+): Promise<ExerciseResultResponse> {
+  const res = await client.post("/api/v1/therapy/results", { user_id: userId, ...result });
+  return res.data;
 }
 
-export async function getPrivacyBudget(sessionId: string): Promise<PrivacyBudget> {
-  const res = await client.get(`/api/v1/therapy/privacy/budget/${sessionId}`);
+export async function getProgress(userId: string): Promise<ProgressSummary> {
+  const res = await client.get(`/api/v1/therapy/progress/${user(userId)}`);
+  return res.data;
+}
+
+export async function getWeeklyPlan(userId: string): Promise<WeeklyPlanResponse> {
+  const res = await client.get(`/api/v1/therapy/plan/${user(userId)}`);
+  return res.data;
+}
+
+export async function getAssistantBriefing(
+  userId: string,
+  name: string
+): Promise<AssistantBriefing> {
+  const res = await client.get(`/api/v1/therapy/assistant/${user(userId)}`, {
+    params: { name },
+  });
+  return res.data;
+}
+
+export async function askAssistant(
+  userId: string,
+  name: string,
+  message: string
+): Promise<AssistantReply> {
+  const res = await client.post("/api/v1/therapy/assistant/chat", {
+    user_id: userId,
+    name,
+    message,
+  });
+  return res.data;
+}
+
+export async function getPrivacyBudget(userId: string): Promise<PrivacyBudget> {
+  const res = await client.get(`/api/v1/therapy/privacy/budget/${user(userId)}`);
   return res.data;
 }
 

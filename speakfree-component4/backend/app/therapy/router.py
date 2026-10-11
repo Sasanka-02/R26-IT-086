@@ -1,19 +1,33 @@
 import logging
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
-from app.therapy.bandit import build_context, recommend_weekly_plan, record_week_outcome
+from app.therapy import auth
+from app.therapy.adaptive import (
+    LEVELS,
+    attempt_feedback,
+    level_change_message,
+    level_state,
+    personal_target_wpm,
+    score_attempt,
+    verdict,
+)
+from app.therapy.assistant import answer, build_briefing
+from app.therapy.bandit import recommend_weekly_plan
 from app.therapy.biomarker import compute_delta_vector, overall_progress_score
-from app.therapy.dashboard import generate_weekly_trend, summarize_streak
-from app.therapy.exercises import recommend_exercises
+from app.therapy.dashboard import build_progress_summary
+from app.therapy.exercises import EXERCISE_BANK, get_exercise, recommend_exercises, syllables_per_word
 from app.therapy.federated_stub import get_federated_architecture
-from app.therapy.privacy import budget_ledger, privatize_statistic
+from app.therapy.privacy import budget_ledger
+from app.therapy.progress_store import add_record, get_records, normalize_user_id
 from app.therapy.realtime_feedback import process_metric, summarize
 from app.therapy.schemas import (
+    AssistantChatRequest,
     BiomarkerCompareRequest,
     DafCalibrationRequest,
     DafCalibrationResult,
     EndSessionRequest,
+    ExerciseResultRequest,
     ExerciseType,
     LiveMetric,
     PrivacyBudgetResponse,
@@ -21,10 +35,9 @@ from app.therapy.schemas import (
     SeverityLevel,
     StartSessionRequest,
     StartSessionResponse,
-    WeeklyPlanRequest,
-    WeeklyPlanResponse,
 )
 from app.therapy.session_store import end_session, get_session, start_session
+from app.therapy.therapist_store import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/therapy", tags=["therapy"])
@@ -58,6 +71,8 @@ async def end_therapy_session(payload: EndSessionRequest):
             avg_energy=0,
             pause_count=0,
             feedback_events=0,
+            quiet_warnings=0,
+            syllables=0,
         )
     stats = summarize(state)
     return SessionSummary(session_id=payload.session_id, **stats)
@@ -108,37 +123,120 @@ async def calibrate_daf(payload: DafCalibrationRequest):
     )
 
 
+# --- Per-user exercises + results (adaptive learning) -------------------
+
+@router.get("/exercises/user/{user_id}")
+async def list_user_exercises(user_id: str, user: dict = Depends(auth.current_user)):
+    """Full exercise bank for one student: reading levels above their level
+    are locked, therapist-assigned exercises are flagged, and each passage's
+    highlight speed is personalised to their past attempts."""
+    auth.ensure_can_access(user, user_id)
+    records = get_records(user_id)
+    settings = get_settings(user_id)
+    level = level_state(records, settings["level_override"])
+    assigned = {a["exercise_id"] for a in settings["assigned"]}
+    exercises = []
+    for ex in EXERCISE_BANK:
+        data = ex.model_dump(mode="json")
+        data["locked"] = ex.level is not None and LEVELS.index(ex.level.value) > level["level_index"]
+        data["assigned"] = ex.id in assigned
+        if ex.target_wpm:
+            data["base_wpm"] = ex.target_wpm
+            data["target_wpm"] = personal_target_wpm(ex.target_wpm, ex.id, records)
+        exercises.append(data)
+    return {"level": level, "exercises": exercises}
+
+
+def _measured_wpm(exercise, syllables: int | None, duration: float) -> int | None:
+    if not syllables or not exercise.passage or duration < 5:
+        return None
+    words = syllables / syllables_per_word(exercise.passage)
+    return int(round(words / (duration / 60)))
+
+
+@router.post("/results")
+async def submit_result(payload: ExerciseResultRequest, user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, payload.user_id)
+    exercise = get_exercise(payload.exercise_id)
+    if exercise is None:
+        raise HTTPException(status_code=404, detail="Unknown exercise")
+
+    records = get_records(payload.user_id)
+    settings = get_settings(payload.user_id)
+    before = level_state(records, settings["level_override"])
+    attempt = {
+        "exercise_id": exercise.id,
+        "exercise_type": exercise.type.value,
+        "title": exercise.title,
+        "level": exercise.level.value if exercise.level else None,
+        "difficulty": exercise.difficulty,
+        "duration_seconds": round(payload.duration_seconds, 1),
+        "speaking_ratio": (
+            round(payload.speaking_ratio, 3) if payload.speaking_ratio is not None else None
+        ),
+        "long_pauses": payload.long_pauses,
+        "quiet_warnings": payload.quiet_warnings,
+        "syllables": payload.syllables,
+        "measured_wpm": _measured_wpm(exercise, payload.syllables, payload.duration_seconds),
+        "target_wpm": payload.target_wpm or exercise.target_wpm,
+        "self_rating": payload.self_rating.value,
+    }
+    score, breakdown = score_attempt(attempt)
+    stored = add_record(payload.user_id, {**attempt, "score": score, "score_breakdown": breakdown})
+    after = level_state(records + [stored], settings["level_override"])
+    return {
+        "record": stored,
+        "score": score,
+        "verdict": verdict(score),
+        "feedback": attempt_feedback(stored),
+        "breakdown": breakdown,
+        "measured_wpm": stored["measured_wpm"],
+        "target_wpm": stored["target_wpm"],
+        "level": after,
+        "level_message": level_change_message(before, after),
+    }
+
+
 # --- SO3: Dashboard + adaptive weekly plan ------------------------------
 
-@router.get("/dashboard/{session_id}")
-async def get_dashboard(session_id: str):
-    trend = generate_weekly_trend()
-    streak = summarize_streak(trend)
-    for week in trend:
-        week["stuttering_events_per_min"] = round(
-            privatize_statistic(week["stuttering_events_per_min"], sensitivity=0.5, epsilon=3.0),
-            2,
-        )
-    return {"session_id": session_id, "weekly_trend": trend, **streak}
+@router.get("/progress/{user_id}")
+async def get_progress(user_id: str, user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, user_id)
+    return build_progress_summary(normalize_user_id(user_id), get_records(user_id))
 
 
-@router.post("/plan/weekly", response_model=WeeklyPlanResponse)
-async def get_weekly_plan(payload: WeeklyPlanRequest):
-    context = build_context(
-        payload.severity_level, payload.avg_stutter_freq, payload.trend, payload.comfort_score
+@router.get("/plan/{user_id}")
+async def get_weekly_plan(user_id: str, user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, user_id)
+    plan = recommend_weekly_plan(get_records(user_id), get_settings(user_id))
+    return {"user_id": normalize_user_id(user_id), **plan}
+
+
+# --- Therapy Assistant ---------------------------------------------------
+
+@router.get("/assistant/{user_id}")
+async def get_assistant_briefing(user_id: str, name: str = "", user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, user_id)
+    return build_briefing(normalize_user_id(user_id), name, get_records(user_id))
+
+
+@router.post("/assistant/chat")
+async def assistant_chat(payload: AssistantChatRequest, user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, payload.user_id)
+    return answer(
+        normalize_user_id(payload.user_id),
+        payload.name,
+        payload.message,
+        get_records(payload.user_id),
     )
-    exercises = recommend_weekly_plan(context)
-
-    budget_ledger.spend(payload.session_id, epsilon=0.1)
-
-    return WeeklyPlanResponse(session_id=payload.session_id, exercises=exercises)
 
 
 # --- SO5: Privacy budget -------------------------------------------------
 
 @router.get("/privacy/budget/{session_id}", response_model=PrivacyBudgetResponse)
-async def get_privacy_budget(session_id: str):
-    return PrivacyBudgetResponse(**budget_ledger.status(session_id))
+async def get_privacy_budget(session_id: str, user: dict = Depends(auth.current_user)):
+    """Budget spent on differentially private cohort releases (shared by the clinic)."""
+    return PrivacyBudgetResponse(**budget_ledger.status("cohort-report"))
 
 
 # --- SO4: Federated learning architecture (design stub, not live) --------

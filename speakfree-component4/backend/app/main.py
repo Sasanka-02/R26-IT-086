@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.therapy.router import router as therapy_router
+from app.therapy.therapist_router import router as therapist_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(therapy_router)
+app.include_router(therapist_router)
 
 
 @app.get("/api/v1/health")

@@ -7,6 +7,19 @@ class ExerciseType(str, Enum):
     PACING = "pacing"
     DAF = "daf"
     PICTURE = "picture"
+    READING = "reading"
+
+
+class ReadingLevel(str, Enum):
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
+
+
+class SelfRating(str, Enum):
+    EASY = "easy"
+    OK = "ok"
+    HARD = "hard"
 
 
 class SeverityLevel(str, Enum):
@@ -24,6 +37,9 @@ class TherapyExercise(BaseModel):
     target_wpm: int | None = None
     passage: str | None = None
     image_url: str | None = None
+    prompts: list[str] = Field(default_factory=list)
+    level: ReadingLevel | None = None
+    difficulty: int = 1
     recommended_for: list[SeverityLevel] = Field(default_factory=list)
 
 
@@ -42,6 +58,7 @@ class LiveMetric(BaseModel):
     rms_energy: float
     zero_crossing_rate: float
     is_speaking: bool
+    syllables: int = 0  # syllable-like energy peaks detected in the browser this interval
 
 
 class FeedbackMessage(BaseModel):
@@ -62,6 +79,8 @@ class SessionSummary(BaseModel):
     avg_energy: float
     pause_count: int
     feedback_events: int
+    quiet_warnings: int = 0
+    syllables: int = 0
 
 
 class DafCalibrationTrial(BaseModel):
@@ -81,25 +100,6 @@ class DafCalibrationResult(BaseModel):
     trials_evaluated: int
 
 
-class WeeklyPlanRequest(BaseModel):
-    session_id: str
-    severity_level: int = 2
-    avg_stutter_freq: float = 5.0
-    trend: float = 0.0
-    comfort_score: float = 0.5
-
-
-class WeeklyPlanExercise(BaseModel):
-    id: str
-    title: str
-    difficulty: int
-
-
-class WeeklyPlanResponse(BaseModel):
-    session_id: str
-    exercises: list[WeeklyPlanExercise]
-
-
 class BiomarkerCompareRequest(BaseModel):
     task_type: str
     patient_metrics: dict
@@ -111,3 +111,21 @@ class PrivacyBudgetResponse(BaseModel):
     epsilon_threshold: float
     epsilon_remaining: float
     inference_only: bool
+
+
+class ExerciseResultRequest(BaseModel):
+    user_id: str
+    exercise_id: str
+    duration_seconds: float = 0
+    speaking_ratio: float | None = None
+    long_pauses: int = 0
+    quiet_warnings: int = 0
+    syllables: int | None = None
+    target_wpm: int | None = None
+    self_rating: SelfRating = SelfRating.OK
+
+
+class AssistantChatRequest(BaseModel):
+    user_id: str
+    name: str = ""
+    message: str

@@ -5,6 +5,9 @@ import SignupPage from "./pages/SignupPage";
 import DashboardPage from "./pages/DashboardPage";
 import TherapyPage from "./pages/TherapyPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import TherapistPortalPage from "./therapist/TherapistPortalPage";
+import TherapistStudentPage from "./therapist/TherapistStudentPage";
+import EvidencePage from "./therapist/EvidencePage";
 
 export default function App() {
   return (
@@ -25,6 +28,30 @@ export default function App() {
         element={
           <ProtectedRoute>
             <TherapyPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/therapist"
+        element={
+          <ProtectedRoute role="therapist">
+            <TherapistPortalPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/therapist/evidence"
+        element={
+          <ProtectedRoute role="therapist">
+            <EvidencePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/therapist/students/:email"
+        element={
+          <ProtectedRoute role="therapist">
+            <TherapistStudentPage />
           </ProtectedRoute>
         }
       />

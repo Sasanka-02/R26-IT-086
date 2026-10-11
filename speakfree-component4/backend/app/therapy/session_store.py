@@ -22,6 +22,8 @@ class LiveSessionState:
     speaking_flags: list[bool] = field(default_factory=list)
     pause_count: int = 0
     feedback_events: int = 0
+    quiet_warnings: int = 0
+    syllables: int = 0
     _was_speaking: bool = False
 
 

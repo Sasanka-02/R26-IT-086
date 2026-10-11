@@ -1,56 +1,57 @@
-import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { CompletedSession } from "../types/history";
-import { TherapyExercise } from "../types/therapy";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
+import { useAuth } from "./AuthContext";
+import { getProgress, submitResult } from "../therapy/therapyApi";
+import {
+  ExerciseResultInput,
+  ExerciseResultResponse,
+  ProgressSummary,
+} from "../types/therapy";
 
 interface PracticeHistoryContextValue {
-  history: CompletedSession[];
-  recordCompletion: (exercise: TherapyExercise) => void;
-  totalCompleted: number;
-  lastCompletedAt: string | null;
+  userId: string;
+  progress: ProgressSummary | null;
+  progressError: boolean;
+  /** Bumps after every saved result so views can refetch their own data. */
+  version: number;
+  recordCompletion: (result: ExerciseResultInput) => Promise<ExerciseResultResponse>;
+  refresh: () => void;
 }
 
 const PracticeHistoryContext = createContext<PracticeHistoryContextValue | undefined>(
   undefined
 );
-const STORAGE_KEY = "speakfree_c4_practice_history";
 
 export function PracticeHistoryProvider({ children }: { children: ReactNode }) {
-  const [history, setHistory] = useState<CompletedSession[]>([]);
+  const { user } = useAuth();
+  const userId = user?.email.trim().toLowerCase() ?? "";
+  const [progress, setProgress] = useState<ProgressSummary | null>(null);
+  const [progressError, setProgressError] = useState(false);
+  const [version, setVersion] = useState(0);
+
+  const refresh = useCallback(() => setVersion((v) => v + 1), []);
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        setHistory(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-  }, []);
-
-  const recordCompletion = (exercise: TherapyExercise) => {
-    const entry: CompletedSession = {
-      id: `${exercise.id}-${Date.now()}`,
-      exerciseId: exercise.id,
-      exerciseType: exercise.type,
-      title: exercise.title,
-      completedAt: new Date().toISOString(),
+    setProgress(null);
+    setProgressError(false);
+    if (!userId) return;
+    let active = true;
+    getProgress(userId)
+      .then((data) => active && setProgress(data))
+      .catch(() => active && setProgressError(true));
+    return () => {
+      active = false;
     };
-    setHistory((prev) => {
-      const updated = [entry, ...prev];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      return updated;
-    });
+  }, [userId, version]);
+
+  const recordCompletion = async (result: ExerciseResultInput) => {
+    const saved = await submitResult(userId, result);
+    refresh();
+    return saved;
   };
 
   return (
     <PracticeHistoryContext.Provider
-      value={{
-        history,
-        recordCompletion,
-        totalCompleted: history.length,
-        lastCompletedAt: history[0]?.completedAt ?? null,
-      }}
+      value={{ userId, progress, progressError, version, recordCompletion, refresh }}
     >
       {children}
     </PracticeHistoryContext.Provider>

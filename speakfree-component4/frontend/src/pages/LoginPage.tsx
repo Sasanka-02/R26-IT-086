@@ -1,18 +1,28 @@
 import { FormEvent, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { HeartPulse } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { homePathFor, useAuth } from "../context/AuthContext";
+import { errorMessage } from "../api/client";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    login(email);
-    navigate("/dashboard");
+    setSubmitting(true);
+    setError(null);
+    try {
+      const account = await login(email, password);
+      navigate(homePathFor(account.role));
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't log in. Check that the therapy service is running."));
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -55,9 +65,16 @@ export default function LoginPage() {
               />
             </div>
 
+            {error && (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="w-full rounded-full bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
+              disabled={submitting}
+              className="w-full disabled:opacity-60 rounded-full bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
             >
               Log in
             </button>

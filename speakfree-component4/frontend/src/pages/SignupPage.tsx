@@ -1,19 +1,32 @@
 import { FormEvent, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { HeartPulse } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { homePathFor, useAuth, UserRole } from "../context/AuthContext";
+import RolePicker from "../components/RolePicker";
+import { errorMessage } from "../api/client";
 
 export default function SignupPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { signup } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<UserRole>("student");
+  const [submitting, setSubmitting] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    login(email, name);
-    navigate("/dashboard");
+    setSubmitting(true);
+    setError(null);
+    try {
+      const account = await signup({ email, name, password, role, inviteCode });
+      navigate(homePathFor(account.role));
+    } catch (err) {
+      setError(errorMessage(err, "Couldn't create the account. Check that the therapy service is running."));
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -33,6 +46,20 @@ export default function SignupPage() {
           <p className="mt-1 text-sm text-ink-soft">Start practicing in minutes.</p>
 
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+            <RolePicker value={role} onChange={setRole} />
+            {role === "therapist" && (
+              <div>
+                <label className="text-sm font-medium text-ink-soft">Clinic invite code</label>
+                <input
+                  type="text"
+                  required
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-teal-100 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  placeholder="Provided by your clinic"
+                />
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium text-ink-soft">Full name</label>
               <input
@@ -60,6 +87,7 @@ export default function SignupPage() {
               <input
                 type="password"
                 required
+                minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-teal-100 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -67,9 +95,16 @@ export default function SignupPage() {
               />
             </div>
 
+            {error && (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="w-full rounded-full bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
+              disabled={submitting}
+              className="w-full disabled:opacity-60 rounded-full bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
             >
               Create account
             </button>
