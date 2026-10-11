@@ -7,10 +7,10 @@ import { GoalMetric, TherapistSettings } from "../types/therapist";
 import { addGoal, addNote, removeGoal, setAssignedExercises, setLevelOverride } from "./therapistApi";
 import { formatDate, Panel } from "./ui";
 
-const GOAL_OPTIONS: { metric: GoalMetric; label: string; placeholder: string }[] = [
-  { metric: "average_score", label: "Average score (last 7 days) at least", placeholder: "70" },
-  { metric: "sessions_per_week", label: "Exercises in the last 7 days at least", placeholder: "4" },
-  { metric: "long_pauses_per_reading", label: "Long pauses per reading at most", placeholder: "1" },
+const GOAL_OPTIONS: { metric: GoalMetric; label: string; suggested: string; min: number; max: number }[] = [
+  { metric: "average_score", label: "Average score (last 7 days) at least", suggested: "70", min: 0, max: 100 },
+  { metric: "sessions_per_week", label: "Exercises in the last 7 days at least", suggested: "4", min: 1, max: 50 },
+  { metric: "long_pauses_per_reading", label: "Long pauses per reading at most", suggested: "1", min: 0, max: 20 },
 ];
 
 const LEVEL_OPTIONS: { value: ReadingLevel | ""; label: string }[] = [
@@ -33,7 +33,8 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
   const [assigned, setAssigned] = useState<string[]>(settings.assigned.map((a) => a.exercise_id));
   const [level, setLevel] = useState<ReadingLevel | "">(settings.level_override?.level ?? "");
   const [goalMetric, setGoalMetric] = useState<GoalMetric>("average_score");
-  const [goalTarget, setGoalTarget] = useState("");
+  const [goalTarget, setGoalTarget] = useState(GOAL_OPTIONS[0].suggested);
+  const [goalError, setGoalError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -59,11 +60,26 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
   const toggle = (id: string) =>
     setAssigned((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
+  const chooseGoalMetric = (metric: GoalMetric) => {
+    setGoalMetric(metric);
+    setGoalTarget(GOAL_OPTIONS.find((o) => o.metric === metric)!.suggested);
+    setGoalError(null);
+  };
+
   const submitGoal = (e: FormEvent) => {
     e.preventDefault();
+    const option = GOAL_OPTIONS.find((o) => o.metric === goalMetric)!;
     const target = Number(goalTarget);
-    if (!goalTarget || Number.isNaN(target)) return;
-    run(() => addGoal(email, goalMetric, target), "Goal added.").then(() => setGoalTarget(""));
+    if (goalTarget.trim() === "" || Number.isNaN(target)) {
+      setGoalError("Enter a target number for this goal.");
+      return;
+    }
+    if (target < option.min || target > option.max) {
+      setGoalError(`The target must be between ${option.min} and ${option.max}.`);
+      return;
+    }
+    setGoalError(null);
+    run(() => addGoal(email, goalMetric, target), "Goal added.");
   };
 
   const submitNote = (e: FormEvent) => {
@@ -166,7 +182,7 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
             <form onSubmit={submitGoal} className="mt-2 flex flex-wrap gap-2">
               <select
                 value={goalMetric}
-                onChange={(e) => setGoalMetric(e.target.value as GoalMetric)}
+                onChange={(e) => chooseGoalMetric(e.target.value as GoalMetric)}
                 className="rounded-lg border border-teal-100 bg-white px-2 py-1.5 text-sm"
               >
                 {GOAL_OPTIONS.map((o) => (
@@ -179,14 +195,26 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
                 type="number"
                 step="any"
                 value={goalTarget}
-                onChange={(e) => setGoalTarget(e.target.value)}
-                placeholder={GOAL_OPTIONS.find((o) => o.metric === goalMetric)?.placeholder}
+                onChange={(e) => {
+                  setGoalTarget(e.target.value);
+                  setGoalError(null);
+                }}
+                aria-label="Goal target"
                 className="w-20 rounded-lg border border-teal-100 px-2 py-1.5 text-sm"
               />
-              <button disabled={busy} className="rounded-full bg-teal-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+              <button
+                type="submit"
+                disabled={busy}
+                className="rounded-full bg-teal-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              >
                 Add goal
               </button>
             </form>
+            {goalError && (
+              <p className="mt-1 text-xs text-red-700" role="alert">
+                {goalError}
+              </p>
+            )}
           </div>
         </div>
       </div>
