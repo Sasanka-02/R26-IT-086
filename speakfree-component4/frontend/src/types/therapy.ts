@@ -12,6 +12,7 @@ export interface TherapyExercise {
   passage: string | null;
   image_url: string | null;
   prompts: string[];
+  example_sentences: string[];
   level: ReadingLevel | null;
   difficulty: number;
   recommended_for: SeverityLevel[];

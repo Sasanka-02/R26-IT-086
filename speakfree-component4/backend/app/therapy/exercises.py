@@ -141,6 +141,13 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "What are the children playing?",
             "What is the weather like?",
         ],
+        example_sentences=[
+            "A woman is walking her brown dog on the path.",
+            "A boy is kicking a black and white football.",
+            "A girl is riding a blue bike across the grass.",
+            "A man is sitting on a bench and reading a book.",
+            "The sun is shining and the trees are green.",
+        ],
         recommended_for=ALL_SEVERITIES,
     ),
     TherapyExercise(
@@ -159,6 +166,13 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "What food can you see on the table?",
             "What do you think will happen next?",
         ],
+        example_sentences=[
+            "A family is cooking together in the kitchen.",
+            "The mother is stirring soup in a red pot.",
+            "The father is cutting orange carrots on the table.",
+            "The child is mixing something in a white bowl.",
+            "An orange cat is lying on the floor.",
+        ],
         recommended_for=ALL_SEVERITIES,
     ),
     TherapyExercise(
@@ -176,6 +190,13 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "What can you see in the sea and in the sky?",
             "What is the man under the umbrella doing?",
             "Would you like to be there? Why?",
+        ],
+        example_sentences=[
+            "Two children are building a sandcastle on the beach.",
+            "A girl is flying an orange kite in the sky.",
+            "A man is reading a book under a pink umbrella.",
+            "A white and pink boat is sailing on the blue sea.",
+            "There is a small red crab on the sand.",
         ],
         recommended_for=ALL_SEVERITIES,
     ),

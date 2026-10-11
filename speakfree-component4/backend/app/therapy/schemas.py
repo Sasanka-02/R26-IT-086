@@ -38,6 +38,7 @@ class TherapyExercise(BaseModel):
     passage: str | None = None
     image_url: str | None = None
     prompts: list[str] = Field(default_factory=list)
+    example_sentences: list[str] = Field(default_factory=list)  # model answer for picture tasks
     level: ReadingLevel | None = None
     difficulty: int = 1
     recommended_for: list[SeverityLevel] = Field(default_factory=list)
