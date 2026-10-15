@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+backend/venv/
+.pytest_cache/
+
+# Secrets – never commit
+.env
+backend/.env
+frontend/.env
+
+# Databases (patient accounts and results) – never commit, wherever they are created
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Trained model weights (CLAUDE.md: keep out of git, document a download instead)
+backend/models/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
