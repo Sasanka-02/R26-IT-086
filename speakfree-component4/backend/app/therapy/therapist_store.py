@@ -24,7 +24,7 @@ GOAL_METRICS = {
 
 
 def _empty() -> dict:
-    return {"assigned": [], "level_override": None, "goals": [], "notes": []}
+    return {"assigned": [], "level_override": None, "goals": [], "notes": [], "screening": None}
 
 
 def _load() -> dict[str, dict]:
@@ -72,6 +72,25 @@ def set_assigned(student: str, exercise_ids: list[str], by: str) -> dict:
 def set_level_override(student: str, level: str | None, by: str) -> dict:
     def mutate(s):
         s["level_override"] = {"level": level, "by": by, "at": _now()} if level else None
+    return _update(student, mutate)
+
+
+def set_screening(student: str, severity: str, source: str, by: str, start_level: str | None) -> dict:
+    """Stores the screening result from Components 1–3. While the student has
+    no reading attempts and no therapist-set level, it also sets the starting
+    level (recorded like an override, so the level engine replays from it)."""
+    def mutate(s):
+        now = _now()
+        s["screening"] = {"severity": severity, "source": source, "by": by, "at": now}
+        current = s["level_override"]
+        therapist_set = current is not None and not current.get("by", "").startswith("screening")
+        if start_level and not therapist_set:
+            s["level_override"] = {
+                "level": start_level,
+                "by": f"screening ({source})",
+                "at": now,
+                "note": f"Starting level from the screening result ({severity} stuttering).",
+            }
     return _update(student, mutate)
 
 

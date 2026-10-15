@@ -14,6 +14,7 @@ export default function SignupPage() {
   const [role, setRole] = useState<UserRole>("student");
   const [submitting, setSubmitting] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -21,7 +22,7 @@ export default function SignupPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const account = await signup({ email, name, password, role, inviteCode });
+      const account = await signup({ email, name, password, role, inviteCode, consent });
       navigate(homePathFor(account.role));
     } catch (err) {
       setError(errorMessage(err, "Couldn't create the account. Check that the therapy service is running."));
@@ -30,7 +31,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-6">
+    <div className="flex min-h-screen items-center justify-center bg-shell px-6">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-white">
@@ -94,6 +95,22 @@ export default function SignupPage() {
                 placeholder="••••••••"
               />
             </div>
+
+            <label className="flex items-start gap-2 rounded-lg bg-shell/60 p-3 text-xs text-ink-soft">
+              <input
+                type="checkbox"
+                required
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                className="mt-0.5 accent-teal-600"
+              />
+              <span>
+                I agree that SpeakFree stores my practice results (scores, timings, pauses, how each exercise felt)
+                so that I and my therapist can track progress. My voice is never recorded or uploaded. I can download
+                or delete my data at any time from the Privacy page (Personal Data Protection Act No. 9 of 2022).
+                If I am under 18, a parent or guardian has agreed to this.
+              </span>
+            </label>
 
             {error && (
               <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">

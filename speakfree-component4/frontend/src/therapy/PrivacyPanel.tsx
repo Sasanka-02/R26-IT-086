@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { ShieldCheck } from "lucide-react";
-import { getPrivacyBudget, getFederatedArchitecture } from "./therapyApi";
+import { useNavigate } from "react-router-dom";
+import { Download, ShieldCheck, Trash2 } from "lucide-react";
+import { deleteMyAccount, downloadMyData, getPrivacyBudget, getFederatedArchitecture } from "./therapyApi";
+import { useAuth } from "../context/AuthContext";
 import { PrivacyBudget } from "../types/therapy";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
 
@@ -8,6 +10,20 @@ export default function PrivacyPanel() {
   const { userId } = usePracticeHistory();
   const [budget, setBudget] = useState<PrivacyBudget | null>(null);
   const [architecture, setArchitecture] = useState<Record<string, unknown> | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const removeAccount = async () => {
+    try {
+      await deleteMyAccount();
+      logout();
+      navigate("/");
+    } catch {
+      setDataError("Couldn't delete your account. Try again.");
+    }
+  };
 
   useEffect(() => {
     getPrivacyBudget(userId).then(setBudget);
@@ -55,10 +71,50 @@ export default function PrivacyPanel() {
         </ul>
       </div>
 
+      <div className="rounded-xl border border-teal-100 p-4 text-sm">
+        <p className="font-medium text-ink">Your data, your choice</p>
+        <p className="mt-1 text-xs text-ink-soft">
+          Under Sri Lanka's Personal Data Protection Act No. 9 of 2022 you can see everything stored about you and
+          ask for it to be erased.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            onClick={() => downloadMyData().catch(() => setDataError("Couldn't download your data. Try again."))}
+            className="flex items-center gap-1.5 rounded-full border border-teal-200 px-4 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-50"
+          >
+            <Download size={14} />
+            Download my data
+          </button>
+          {!confirming ? (
+            <button
+              onClick={() => setConfirming(true)}
+              className="flex items-center gap-1.5 rounded-full border border-red-200 px-4 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+            >
+              <Trash2 size={14} />
+              Delete my account
+            </button>
+          ) : (
+            <span className="flex flex-wrap items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
+              This permanently deletes your account and every result. It can't be undone.
+              <button
+                onClick={removeAccount}
+                className="rounded-full bg-red-600 px-3 py-1 font-semibold text-white"
+              >
+                Yes, delete everything
+              </button>
+              <button onClick={() => setConfirming(false)} className="rounded-full px-3 py-1 font-medium text-ink">
+                Cancel
+              </button>
+            </span>
+          )}
+        </div>
+        {dataError && <p className="mt-2 text-xs text-red-700">{dataError}</p>}
+      </div>
+
       {architecture && (
         <div className="rounded-xl bg-paper p-4 text-xs text-ink-soft">
           <p className="font-medium text-ink">
-            Federated learning architecture (design, not live in this demo)
+            Federated learning — future work (design only, not running)
           </p>
           <p className="mt-1">
             {String(architecture.protocol)} via {String(architecture.framework)} — raw

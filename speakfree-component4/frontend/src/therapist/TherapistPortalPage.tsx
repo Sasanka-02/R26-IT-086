@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronRight, RefreshCw, Search } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { CaseloadOverview, StudentRow, StudentStatusKey } from "../types/therapist";
@@ -11,10 +11,10 @@ import {
   formatRelative,
   initials,
   Panel,
-  PortalHeader,
   StatTile,
   StatusPill,
 } from "./ui";
+import AppShell from "../components/AppShell";
 
 const FILTERS: { key: "all" | StudentStatusKey; label: string }[] = [
   { key: "all", label: "All students" },
@@ -54,9 +54,15 @@ export default function TherapistPortalPage() {
   const [overview, setOverview] = useState<CaseloadOverview | null>(null);
   const [students, setStudents] = useState<StudentRow[] | null>(null);
   const [error, setError] = useState(false);
-  const [query, setQuery] = useState("");
+  const [params] = useSearchParams();
+  const [query, setQuery] = useState(params.get("q") ?? "");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [reload, setReload] = useState(0);
+
+  // The top-bar search lands here as ?q=.
+  useEffect(() => {
+    setQuery(params.get("q") ?? "");
+  }, [params]);
 
   useEffect(() => {
     let active = true;
@@ -88,9 +94,8 @@ export default function TherapistPortalPage() {
   );
 
   return (
-    <div className="min-h-screen bg-paper">
-      <PortalHeader />
-      <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
+    <AppShell>
+      <main className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-600">
@@ -287,6 +292,6 @@ export default function TherapistPortalPage() {
           </Panel>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }

@@ -1,11 +1,15 @@
 """
-SO5 - Differential Privacy Integration (demo-scale, genuinely functional).
+SO5 - Differential privacy: the Laplace mechanism and a privacy budget ledger.
 
-Implements the Laplace mechanism for privatising stored session
-statistics, and a per-patient privacy budget ledger. This is real,
-working differential privacy math — not a stub — scaled down from the
-full DP-SGD federated training loop described in the proposal (which
-requires an actual training loop with real gradients to be meaningful).
+Where it is applied (and where it is not):
+  * Applied: every statistic that leaves the clinic. The cohort report
+    (cohort_report.py) releases each count and mean through
+    privatize_statistic() and records the ε spent in the budget ledger.
+  * Not applied: the student's own dashboard and the treating therapist's
+    view. They need exact numbers to give therapy, and they stay inside
+    the clinic's access control (role checks on every endpoint).
+  * Not implemented: DP-SGD inside federated training — see
+    federated_stub.py; it is future work and labelled as such.
 """
 
 import math
@@ -21,10 +25,13 @@ def laplace_noise(sensitivity: float, epsilon: float) -> float:
     return -scale * math.copysign(1, u) * math.log(1 - 2 * abs(u) + 1e-12)
 
 
-def privatize_statistic(value: float, sensitivity: float, epsilon: float) -> float:
-    """Adds calibrated Laplace noise to a single stored statistic
-    (e.g. weekly stuttering frequency) before it is persisted."""
-    return value + laplace_noise(sensitivity, epsilon)
+def privatize_statistic(value: float, sensitivity: float, epsilon: float, rng=None) -> float:
+    """Laplace mechanism for one statistic: value + Lap(sensitivity / ε).
+    Pass a numpy Generator to make a release reproducible (the cohort
+    report caches releases so repeated requests cannot average noise away)."""
+    if rng is None:
+        return value + laplace_noise(sensitivity, epsilon)
+    return value + float(rng.laplace(0.0, sensitivity / max(epsilon, 1e-9)))
 
 
 @dataclass

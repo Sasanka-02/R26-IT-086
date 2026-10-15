@@ -25,6 +25,11 @@ from app.therapy.exercises import EXERCISE_BANK, get_exercise
 CONTEXT_DIM = 5  # [bias, level, avg_score, trend, comfort]
 PLAN_SIZE = 3
 ALPHA = 0.6
+# Added to an exercise's UCB when it is recommended for the student's screening
+# severity (subtracted when it is not). With no history every UCB is equal, so
+# this decides the first plan; as evidence builds up, the student's own scores
+# dominate.
+SEVERITY_BONUS = 0.15
 
 
 class LinUCBBandit:
@@ -51,6 +56,51 @@ class LinUCBBandit:
         self.A[arm] += np.outer(context, context)
         self.b[arm] += reward * context
         self.pulls[arm] += 1
+
+
+EXERCISE_TYPES = ["reading", "pacing", "daf", "picture"]
+
+
+def exercise_features(ex) -> np.ndarray:
+    """[1, difficulty, difficulty², type one-hot] — what the exercise is like."""
+    d = ex.difficulty / 3
+    return np.array([1.0, d, d * d] + [1.0 if ex.type.value == t else 0.0 for t in EXERCISE_TYPES])
+
+
+class HybridLinUCB:
+    """LinUCB that also uses exercise features (evaluated in simulation only).
+
+    One ridge model over z = [student context ⊗ exercise features, exercise
+    one-hot]. The shared part lets evidence from one exercise inform similar
+    ones (same type, nearby difficulty); the one-hot keeps a per-exercise
+    offset. Compared with the per-exercise model on the evidence page."""
+
+    def __init__(self, n_arms: int, context_dim: int = CONTEXT_DIM, alpha: float = 0.3):
+        self.features = [exercise_features(ex) for ex in EXERCISE_BANK[:n_arms]]
+        self.n_arms = n_arms
+        self.alpha = alpha
+        dim = context_dim * len(self.features[0]) + n_arms
+        self.A = np.identity(dim)
+        self.b = np.zeros(dim)
+
+    def _z(self, arm: int, context: np.ndarray) -> np.ndarray:
+        onehot = np.zeros(self.n_arms)
+        onehot[arm] = 1.0
+        return np.concatenate([np.outer(context, self.features[arm]).ravel(), onehot])
+
+    def choose(self, context: np.ndarray) -> int:
+        A_inv = np.linalg.inv(self.A)
+        theta = A_inv @ self.b
+        scores = []
+        for arm in range(self.n_arms):
+            z = self._z(arm, context)
+            scores.append(theta @ z + self.alpha * math_sqrt(z @ A_inv @ z))
+        return int(np.argmax(scores))
+
+    def update(self, arm: int, context: np.ndarray, reward: float) -> None:
+        z = self._z(arm, context)
+        self.A += np.outer(z, z)
+        self.b += reward * z
 
 
 def math_sqrt(x: float) -> float:
@@ -119,6 +169,61 @@ def _item(ex, source: str, reason: str, estimate: tuple[float, float] | None, pu
     return item
 
 
+def _sureness(uncertainty: int | None) -> str:
+    if uncertainty is None or uncertainty > 60:
+        return "still unsure"
+    if uncertainty > 30:
+        return "fairly sure"
+    return "quite sure"
+
+
+def _explain_context(records: list[dict], level: dict, context: np.ndarray) -> list[str]:
+    """The numbers the bandit plans from, said in words."""
+    lines = [f"You are on {level['label']} reading. {level['progress_text']}"]
+    if not records:
+        lines.append(
+            "You haven't saved any exercises yet, so the engine starts from neutral guesses "
+            "and will try a bit of everything first."
+        )
+        return lines
+    recent = records[-5:]
+    lines.append(f"Your last {len(recent)} score{'s' if len(recent) != 1 else ''} average {round(context[2] * 100)} out of 100.")
+    trend = round(context[3] * 100)
+    if len(records) >= 6:
+        if trend >= 5:
+            lines.append(f"Your scores are rising (up {trend} points), so the plan can stretch you a little.")
+        elif trend <= -5:
+            lines.append(f"Your scores dipped by {-trend} points, so the plan leans towards exercises that work for you.")
+        else:
+            lines.append("Your scores are steady.")
+    comfortable = sum(1 for r in recent if r["self_rating"] != "hard")
+    lines.append(f"{comfortable} of your last {len(recent)} exercises felt okay or easy to you.")
+    return lines
+
+
+def _explain_item(item: dict, level: dict) -> str:
+    if item["source"] == "therapist":
+        return "Your therapist assigned this, so it always comes first."
+    if item["source"] == "level":
+        if level["mastered"]:
+            return "You have completed the final stage — this passage keeps your reading fluent."
+        goal = "move you up" if level["next_level"] else "complete the final stage"
+        return (
+            f"This is the passage for your level ({level['label']}). "
+            f"{level['needed_to_advance']} strong readings in a row here {goal}."
+        )
+    if item["predicted_score"] is None:
+        return (
+            f"You haven't tried this yet. The engine ranked it #{item['rank']} of {item['compared']} "
+            "because trying it tells it whether it suits you."
+        )
+    return (
+        f"From your {item['times_practised']} attempt{'s' if item['times_practised'] != 1 else ''}, the engine "
+        f"expects you to score about {item['predicted_score']} here and is {_sureness(item['uncertainty'])}. "
+        f"It ranked #{item['rank']} of the {item['compared']} exercises it compared for you."
+    )
+
+
 def recommend_weekly_plan(
     records: list[dict], settings: dict | None = None, plan_size: int = PLAN_SIZE
 ) -> dict:
@@ -126,6 +231,8 @@ def recommend_weekly_plan(
     current reading level, then the highest-UCB exercises of other types."""
     settings = settings or {}
     override = settings.get("level_override")
+    screening = settings.get("screening")
+    severity = screening["severity"] if screening else None
     level = level_state(records, override)
     context = build_context(records, override)
     bandit = train_user_bandit(records)
@@ -164,20 +271,41 @@ def recommend_weekly_plan(
             continue
         mean, bonus = bandit.estimate(i, context)
         level_fit = -0.1 * abs(ex.difficulty - target_difficulty)
-        candidates.append((mean + bonus + level_fit, ex, (mean, bonus), bandit.pulls[i]))
+        severity_fit = 0.0
+        if severity not in (None, "unknown"):
+            severity_fit = SEVERITY_BONUS if severity in ex.recommended_for else -SEVERITY_BONUS
+        candidates.append((mean + bonus + level_fit + severity_fit, ex, (mean, bonus), bandit.pulls[i]))
     candidates.sort(key=lambda c: c[0], reverse=True)
 
-    for _, ex, estimate, pulls in candidates:
+    for rank, (_, ex, estimate, pulls) in enumerate(candidates, start=1):
         if len(chosen) >= max(plan_size, len(settings.get("assigned", [])) + 1):
             break
         if ex.type.value in used_types:
             continue
-        chosen.append(_item(ex, "bandit", _reason(ex, records, level), estimate, pulls))
+        item = _item(ex, "bandit", _reason(ex, records, level), estimate, pulls)
+        item["rank"] = rank
+        item["compared"] = len(candidates)
+        chosen.append(item)
         used_types.add(ex.type.value)
 
+    for item in chosen:
+        item["explanation"] = _explain_item(item, level)
+        ex = get_exercise(item["id"])
+        if item["source"] == "bandit" and severity not in (None, "unknown") and severity in ex.recommended_for:
+            item["explanation"] += f" It suits {severity} stuttering (your screening result)."
+
+    why = _explain_context(records, level, context)
+    if screening:
+        why.insert(
+            1,
+            f"Your screening result was {screening['severity']} stuttering ({screening['source']}), "
+            "so the plan favours exercises suited to it.",
+        )
     return {
         "level": level,
         "exercises": chosen,
+        "screening": screening,
+        "why": why,
         "context": {
             "level": round(float(context[1]), 2),
             "recent_average": round(float(context[2]) * 100),

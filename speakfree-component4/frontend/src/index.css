@@ -2,31 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme tokens as RGB channels — consumed by tailwind.config.js. */
 :root {
-  --shadow-soft: 0 1px 2px rgba(27, 38, 34, 0.04), 0 10px 30px -12px rgba(27, 38, 34, 0.14);
-  --shadow-lift: 0 2px 4px rgba(27, 38, 34, 0.05), 0 18px 40px -14px rgba(27, 38, 34, 0.22);
-  --hairline: rgba(30, 94, 83, 0.12);
+  color-scheme: dark;
+
+  --c-shell: 22 22 28; /* page behind the app frame */
+  --c-panel: 29 29 36; /* app frame / sidebar */
+  --c-card: 38 38 47; /* cards */
+  --c-inset: 30 30 38; /* inner tiles on cards */
+  --c-ink: 236 236 241;
+  --c-ink-soft: 156 156 171;
+
+  /* Mint accent scale — low numbers are tints on dark, high numbers are bright. */
+  --c-teal-50: 40 58 60;
+  --c-teal-100: 52 52 64;
+  --c-teal-200: 64 88 90;
+  --c-teal-400: 95 175 160;
+  --c-teal-500: 127 206 192;
+  --c-teal-600: 168 222 214;
+  --c-teal-700: 190 232 225;
+  --c-teal-800: 201 238 232;
+  --c-teal-900: 221 245 241;
+
+  --c-gold-400: 245 176 94;
+  --c-gold-500: 242 165 65;
+  --c-gold-600: 247 194 122;
+
+  --c-amber-50: 61 46 32;
+  --c-amber-200: 122 86 44;
+  --c-amber-800: 247 194 122;
+  --c-amber-900: 250 210 150;
+
+  --c-red-50: 64 34 38;
+  --c-red-200: 128 58 64;
+  --c-red-600: 236 112 118;
+  --c-red-700: 244 150 154;
+
+  --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 30px -18px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 18px 40px -16px rgba(0, 0, 0, 0.75);
 }
 
 html {
-  background-color: #f3eee4;
+  background-color: rgb(var(--c-shell));
 }
 
 body {
-  @apply text-ink font-sans antialiased;
+  @apply bg-shell text-ink font-sans antialiased;
   min-height: 100vh;
-  /* Soft champagne + sage glows over warm ivory. */
-  background:
-    radial-gradient(1100px 600px at 8% -10%, rgba(199, 161, 90, 0.16), transparent 60%),
-    radial-gradient(900px 600px at 100% 0%, rgba(46, 122, 107, 0.14), transparent 55%),
-    radial-gradient(900px 700px at 50% 110%, rgba(220, 192, 138, 0.18), transparent 60%),
-    linear-gradient(180deg, #f6f2ea 0%, #efe8dc 100%);
-  background-attachment: fixed;
-}
-
-/* Let the page background show through full-screen wrappers. */
-.min-h-screen.bg-paper {
-  background-color: transparent;
 }
 
 h1, h2, h3, h4 {
@@ -35,18 +57,15 @@ h1, h2, h3, h4 {
 }
 
 ::selection {
-  background: rgba(199, 161, 90, 0.35);
+  background: rgba(168, 222, 214, 0.3);
 }
 
 /* ---------- Surfaces ---------- */
 
-/* Cards: ivory glass, hairline border, layered shadow. */
 .bg-white.rounded-2xl,
 .bg-white.rounded-3xl,
 .bg-white.rounded-xl {
-  background-color: rgba(255, 253, 248, 0.82);
-  backdrop-filter: blur(10px);
-  border-color: var(--hairline);
+  border-color: rgba(255, 255, 255, 0.05);
   box-shadow: var(--shadow-soft);
 }
 
@@ -58,60 +77,15 @@ button.bg-white.rounded-2xl:not(:disabled):hover {
   box-shadow: var(--shadow-lift);
 }
 
-/* Inner panels on cards. */
-.bg-paper.rounded-xl,
-.bg-paper.rounded-lg {
-  background-color: rgba(243, 238, 228, 0.7);
-}
-
-/* Sticky frosted header. */
-header.bg-white {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  background-color: rgba(255, 253, 248, 0.72);
-  backdrop-filter: saturate(160%) blur(14px);
-  border-color: var(--hairline);
-}
-
-/* Footer blends into the page instead of a white band. */
-footer.bg-white {
-  background-color: rgba(255, 253, 248, 0.45);
-  backdrop-filter: blur(8px);
-  border-color: var(--hairline);
-}
-
-/* Pill tab bar. */
-.bg-white.rounded-full.border {
-  background-color: rgba(255, 253, 248, 0.8);
-  backdrop-filter: blur(10px);
-  border-color: var(--hairline);
-  box-shadow: var(--shadow-soft);
-}
-
-/* Hero banner: deep emerald with a champagne sheen. */
-.bg-gradient-to-br.from-teal-600 {
-  background-image:
-    radial-gradient(600px 240px at 90% 0%, rgba(220, 192, 138, 0.35), transparent 60%),
-    linear-gradient(135deg, #1e5e53 0%, #164a42 55%, #103a33 100%);
-  box-shadow: 0 24px 50px -24px rgba(16, 58, 51, 0.6);
-}
-
 /* ---------- Buttons ---------- */
 
 button.bg-teal-600 {
-  background-image: linear-gradient(180deg, #2a7064 0%, #1e5e53 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 6px 16px -8px rgba(16, 58, 51, 0.65);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  font-weight: 600;
+  transition: transform 0.15s ease, filter 0.15s ease;
 }
 button.bg-teal-600:not(:disabled):hover {
-  filter: brightness(1.08);
+  filter: brightness(1.06);
   transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 22px -10px rgba(16, 58, 51, 0.7);
-}
-
-button.bg-red-600 {
-  box-shadow: 0 6px 16px -8px rgba(185, 28, 28, 0.6);
 }
 
 /* Form fields. */
@@ -119,21 +93,33 @@ input[type="text"],
 input[type="email"],
 input[type="password"],
 input[type="number"],
-input:not([type]) {
-  background-color: rgba(255, 253, 248, 0.9);
+input[type="search"],
+input:not([type]),
+textarea,
+select {
+  background-color: rgb(var(--c-inset));
+  color: rgb(var(--c-ink));
+  border-color: rgba(255, 255, 255, 0.08);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-input:focus {
-  box-shadow: 0 0 0 4px rgba(46, 122, 107, 0.12);
+input::placeholder,
+textarea::placeholder {
+  color: rgb(var(--c-ink-soft) / 0.7);
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(168, 222, 214, 0.18);
 }
 
-/* Slim, warm scrollbar. */
+/* Slim scrollbar. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(30, 94, 83, 0.25);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
@@ -142,10 +128,35 @@ input:focus {
   background: transparent;
 }
 
-/* ---------- Print (therapist PDF report) ---------- */
+/* Recharts: no focus box around a clicked chart. */
+.recharts-wrapper:focus,
+.recharts-surface:focus,
+.recharts-wrapper *:focus {
+  outline: none;
+}
+
+/* ---------- Print (therapist PDF report) — switch tokens to a light palette ---------- */
 @media print {
+  :root {
+    color-scheme: light;
+    --c-shell: 255 255 255;
+    --c-panel: 255 255 255;
+    --c-card: 255 255 255;
+    --c-inset: 245 245 245;
+    --c-ink: 20 20 20;
+    --c-ink-soft: 90 90 90;
+    --c-teal-50: 236 246 244;
+    --c-teal-100: 220 220 220;
+    --c-teal-200: 190 214 204;
+    --c-teal-600: 30 94 83;
+    --c-teal-700: 22 74 66;
+    --c-teal-800: 16 58 51;
+    --c-gold-600: 154 117 53;
+    --c-amber-800: 146 64 14;
+  }
   .no-print,
-  header {
+  header,
+  aside {
     display: none !important;
   }
   body {
@@ -154,7 +165,6 @@ input:focus {
   .bg-white.rounded-2xl,
   .bg-white.rounded-xl {
     box-shadow: none !important;
-    backdrop-filter: none !important;
     break-inside: avoid;
   }
 }

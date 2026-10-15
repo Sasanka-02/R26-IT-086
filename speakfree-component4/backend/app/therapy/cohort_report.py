@@ -26,7 +26,7 @@ import hashlib
 import numpy as np
 
 from app.therapy.adaptive import LEVELS, LEVEL_LABELS, level_state
-from app.therapy.privacy import budget_ledger
+from app.therapy.privacy import budget_ledger, privatize_statistic
 from app.therapy.progress_store import all_records
 from app.therapy.therapist_store import get_settings
 
@@ -72,14 +72,14 @@ def _noisy(stats: dict, epsilon: float, rng: np.random.Generator) -> dict:
     n = max(stats["attempts"], 1)
 
     def count(v: int, sensitivity: float = 1.0) -> int:
-        return max(0, int(round(v + rng.laplace(0, sensitivity / eps))))
+        return max(0, int(round(privatize_statistic(v, sensitivity, eps, rng))))
 
     return {
         "by_type": {k: count(v) for k, v in stats["by_type"].items()},
         # One attempt can move one student to another level: L1 sensitivity 2.
         "levels": {k: count(v, 2.0) for k, v in stats["levels"].items()},
         # Mean of n bounded scores (0–100): one attempt changes it by at most 100/n.
-        "mean_score": round(float(np.clip(stats["mean_score"] + rng.laplace(0, (100 / n) / eps), 0, 100)), 1),
+        "mean_score": round(float(np.clip(privatize_statistic(stats["mean_score"], 100 / n, eps, rng), 0, 100)), 1),
         "score_bands": {k: count(v) for k, v in stats["score_bands"].items()},
     }
 

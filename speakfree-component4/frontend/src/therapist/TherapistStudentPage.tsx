@@ -4,16 +4,19 @@ import { ArrowLeft, Lightbulb, Printer } from "lucide-react";
 import { StudentDetail } from "../types/therapist";
 import { getStudentDetail, rateAttempt } from "./therapistApi";
 import StudentControls from "./StudentControls";
+import PlanReviewPanel from "./PlanReviewPanel";
+import { LevelTimeline, ReportCard } from "../components/ReportCard";
 import { ColumnChart, ScoreLineChart } from "./charts";
 import {
   formatDate,
   formatRelative,
   initials,
   Panel,
-  PortalHeader,
   StatTile,
   StatusPill,
 } from "./ui";
+import AppShell from "../components/AppShell";
+import { useAuth } from "../context/AuthContext";
 
 const RATING_LABEL = { easy: "Easy", ok: "Okay", hard: "Hard" };
 const LEVEL_STEPS = ["Beginner", "Intermediate", "Advanced (final stage)"];
@@ -27,6 +30,7 @@ function formatDuration(seconds: number) {
 export default function TherapistStudentPage() {
   const navigate = useNavigate();
   const { email = "" } = useParams();
+  const { user } = useAuth();
   const [detail, setDetail] = useState<StudentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -63,9 +67,8 @@ export default function TherapistStudentPage() {
   const summary = detail?.summary;
 
   return (
-    <div className="min-h-screen bg-paper">
-      <PortalHeader />
-      <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
+    <AppShell>
+      <main className="mx-auto max-w-6xl space-y-6">
         <div className="no-print flex items-center justify-between">
           <button
             onClick={() => navigate("/therapist")}
@@ -114,6 +117,8 @@ export default function TherapistStudentPage() {
                 {detail.row.status.detail}
               </p>
             </section>
+
+            <ReportCard card={summary.report_card} name={detail.profile.name.split(" ")[0]} />
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               <StatTile label="Exercises completed" value={summary.total_sessions} />
@@ -186,6 +191,10 @@ export default function TherapistStudentPage() {
                         );
                       })}
                     </ol>
+                    <div className="mt-4">
+                      <p className="mb-2 text-xs font-semibold text-ink-soft">Level timeline</p>
+                      <LevelTimeline history={summary.level.history} />
+                    </div>
                   </Panel>
                   <Panel title="Progress notes" subtitle="As shown to the student">
                     <ul className="space-y-2 text-sm text-ink">
@@ -198,6 +207,13 @@ export default function TherapistStudentPage() {
                     </ul>
                   </Panel>
                 </div>
+
+                <PlanReviewPanel
+                  email={detail.profile.email}
+                  plan={detail.plan}
+                  reviews={detail.plan_reviews}
+                  onSaved={() => setReload((n) => n + 1)}
+                />
 
                 <Panel title="By exercise type">
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -225,13 +241,17 @@ export default function TherapistStudentPage() {
                           <th className="py-2 pr-3 text-right font-medium" title="Measured words per minute / target">wpm</th>
                           <th className="py-2 pr-3 font-medium">Felt</th>
                           <th className="py-2 pr-3 text-right font-medium">Score</th>
-                          <th className="no-print py-2 font-medium" title="Your clinical rating of this attempt (1 = very poor, 5 = very fluent). Used to validate and calibrate the score.">
-                            Expert rating
+                          <th className="no-print py-2 font-medium" title="Your clinical rating of this attempt (1 = very poor, 5 = very fluent). Used to validate and calibrate the score. A second therapist's ratings are kept separately and give inter-rater agreement (Cohen's kappa).">
+                            Your rating
                           </th>
                         </tr>
                       </thead>
                       <tbody className="tabular-nums">
-                        {detail.records.map((r) => (
+                        {detail.records.map((r) => {
+                          // Each rater sees and edits their own rating; others' are listed beside it.
+                          const mine = r.expert_reviews.find((x) => x.by === user?.email)?.rating;
+                          const others = r.expert_reviews.filter((x) => x.by !== user?.email);
+                          return (
                           <tr key={r.id} className="border-b border-teal-50 last:border-0">
                             <td className="py-2.5 pr-3 text-ink-soft">{formatDate(r.completed_at, true)}</td>
                             <td className="py-2.5 pr-3 text-ink">{r.title}</td>
@@ -256,11 +276,11 @@ export default function TherapistStudentPage() {
                                   <button
                                     key={n}
                                     role="radio"
-                                    aria-checked={r.expert?.rating === n}
+                                    aria-checked={mine === n}
                                     disabled={savingRating === r.id}
                                     onClick={() => rate(r.id, n)}
                                     className={`h-6 w-6 rounded-full text-xs font-semibold transition ${
-                                      r.expert?.rating === n
+                                      mine === n
                                         ? "bg-teal-600 text-white"
                                         : "border border-teal-100 text-ink-soft hover:border-teal-400"
                                     }`}
@@ -269,9 +289,17 @@ export default function TherapistStudentPage() {
                                   </button>
                                 ))}
                               </div>
+                              {others.length > 0 && (
+                                <p className="mt-1 text-[11px] text-ink-soft">
+                                  {others
+                                    .map((x) => `${x.by.split("@")[0]}: ${x.rating}${x.source === "synthetic" ? " (synthetic)" : ""}`)
+                                    .join(" · ")}
+                                </p>
+                              )}
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -287,6 +315,6 @@ export default function TherapistStudentPage() {
           </>
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }

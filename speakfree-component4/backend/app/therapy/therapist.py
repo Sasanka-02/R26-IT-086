@@ -9,8 +9,11 @@ status, and per-student detail with chart-ready series.
 from datetime import datetime, timedelta, timezone
 
 from app.therapy.adaptive import LEVEL_LABELS, LEVELS, verdict
+from app.therapy.bandit import recommend_weekly_plan
 from app.therapy.dashboard import build_progress_summary
+from app.therapy.plan_review import reviews_for
 from app.therapy.progress_store import all_records, get_records, normalize_user_id
+from app.therapy.scoring import reviews_of
 from app.therapy.therapist_store import get_settings
 from app.therapy.user_store import get_user, list_users
 
@@ -179,11 +182,14 @@ def student_detail(email: str) -> dict | None:
         ],
         "weekly_sessions": weekly,
         "settings": get_settings(user_id),
+        "plan": recommend_weekly_plan(records, get_settings(user_id)),
+        "plan_reviews": list(reversed(reviews_for(user_id)))[:5],
         "records": [
             {
                 "id": r["id"],
                 "exercise_id": r["exercise_id"],
                 "expert": r.get("expert"),
+                "expert_reviews": reviews_of(r),
                 "measured_wpm": r.get("measured_wpm"),
                 "target_wpm": r.get("target_wpm"),
                 "score_breakdown": r.get("score_breakdown", []),

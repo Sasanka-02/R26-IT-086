@@ -3,8 +3,10 @@ import logging
 import pytest
 from fastapi.testclient import TestClient
 
+import app.therapy.audit as audit
 import app.therapy.auth as auth
 import app.therapy.cohort_report as cohort_report
+import app.therapy.plan_review as plan_review
 import app.therapy.privacy as privacy
 import app.therapy.progress_store as progress_store
 import app.therapy.scoring as scoring
@@ -25,6 +27,9 @@ def isolated_data(tmp_path, monkeypatch):
     monkeypatch.setattr(scoring, "CALIBRATION_FILE", tmp_path / "calibration.json")
     monkeypatch.setattr(auth, "SECRET_FILE", tmp_path / "secret.key")
     monkeypatch.setattr(survey, "SURVEY_FILE", tmp_path / "surveys.json")
+    monkeypatch.setattr(plan_review, "REVIEWS_FILE", tmp_path / "plan_reviews.json")
+    monkeypatch.setattr(audit, "AUDIT_FILE", tmp_path / "audit_log.jsonl")
+    monkeypatch.setattr(auth, "_failed_logins", {})
     monkeypatch.setattr(cohort_report, "_cache", {})
     monkeypatch.setattr(privacy, "budget_ledger", privacy.PrivacyBudgetLedger())
     monkeypatch.setattr(cohort_report, "budget_ledger", privacy.budget_ledger)
@@ -37,7 +42,7 @@ def client():
 
 
 def signup(client, email, role="student", name="Test User", password="secret123"):
-    body = {"email": email, "name": name, "password": password, "role": role}
+    body = {"email": email, "name": name, "password": password, "role": role, "consent": True}
     if role == "therapist":
         body["invite_code"] = auth.THERAPIST_INVITE_CODE
     res = client.post("/api/v1/auth/signup", json=body)

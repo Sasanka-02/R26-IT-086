@@ -8,6 +8,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import TherapistPortalPage from "./therapist/TherapistPortalPage";
 import TherapistStudentPage from "./therapist/TherapistStudentPage";
 import EvidencePage from "./therapist/EvidencePage";
+import ComparePage from "./therapist/ComparePage";
 
 export default function App() {
   return (
@@ -44,6 +45,14 @@ export default function App() {
         element={
           <ProtectedRoute role="therapist">
             <EvidencePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/therapist/compare"
+        element={
+          <ProtectedRoute role="therapist">
+            <ComparePage />
           </ProtectedRoute>
         }
       />

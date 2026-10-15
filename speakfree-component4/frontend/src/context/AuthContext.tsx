@@ -20,6 +20,7 @@ interface SignupInput {
   password: string;
   role: UserRole;
   inviteCode?: string;
+  consent: boolean;
 }
 
 interface AuthContextValue {
@@ -68,13 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return store(res.data);
   };
 
-  const signup = async ({ email, name, password, role, inviteCode }: SignupInput) => {
+  const signup = async ({ email, name, password, role, inviteCode, consent }: SignupInput) => {
     const res = await api.post("/api/v1/auth/signup", {
       email,
       name,
       password,
       role,
       invite_code: inviteCode || null,
+      consent,
     });
     return store(res.data);
   };

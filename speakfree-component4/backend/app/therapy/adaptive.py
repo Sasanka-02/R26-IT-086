@@ -113,6 +113,26 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
     strong = 0
     weak = 0
     mastered = False
+    streak_scores: list[int] = []
+    history: list[dict] = []
+    if since:
+        history.append(
+            {"at": override["at"], "from": None, "to": LEVEL_LABELS[LEVELS[level]],
+             "direction": "therapist", "reason": override.get("note") or "Level set by the therapist."}
+        )
+
+    def move(record: dict, new_level: int | None, direction: str, kind: str) -> None:
+        scores = ", ".join(str(s) for s in streak_scores)
+        history.append(
+            {
+                "at": record["completed_at"],
+                "from": LEVEL_LABELS[LEVELS[level]],
+                "to": LEVEL_LABELS[LEVELS[new_level]] if new_level is not None else "Final stage completed",
+                "direction": direction,
+                "reason": f"after {STREAK_TO_MOVE} {kind} {LEVEL_LABELS[LEVELS[level]]} readings in a row (scores {scores})",
+            }
+        )
+
     for record in records:
         if record.get("exercise_type") != "reading" or record.get("level") not in LEVELS:
             continue
@@ -121,18 +141,24 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
         if LEVELS.index(record["level"]) != level:
             continue
         if _is_strong(record, t):
+            streak_scores = (streak_scores if strong else []) + [record["score"]]
             strong, weak = strong + 1, 0
         elif _is_weak(record, t):
+            streak_scores = (streak_scores if weak else []) + [record["score"]]
             strong, weak = 0, weak + 1
         else:
             strong, weak = 0, 0
 
         if strong >= STREAK_TO_MOVE:
             if level < len(LEVELS) - 1:
+                move(record, level + 1, "up", "strong")
                 level, strong = level + 1, 0
             else:
+                if not mastered:
+                    move(record, None, "mastered", "strong")
                 mastered, strong = True, STREAK_TO_MOVE
         elif weak >= STREAK_TO_MOVE and level > 0:
+            move(record, level - 1, "down", "difficult")
             level, weak = level - 1, 0
 
     current = LEVELS[level]
@@ -157,9 +183,12 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
         "needed_to_advance": STREAK_TO_MOVE,
         "mastered": mastered,
         "progress_text": progress_text,
-        "set_by_therapist": bool(override and override.get("level")),
+        "set_by_therapist": bool(
+            override and override.get("level") and not override.get("by", "").startswith("screening")
+        ),
         "strong_threshold": t["strong"],
         "weak_threshold": t["weak"],
+        "history": history,
     }
 
 

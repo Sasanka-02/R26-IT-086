@@ -92,6 +92,39 @@ def decode_token(token: str) -> dict | None:
     return payload
 
 
+# --- Login rate limit -----------------------------------------------------------
+# After MAX_FAILED_LOGINS wrong passwords for one account within the window,
+# further attempts are refused until the oldest failure expires. This slows
+# password guessing without locking the real user out for long.
+
+MAX_FAILED_LOGINS = 5
+LOGIN_WINDOW_SECONDS = 15 * 60
+_failed_logins: dict[str, list[float]] = {}
+
+
+def _recent_failures(email: str) -> list[float]:
+    cutoff = time.time() - LOGIN_WINDOW_SECONDS
+    recent = [t for t in _failed_logins.get(normalize_user_id(email), []) if t > cutoff]
+    _failed_logins[normalize_user_id(email)] = recent
+    return recent
+
+
+def login_blocked_for(email: str) -> int:
+    """Seconds until another login attempt is allowed (0 = allowed now)."""
+    recent = _recent_failures(email)
+    if len(recent) < MAX_FAILED_LOGINS:
+        return 0
+    return int(recent[0] + LOGIN_WINDOW_SECONDS - time.time()) + 1
+
+
+def record_failed_login(email: str) -> None:
+    _recent_failures(email).append(time.time())
+
+
+def clear_failed_logins(email: str) -> None:
+    _failed_logins.pop(normalize_user_id(email), None)
+
+
 # --- FastAPI dependencies ----------------------------------------------------
 
 def current_user(authorization: str | None = Header(default=None)) -> dict:

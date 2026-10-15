@@ -1,15 +1,11 @@
 import { ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   CheckCircle2,
   CircleDashed,
-  LogOut,
   MoonStar,
-  Stethoscope,
   TrendingUp,
 } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
 import { StudentStatus, StudentStatusKey } from "../types/therapist";
 
 // Status is always icon + label, never colour alone.
@@ -17,8 +13,8 @@ const STATUS_STYLES: Record<StudentStatusKey, { className: string; icon: typeof 
   improving: { className: "border-teal-200 bg-teal-50 text-teal-800", icon: TrendingUp },
   on_track: { className: "border-teal-100 bg-paper text-teal-800", icon: CheckCircle2 },
   needs_attention: { className: "border-amber-200 bg-amber-50 text-amber-900", icon: AlertTriangle },
-  inactive: { className: "border-stone-200 bg-stone-100 text-stone-700", icon: MoonStar },
-  not_started: { className: "border-stone-200 bg-white text-stone-600", icon: CircleDashed },
+  inactive: { className: "border-teal-100 bg-paper text-ink-soft", icon: MoonStar },
+  not_started: { className: "border-dashed border-teal-100 bg-white text-ink-soft", icon: CircleDashed },
 };
 
 export function StatusPill({ status }: { status: StudentStatus }) {
@@ -66,58 +62,6 @@ export function Panel({
       </div>
       <div className="mt-4">{children}</div>
     </section>
-  );
-}
-
-export function PortalHeader() {
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  return (
-    <header className="border-b border-teal-100 bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <button onClick={() => navigate("/therapist")} className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600 text-white">
-            <Stethoscope size={15} />
-          </div>
-          <span className="font-display font-semibold text-ink">SpeakFree</span>
-          <span className="rounded-full bg-gold-400/20 px-2 py-0.5 text-xs font-medium text-gold-600">
-            Therapist Portal
-          </span>
-        </button>
-        <nav className="hidden items-center gap-1 md:flex">
-          {[
-            { to: "/therapist", label: "Students", end: true },
-            { to: "/therapist/evidence", label: "Model evidence", end: false },
-          ].map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.end}
-              className={({ isActive }) =>
-                `rounded-full px-3 py-1.5 text-sm font-medium ${
-                  isActive ? "bg-teal-50 text-teal-800" : "text-ink-soft hover:text-ink"
-                }`
-              }
-            >
-              {link.label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="flex items-center gap-3">
-          <span className="hidden text-sm text-ink-soft sm:inline">{user?.name}</span>
-          <button
-            onClick={() => {
-              logout();
-              navigate("/");
-            }}
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-ink-soft hover:bg-teal-50"
-          >
-            <LogOut size={15} />
-            Log out
-          </button>
-        </div>
-      </div>
-    </header>
   );
 }
 

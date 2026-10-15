@@ -3,8 +3,11 @@ import { ReadingLevel } from "../types/therapy";
 import {
   CaseloadOverview,
   CohortReport,
+  CompareResponse,
   EvidenceReport,
   GoalMetric,
+  PlanReview,
+  PlanVerdict,
   StudentDetail,
   StudentRow,
 } from "../types/therapist";
@@ -53,4 +56,23 @@ export async function getEvidence(): Promise<EvidenceReport> {
 
 export async function getCohortReport(epsilon: number): Promise<CohortReport> {
   return (await api.get("/api/v1/therapist/cohort-report", { params: { epsilon } })).data;
+}
+
+export async function reviewPlan(email: string, verdict: PlanVerdict, note?: string): Promise<PlanReview> {
+  return (await api.post(`${student(email)}/plan-review`, { verdict, note })).data;
+}
+
+export async function compareStudents(a: string, b: string): Promise<CompareResponse> {
+  return (await api.get("/api/v1/therapist/compare", { params: { a, b } })).data;
+}
+
+/** Saves every expert rating as a CSV file (the rating sheet for the report). */
+export async function downloadRatingsSheet() {
+  const res = await api.get("/api/v1/therapist/evidence/ratings.csv", { responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "expert-ratings.csv";
+  link.click();
+  URL.revokeObjectURL(url);
 }

@@ -2,12 +2,13 @@ import re
 
 from app.therapy.schemas import ExerciseType, ReadingLevel, SeverityLevel, TherapyExercise
 
-ALL_SEVERITIES = [
-    SeverityLevel.MILD,
-    SeverityLevel.MODERATE,
-    SeverityLevel.SEVERE,
-    SeverityLevel.UNKNOWN,
-]
+# Starting reading level from the screening severity (Components 1–3).
+# Fluency shaping works up a hierarchy, so more severe stuttering starts lower.
+START_LEVEL = {
+    SeverityLevel.SEVERE: "beginner",
+    SeverityLevel.MODERATE: "beginner",
+    SeverityLevel.MILD: "intermediate",
+}
 
 EXERCISE_BANK: list[TherapyExercise] = [
     # --- Graded reading (adaptive: beginner -> intermediate -> advanced) ---
@@ -30,7 +31,7 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "They play until lunch time. "
             "Then they walk home together, happy and tired."
         ),
-        recommended_for=ALL_SEVERITIES,
+        recommended_for=[SeverityLevel.SEVERE, SeverityLevel.MODERATE, SeverityLevel.UNKNOWN],
     ),
     TherapyExercise(
         id="reading-intermediate",
@@ -52,7 +53,7 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "warm. We sit around the table, share the bread with butter and honey, "
             "and talk about our week. These simple mornings are some of my favourite memories."
         ),
-        recommended_for=ALL_SEVERITIES,
+        recommended_for=[SeverityLevel.MODERATE, SeverityLevel.MILD, SeverityLevel.UNKNOWN],
     ),
     TherapyExercise(
         id="reading-advanced",
@@ -80,7 +81,7 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "controlled pacing, you can communicate your thoughts clearly, calmly, and "
             "with genuine confidence."
         ),
-        recommended_for=ALL_SEVERITIES,
+        recommended_for=[SeverityLevel.MILD, SeverityLevel.UNKNOWN],
     ),
     # --- Pacing ---
     TherapyExercise(
@@ -122,7 +123,7 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "This technique is commonly used to help smooth out speech rhythm. "
             "Start with a short delay and increase gradually if it feels comfortable."
         ),
-        recommended_for=[SeverityLevel.MILD, SeverityLevel.MODERATE, SeverityLevel.SEVERE],
+        recommended_for=[SeverityLevel.SEVERE, SeverityLevel.MODERATE],
     ),
     # --- Picture description ---
     TherapyExercise(
@@ -148,7 +149,7 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "A man is sitting on a bench and reading a book.",
             "The sun is shining and the trees are green.",
         ],
-        recommended_for=ALL_SEVERITIES,
+        recommended_for=[SeverityLevel.MILD, SeverityLevel.MODERATE, SeverityLevel.UNKNOWN],
     ),
     TherapyExercise(
         id="picture-2",
@@ -173,7 +174,7 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "The child is mixing something in a white bowl.",
             "An orange cat is lying on the floor.",
         ],
-        recommended_for=ALL_SEVERITIES,
+        recommended_for=[SeverityLevel.MILD, SeverityLevel.MODERATE, SeverityLevel.UNKNOWN],
     ),
     TherapyExercise(
         id="picture-3",
@@ -198,7 +199,7 @@ EXERCISE_BANK: list[TherapyExercise] = [
             "A white and pink boat is sailing on the blue sea.",
             "There is a small red crab on the sand.",
         ],
-        recommended_for=ALL_SEVERITIES,
+        recommended_for=[SeverityLevel.MILD, SeverityLevel.MODERATE, SeverityLevel.UNKNOWN],
     ),
 ]
 

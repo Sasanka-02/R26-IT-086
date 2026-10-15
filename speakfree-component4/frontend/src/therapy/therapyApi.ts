@@ -102,3 +102,23 @@ export async function getFederatedArchitecture() {
   const res = await client.get("/api/v1/therapy/federated/architecture");
   return res.data;
 }
+
+/** Screening result from Components 1–3: sets the starting level and steers the plan. */
+export async function submitScreening(userId: string, severity: SeverityLevel, source = "Component 1 screening") {
+  return (await client.post("/api/v1/therapy/screening", { user_id: userId, severity, source })).data;
+}
+
+/** Downloads everything stored about the logged-in account as a JSON file. */
+export async function downloadMyData() {
+  const res = await client.get("/api/v1/auth/me/data", { responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "speakfree-my-data.json";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function deleteMyAccount() {
+  return (await client.delete("/api/v1/auth/me")).data;
+}

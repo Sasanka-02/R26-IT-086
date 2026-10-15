@@ -1,8 +1,19 @@
 import { useNavigate } from "react-router-dom";
-import { HeartPulse, LogOut, Play, History, Target, Award } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { Award, CalendarCheck, Clock, Flame, Play, Target, TrendingUp } from "lucide-react";
 import { useSession } from "../context/SessionContext";
+import { useAuth } from "../context/AuthContext";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
+import AppShell from "../components/AppShell";
+import BadgeShowcase from "../components/BadgeShowcase";
+import { Card, KpiTile, MeterBar, ScorePill } from "../components/ui";
+import {
+  DailyActivityChart,
+  ScoreGauge,
+  ScoreTrendChart,
+  ACCENT,
+} from "../components/progressCharts";
+
+const LEVEL_STEPS = ["Beginner", "Intermediate", "Advanced"];
 
 function formatRelativeTime(isoString: string): string {
   const diffMs = Date.now() - new Date(isoString).getTime();
@@ -17,112 +28,191 @@ function formatRelativeTime(isoString: string): string {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { resetSession } = useSession();
-  const { progress } = usePracticeHistory();
+  const { progress, progressError, refresh } = usePracticeHistory();
   const recent = progress?.recent ?? [];
+  const thisWeek = progress?.weekly[0];
+  const lastWeek = progress?.weekly[1];
 
-  const handleLogout = () => {
-    logout();
-    navigate("/");
-  };
-
-  const handleStartTherapy = () => {
+  const startTherapy = () => {
     resetSession();
-    navigate("/therapy");
+    navigate("/therapy?tab=practice");
   };
+
+  const weekDelta = thisWeek && lastWeek ? thisWeek.sessions - lastWeek.sessions : 0;
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="border-b border-teal-100 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600 text-white">
-              <HeartPulse size={15} />
-            </div>
-            <span className="font-display font-semibold text-ink">SpeakFree Therapy</span>
+    <AppShell>
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-2xl font-semibold text-ink">
+              Welcome back, {user?.name?.split(" ")[0] ?? "friend"}
+            </h1>
+            <p className="mt-1 text-sm text-ink-soft">
+              {progress?.has_data
+                ? `${progress.trend.label} · Reading level ${progress.level.label}`
+                : "Start with a Beginner reading — your plan adapts as you practise."}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-ink-soft">Hi, {user?.name ?? "there"}</span>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-ink-soft hover:bg-teal-50"
-            >
-              <LogOut size={15} />
-              Log out
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-5xl space-y-8 px-6 py-10">
-        <div className="rounded-3xl bg-gradient-to-br from-teal-600 to-teal-700 p-8 text-white">
-          <h1 className="font-display text-2xl font-semibold">
-            Welcome back, {user?.name ?? "friend"}
-          </h1>
-          <p className="mt-1 text-teal-50">
-            {progress?.has_data
-              ? `${progress.trend.label}. Reading level: ${progress.level.label}.`
-              : "Start with a Beginner reading — your plan will adapt as you practise."}
-          </p>
           <button
-            onClick={handleStartTherapy}
-            className="mt-5 flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-teal-700 hover:bg-teal-50"
+            onClick={startTherapy}
+            className="flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm text-white"
           >
             <Play size={16} />
-            Open Therapy Assistant
+            Start practice
           </button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-teal-100 bg-white p-5">
-            <History className="text-teal-600" size={20} />
-            <p className="mt-3 font-display text-2xl font-semibold text-ink">
-              {progress?.total_sessions ?? 0}
-            </p>
-            <p className="text-sm text-ink-soft">Exercises completed</p>
+        {progressError && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-ink" role="alert">
+            We couldn't load your progress. Check that the therapy service is running.{" "}
+            <button onClick={refresh} className="font-semibold text-gold-400 underline">
+              Try again
+            </button>
           </div>
-          <div className="rounded-2xl border border-teal-100 bg-white p-5">
-            <Target className="text-teal-600" size={20} />
-            <p className="mt-3 font-display text-2xl font-semibold text-ink">
-              {progress?.level.label ?? "Beginner"}
-            </p>
-            <p className="text-sm text-ink-soft">Reading level</p>
-          </div>
-          <div className="rounded-2xl border border-teal-100 bg-white p-5">
-            <Award className="text-teal-600" size={20} />
-            <p className="mt-3 font-display text-2xl font-semibold text-ink">
-              {progress?.average_score ?? "—"}
-            </p>
-            <p className="text-sm text-ink-soft">Average score out of 100</p>
-          </div>
+        )}
+
+        <div className="grid gap-5 lg:grid-cols-3">
+          <Card title="Practice summary" subtitle="All exercises on this account" className="lg:col-span-2">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <KpiTile
+                icon={CalendarCheck}
+                tone="gold"
+                value={progress?.total_sessions ?? 0}
+                label="Exercises done"
+                caption={
+                  thisWeek
+                    ? `${thisWeek.sessions} this week${weekDelta ? ` (${weekDelta > 0 ? "+" : ""}${weekDelta})` : ""}`
+                    : undefined
+                }
+              />
+              <KpiTile
+                icon={Clock}
+                tone="mint"
+                value={`${progress?.total_minutes ?? 0}m`}
+                label="Practice time"
+                caption={thisWeek ? `${thisWeek.minutes} min this week` : undefined}
+              />
+              <KpiTile
+                icon={Flame}
+                tone="pink"
+                value={progress?.streak_days ?? 0}
+                label="Day streak"
+                caption={progress ? `${progress.active_days} active days` : undefined}
+              />
+              <KpiTile
+                icon={Award}
+                tone="blue"
+                value={progress?.average_score ?? "—"}
+                label="Average score"
+                caption={progress?.best_score != null ? `Best ${progress.best_score}` : undefined}
+              />
+            </div>
+          </Card>
+
+          <Card title="Daily activity" subtitle="Exercises per day · last 14 days">
+            <DailyActivityChart daily={progress?.daily ?? []} height={190} />
+          </Card>
         </div>
 
-        <div className="rounded-2xl border border-teal-100 bg-white p-6">
-          <h2 className="font-display font-semibold text-ink">Recent activity</h2>
+        <div className="grid gap-5 lg:grid-cols-3">
+          <Card
+            title="Recent exercises"
+            className="lg:col-span-2"
+            action={
+              <button
+                onClick={() => navigate("/therapy?tab=progress")}
+                className="text-xs font-medium text-teal-600 hover:underline"
+              >
+                View all progress
+              </button>
+            }
+          >
+            {recent.length === 0 ? (
+              <p className="text-sm text-ink-soft">
+                No exercises yet — your history will appear here once you complete one.
+              </p>
+            ) : (
+              <div className="-mx-5 overflow-x-auto">
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <thead className="text-xs text-ink-soft">
+                    <tr className="border-b border-snow/5">
+                      <th className="px-5 py-2 font-medium">#</th>
+                      <th className="py-2 pr-4 font-medium">Exercise</th>
+                      <th className="w-1/3 py-2 pr-4 font-medium">Score</th>
+                      <th className="py-2 pr-5 text-right font-medium">When</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recent.slice(0, 5).map((entry, i) => (
+                      <tr key={entry.id} className="border-b border-snow/5 last:border-0">
+                        <td className="px-5 py-3 tabular-nums text-ink-soft">{String(i + 1).padStart(2, "0")}</td>
+                        <td className="py-3 pr-4 text-ink">{entry.title}</td>
+                        <td className="py-3 pr-4">
+                          <div className="flex items-center gap-3">
+                            <MeterBar value={entry.score} color={ACCENT} />
+                            <ScorePill score={entry.score} />
+                          </div>
+                        </td>
+                        <td className="py-3 pr-5 text-right text-xs text-ink-soft">
+                          {formatRelativeTime(entry.completed_at)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
 
-          {recent.length === 0 ? (
-            <p className="mt-2 text-sm text-ink-soft">
-              No sessions yet — your practice history will appear here once you
-              complete one.
-            </p>
-          ) : (
-            <ul className="mt-4 space-y-2">
-              {recent.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex items-center justify-between rounded-xl bg-paper px-4 py-3 text-sm"
-                >
-                  <span className="text-ink">{entry.title}</span>
-                  <span className="text-xs text-ink-soft">
-                    Score {entry.score} · {formatRelativeTime(entry.completed_at)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <Card title="Reading level" subtitle={progress?.level.progress_text}>
+            <ol className="space-y-2">
+              {LEVEL_STEPS.map((label, i) => {
+                const index = progress?.level.level_index ?? 0;
+                const mastered = progress?.level.mastered ?? false;
+                const done = i < index || (mastered && i === index);
+                const current = i === index && !mastered;
+                return (
+                  <li
+                    key={label}
+                    className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm ${
+                      current ? "bg-teal-600 font-semibold text-white" : "bg-shell/60 text-ink"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Target size={15} className={current ? "" : done ? "text-teal-600" : "text-ink-soft"} />
+                      {label}
+                    </span>
+                    <span className={`text-xs ${current ? "" : "text-ink-soft"}`}>
+                      {done ? "Completed" : current ? "You are here" : "Locked"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </Card>
         </div>
-      </main>
-    </div>
+
+        <div className="grid gap-5 lg:grid-cols-3">
+          <Card title="Average score" subtitle="Across every exercise">
+            <ScoreGauge value={progress?.average_score ?? null} label="Average score" />
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-sm text-ink-soft">
+              <TrendingUp size={15} className="text-teal-600" />
+              {progress?.trend.detail ?? "Loading..."}
+            </p>
+          </Card>
+
+          <Card title="Score trend" subtitle="Your score on each attempt" className="lg:col-span-2">
+            <ScoreTrendChart history={progress?.history ?? []} height={240} />
+          </Card>
+        </div>
+
+        <Card title="Your badges" subtitle="Earned by practising — hover a badge to see how to unlock it">
+          <BadgeShowcase badges={progress?.badges ?? []} compact />
+        </Card>
+      </div>
+    </AppShell>
   );
 }

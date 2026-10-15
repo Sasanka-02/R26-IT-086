@@ -6,7 +6,9 @@ Each simulated student has a hidden "true benefit" for every exercise
 strategy picks one exercise, observes a noisy reward, and learns. We
 compare:
 
-  * LinUCB  — the contextual bandit used by the app
+  * LinUCB  — the contextual bandit used by the app (student features only)
+  * LinUCB + exercise features — HybridLinUCB, which also knows each
+    exercise's type and difficulty (candidate improvement, not yet live)
   * Random  — pick any exercise uniformly
   * Rotation — cycle through exercises in a fixed order (a typical static plan)
 
@@ -16,14 +18,21 @@ Metrics (averaged over students, fixed random seed so results reproduce):
     student's best exercise (lower is better)
   * best-exercise rate: share of the final 10 rounds spent on the
     student's best exercise
+
+α for each LinUCB variant was chosen on separate simulated students
+(seeds 5000+), not on the students reported here.
 """
+
+from functools import lru_cache
+
 
 import numpy as np
 
-from app.therapy.bandit import ALPHA, LinUCBBandit
+from app.therapy.bandit import ALPHA, HybridLinUCB, LinUCBBandit
 from app.therapy.exercises import EXERCISE_BANK
 
 N_ARMS = len(EXERCISE_BANK)
+HYBRID_ALPHA = 0.3
 
 
 def _student(rng: np.random.Generator) -> dict:
@@ -46,25 +55,38 @@ def _context(skill: float, rewards: list[float]) -> np.ndarray:
 
 def _run(strategy: str, student: dict, rounds: int, rng: np.random.Generator) -> np.ndarray:
     bandit = LinUCBBandit(N_ARMS, alpha=ALPHA)
+    hybrid = HybridLinUCB(N_ARMS, alpha=HYBRID_ALPHA)
     rewards: list[float] = []
     picks = np.empty(rounds, dtype=int)
     for t in range(rounds):
         x = _context(student["skill"], rewards)
         if strategy == "linucb":
             arm = int(np.argmax([bandit.arm_score(a, x) for a in range(N_ARMS)]))
+        elif strategy == "hybrid":
+            arm = hybrid.choose(x)
         elif strategy == "random":
             arm = int(rng.integers(N_ARMS))
         else:  # rotation
             arm = t % N_ARMS
         reward = float(np.clip(student["benefit"][arm] + rng.normal(0, 0.08), 0, 1))
-        bandit.update(arm, x, reward)
+        if strategy == "hybrid":
+            hybrid.update(arm, x, reward)
+        else:
+            bandit.update(arm, x, reward)
         rewards.append(reward)
         picks[t] = arm
     return np.array(rewards), picks
 
 
+@lru_cache(maxsize=4)
 def evaluate(n_students: int = 60, rounds: int = 30, seed: int = 7) -> dict:
-    strategies = {"linucb": "LinUCB (adaptive)", "random": "Random", "rotation": "Fixed rotation"}
+    """Deterministic (fixed seeds), so the result is cached."""
+    strategies = {
+        "linucb": "LinUCB (adaptive, in the app)",
+        "hybrid": "LinUCB + exercise features",
+        "random": "Random",
+        "rotation": "Fixed rotation",
+    }
     per_round = {s: np.zeros(rounds) for s in strategies}
     regret = {s: [] for s in strategies}
     best_rate = {s: [] for s in strategies}

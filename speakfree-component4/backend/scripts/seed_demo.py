@@ -1,5 +1,13 @@
 """
-Seed realistic demo data for presentations.
+Seed SYNTHETIC demo data for presentations and pipeline testing.
+
+Everything this script writes is made up: the students, their attempts and
+the "expert" ratings. The ratings come from a formula (_synthetic_rating),
+not from a speech-language pathologist, and are stored with
+source="synthetic". They exist only to show that the rating -> calibration ->
+evidence pipeline works end to end. They are NOT expert validation: the
+scoring module fits on real clinician ratings whenever any exist, and the
+evidence page reports the two sources separately.
 
     python -m scripts.seed_demo          # add demo therapist + students
     python -m scripts.seed_demo --clean  # remove every *@demo.local account
@@ -24,9 +32,11 @@ import numpy as np
 from app.therapy import progress_store, scoring, therapist_store, user_store
 from app.therapy.adaptive import level_state
 from app.therapy.auth import hash_password
+from app.therapy import plan_review
 from app.therapy.exercises import EXERCISE_BANK, get_exercise
+from app.therapy.user_store import DEMO_SUFFIX
 
-SUFFIX = "@demo.local"
+SUFFIX = DEMO_SUFFIX
 PASSWORD = "demo1234"
 
 STUDENTS = [
@@ -52,6 +62,9 @@ def clean() -> None:
     for path in (progress_store.DATA_FILE, user_store.USERS_FILE, therapist_store.STORE_FILE):
         data = _load(path)
         _write(path, {k: v for k, v in data.items() if not k.endswith(SUFFIX)})
+    if plan_review.REVIEWS_FILE.exists():
+        reviews = json.loads(plan_review.REVIEWS_FILE.read_text(encoding="utf-8"))
+        _write(plan_review.REVIEWS_FILE, [r for r in reviews if not r["student"].endswith(SUFFIX)])
     scoring.calibrate()
     print("Removed demo accounts.")
 
@@ -89,9 +102,11 @@ def _attempt(rng, ex, skill, when) -> dict:
     }
 
 
-def _expert_rating(rng, record) -> int:
-    """A simulated therapist: weighs long pauses and speed more heavily than the
-    starting weights do, so calibration has something real to learn."""
+def _synthetic_rating(rng, record) -> int:
+    """SYNTHETIC rating for pipeline testing — a formula, not a clinician.
+    It weighs long pauses and speed more heavily than the starting weights
+    do, so the calibration step has a visible effect in the demo. Results
+    computed from these ratings say nothing about clinical validity."""
     minutes = max(record["duration_seconds"] / 60, 0.25)
     if record["speaking_ratio"] is None:
         score = 70 + 10 * {"easy": 1, "ok": 0, "hard": -1}[record["self_rating"]]
@@ -142,10 +157,12 @@ def seed() -> None:
             level = level_state(records)["level_index"]
         if records:
             for record in rng.choice(records, size=min(5, len(records)), replace=False):
-                record["expert"] = {
-                    "rating": _expert_rating(rng, record), "note": None, "by": therapist,
-                    "at": now.isoformat(),
+                review = {
+                    "rating": _synthetic_rating(rng, record), "note": "synthetic (seed script)",
+                    "by": therapist, "at": now.isoformat(), "source": "synthetic",
                 }
+                record["expert"] = review
+                record["expert_reviews"] = {therapist: review}
             progress[email] = records
 
     settings["nimali" + SUFFIX] = {
@@ -172,7 +189,11 @@ def seed() -> None:
     _write(therapist_store.STORE_FILE, settings)
     cal = scoring.calibrate()
     print(f"Seeded {len(STUDENTS)} students + 1 therapist. Password: {PASSWORD}")
-    print(f"Expert ratings: {cal['n_ratings']} · scoring model: {cal['active']} · thresholds: {cal['thresholds']}")
+    print(
+        f"Synthetic ratings: {cal['n_synthetic']} · clinician ratings: {cal['n_clinician']} · "
+        f"model fitted on: {cal['data_source']} ({cal['active']}) · thresholds: {cal['thresholds']}"
+    )
+    print("NOTE: seeded ratings are synthetic (pipeline testing only), not expert validation.")
 
 
 if __name__ == "__main__":

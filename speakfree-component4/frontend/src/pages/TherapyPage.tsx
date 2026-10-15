@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { HeartPulse, ArrowLeft, Lock, Star } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { ArrowLeft, Lock, Search, Star, X } from "lucide-react";
 import { useSession } from "../context/SessionContext";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
 import { startTherapySession, endTherapySession, getUserExercises } from "../therapy/therapyApi";
@@ -14,8 +14,10 @@ import WeeklyPlan from "../therapy/WeeklyPlan";
 import PrivacyPanel from "../therapy/PrivacyPanel";
 import AssistantPanel from "../therapy/AssistantPanel";
 import UsabilitySurvey from "../components/UsabilitySurvey";
+import AppShell from "../components/AppShell";
 
-type Tab = "practice" | "assistant" | "dashboard" | "plan" | "privacy";
+const TABS = ["practice", "assistant", "progress", "plan", "privacy"] as const;
+type Tab = (typeof TABS)[number];
 
 const LEVEL_NAMES: Record<string, string> = {
   beginner: "Beginner",
@@ -86,10 +88,12 @@ function ExerciseCard({
 }
 
 export default function TherapyPage() {
-  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const { sessionId } = useSession();
   const { userId, version } = usePracticeHistory();
-  const [tab, setTab] = useState<Tab>("practice");
+  const tabParam = params.get("tab") as Tab | null;
+  const tab: Tab = tabParam && TABS.includes(tabParam) ? tabParam : "practice";
+  const query = (params.get("q") ?? "").trim().toLowerCase();
   const [exercises, setExercises] = useState<TherapyExercise[]>([]);
   const [level, setLevel] = useState<LevelState | null>(null);
   const [selected, setSelected] = useState<TherapyExercise | null>(null);
@@ -122,14 +126,6 @@ export default function TherapyPage() {
     };
   }, [userId, version]);
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "practice", label: "Practice" },
-    { id: "assistant", label: "Assistant" },
-    { id: "dashboard", label: "My Progress" },
-    { id: "plan", label: "Weekly Plan" },
-    { id: "privacy", label: "Privacy" },
-  ];
-
   const select = (exercise: TherapyExercise) => {
     if (exercise.locked) return;
     setSelected(exercise);
@@ -140,7 +136,8 @@ export default function TherapyPage() {
   const startById = (exerciseId: string) => {
     const exercise = exercises.find((ex) => ex.id === exerciseId);
     if (!exercise) return;
-    setTab("practice");
+    keepSelection.current = tab !== "practice" || !!query;
+    setParams({ tab: "practice" });
     select(exercise);
   };
 
@@ -149,9 +146,24 @@ export default function TherapyPage() {
     setCalibratedDelay(null);
   };
 
-  const reading = exercises.filter((ex) => ex.type === "reading");
-  const pictures = exercises.filter((ex) => ex.type === "picture");
-  const other = exercises.filter((ex) => ex.type === "pacing" || ex.type === "daf");
+  // Picking a sidebar item while an exercise is open returns to the picker.
+  // (Skipped once when the assistant or plan starts an exercise by switching to Practice.)
+  const keepSelection = useRef(false);
+  useEffect(() => {
+    if (keepSelection.current) {
+      keepSelection.current = false;
+      return;
+    }
+    setSelected(null);
+    setCalibratedDelay(null);
+  }, [tab, query]);
+
+  const visible = query
+    ? exercises.filter((ex) => `${ex.title} ${ex.description}`.toLowerCase().includes(query))
+    : exercises;
+  const reading = visible.filter((ex) => ex.type === "reading");
+  const pictures = visible.filter((ex) => ex.type === "picture");
+  const other = visible.filter((ex) => ex.type === "pacing" || ex.type === "daf");
 
   const section = (title: string, hint: string, items: TherapyExercise[]) =>
     items.length > 0 && (
@@ -160,7 +172,7 @@ export default function TherapyPage() {
           <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
           <p className="text-sm text-ink-soft">{hint}</p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((ex) => (
             <ExerciseCard
               key={ex.id}
@@ -174,43 +186,8 @@ export default function TherapyPage() {
     );
 
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="border-b border-teal-100 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-1.5 text-sm text-ink-soft hover:text-ink"
-          >
-            <ArrowLeft size={15} />
-            Dashboard
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-600 text-white">
-              <HeartPulse size={14} />
-            </div>
-            <span className="font-display font-semibold text-ink">Therapy Assistant</span>
-          </div>
-          <div className="w-20" />
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-4xl space-y-6 p-6">
-        <div className="flex gap-1 overflow-x-auto rounded-full border border-teal-100 bg-white p-1">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex-1 whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium transition ${
-                tab === t.id
-                  ? "bg-teal-600 text-white shadow-sm"
-                  : "text-ink-soft hover:bg-teal-50"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
+    <AppShell>
+      <div className="mx-auto max-w-6xl space-y-6">
         {tab === "practice" && (
           <div className="space-y-6">
             {loading && <p className="text-sm text-ink-soft">Loading today's exercises...</p>}
@@ -237,6 +214,20 @@ export default function TherapyPage() {
                     </p>
                   )}
                 </div>
+                {query && (
+                  <div className="flex flex-wrap items-center gap-3 rounded-xl border border-teal-100 bg-white px-4 py-3 text-sm">
+                    <Search size={15} className="text-ink-soft" />
+                    <span className="text-ink">
+                      {visible.length} exercise{visible.length === 1 ? "" : "s"} matching “{params.get("q")}”
+                    </span>
+                    <button
+                      onClick={() => setParams({ tab: "practice" })}
+                      className="ml-auto flex items-center gap-1 text-xs font-medium text-teal-600 hover:underline"
+                    >
+                      <X size={13} /> Clear search
+                    </button>
+                  </div>
+                )}
                 {section(
                   "Reading practice",
                   "Three levels. Two strong readings in a row unlock the next level.",
@@ -292,10 +283,10 @@ export default function TherapyPage() {
         )}
 
         {tab === "assistant" && <AssistantPanel onStart={startById} />}
-        {tab === "dashboard" && <ProgressDashboard />}
+        {tab === "progress" && <ProgressDashboard />}
         {tab === "plan" && <WeeklyPlan onStart={startById} />}
         {tab === "privacy" && <PrivacyPanel />}
       </div>
-    </div>
+    </AppShell>
   );
 }

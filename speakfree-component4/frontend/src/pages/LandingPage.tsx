@@ -5,7 +5,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="min-h-screen bg-shell">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-white">
@@ -83,8 +83,9 @@ export default function LandingPage() {
               Transparent privacy budget
             </h3>
             <p className="mt-1 text-sm text-ink-soft">
-              Every stored statistic is privatised with differential
-              privacy, and your budget usage is always visible.
+              Your voice never leaves your device. Statistics shared outside
+              the clinic carry differential-privacy noise, and the budget
+              spent is always visible.
             </p>
           </div>
         </div>

@@ -44,6 +44,13 @@ class TherapyExercise(BaseModel):
     recommended_for: list[SeverityLevel] = Field(default_factory=list)
 
 
+class ScreeningRequest(BaseModel):
+    """Severity from the screening components (1–3) for one student."""
+    user_id: str
+    severity: SeverityLevel
+    source: str = Field(default="Component 1 screening", max_length=80)
+
+
 class StartSessionRequest(BaseModel):
     session_id: str
     severity: SeverityLevel = SeverityLevel.UNKNOWN
@@ -124,6 +131,10 @@ class ExerciseResultRequest(BaseModel):
     syllables: int | None = None
     target_wpm: int | None = None
     self_rating: SelfRating = SelfRating.OK
+    # Optional, from a teammate's ASR / disfluency detector (Components 1–3):
+    # repetitions + prolongations + blocks counted in this attempt. With
+    # `syllables` it gives %SS, the standard clinical stuttering measure.
+    disfluencies: int | None = Field(default=None, ge=0)
 
 
 class AssistantChatRequest(BaseModel):

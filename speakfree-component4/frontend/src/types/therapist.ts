@@ -1,4 +1,16 @@
-import { ExerciseType, GoalMetric, ProgressSummary, ReadingLevel, ScorePart, SelfRating } from "./therapy";
+import {
+  AssistantReply,
+  ExerciseType,
+  GoalMetric,
+  LevelState,
+  ProgressSummary,
+  ReadingLevel,
+  ReportCard,
+  ScorePart,
+  Screening,
+  SelfRating,
+  WeeklyPlanResponse,
+} from "./therapy";
 
 export type { GoalMetric };
 
@@ -42,10 +54,19 @@ export interface CaseloadOverview {
   level_distribution: { level: ReadingLevel; label: string; students: number }[];
 }
 
+export interface ExpertReview {
+  rating: number;
+  note: string | null;
+  by: string;
+  at: string;
+  source?: "clinician" | "synthetic";
+}
+
 export interface StudentRecord {
   id: string;
   exercise_id: string;
-  expert: { rating: number; note: string | null; by: string; at: string } | null;
+  expert: ExpertReview | null;
+  expert_reviews: ExpertReview[];
   measured_wpm: number | null;
   target_wpm: number | null;
   score_breakdown: ScorePart[];
@@ -74,6 +95,22 @@ export interface StudentDetail {
   weekly_sessions: { label: string; sessions: number; minutes: number }[];
   records: StudentRecord[];
   settings: TherapistSettings;
+  plan: Omit<WeeklyPlanResponse, "user_id">;
+  plan_reviews: PlanReview[];
+}
+
+export type RatingSource = "clinician" | "synthetic";
+export type PlanVerdict = "appropriate" | "partly" | "not_appropriate";
+
+export interface PlanReview {
+  id: string;
+  student: string;
+  verdict: PlanVerdict;
+  note: string | null;
+  by: string;
+  at: string;
+  source: RatingSource;
+  plan: { level: string; exercises: { id: string; title: string; source: string }[] };
 }
 
 export interface TherapistSettings {
@@ -81,6 +118,7 @@ export interface TherapistSettings {
   level_override: { level: ReadingLevel; by: string; at: string } | null;
   goals: { id: string; metric: GoalMetric; target: number }[];
   notes: { id: string; text: string; by: string; at: string }[];
+  screening: Screening | null;
 }
 
 export interface FitMetrics {
@@ -90,9 +128,49 @@ export interface FitMetrics {
   within_15: number;
 }
 
+export interface StrongMatch {
+  based_on: string;
+  threshold: number;
+  n: number;
+  expert_good: number;
+  flagged_strong: number;
+  accuracy: number;
+  sensitivity: number | null;
+  specificity: number | null;
+}
+
+export interface InterRater {
+  n_pairs: number;
+  exact_agreement: number | null;
+  within_one: number | null;
+  kappa: number | null;
+  weighted_kappa: number | null;
+}
+
+export interface SourceValidation {
+  n: number;
+  shown_scores: FitMetrics;
+  prior_model: FitMetrics;
+  calibrated_model_loo: FitMetrics | null;
+  strong_match: StrongMatch;
+  inter_rater: InterRater;
+}
+
+export interface PlanValidationStats {
+  n: number;
+  students: number;
+  counts: Record<PlanVerdict, number>;
+  appropriate_pct: number | null;
+  acceptable_pct: number | null;
+}
+
 export interface EvidenceReport {
   scoring: {
     active: "prior" | "calibrated";
+    data_source: RatingSource | null;
+    n_clinician: number;
+    n_synthetic: number;
+    validation_by_source: Record<RatingSource, SourceValidation | null>;
     n_ratings: number;
     min_ratings: number;
     ridge_lambda?: number;
@@ -114,7 +192,14 @@ export interface EvidenceReport {
     auto_score: number;
     expert_rating: number;
     expert_score: number;
+    source: RatingSource;
   }[];
+  plan_validation: {
+    labels: Record<PlanVerdict, string>;
+    clinician: PlanValidationStats;
+    synthetic: PlanValidationStats;
+    recent: { student: string; verdict: PlanVerdict; note: string | null; at: string; source: RatingSource; level: string }[];
+  };
   assistant: { examples: number; intents: number; accuracy: number; confidence_threshold: number };
   usability: UsabilitySummary;
   adaptive: {
@@ -162,4 +247,21 @@ export interface CohortReport {
   accuracy: { epsilon: number; count_error: number; mean_score_error: number }[];
   budget: { epsilon_spent: number; epsilon_threshold: number; epsilon_remaining: number; inference_only: boolean };
   epsilon_options: number[];
+}
+
+export interface CompareColumn {
+  email: string;
+  name: string;
+  sessions: number;
+  average_score: number | null;
+  report_card: ReportCard;
+  level: LevelState;
+  plan: Omit<WeeklyPlanResponse, "user_id">;
+  reading_speeds: { title: string; level: ReadingLevel; base_wpm: number; personal_wpm: number }[];
+  assistant: AssistantReply;
+}
+
+export interface CompareResponse {
+  question: string;
+  students: [CompareColumn, CompareColumn];
 }

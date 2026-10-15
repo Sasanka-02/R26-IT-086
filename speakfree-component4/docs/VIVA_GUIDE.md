@@ -39,13 +39,46 @@ Advanced/final stage), picture description, pacing and delayed auditory feedback
 
 | Panel comment | What was built | Where to show it |
 |---|---|---|
-| Output should be clear, not graphs | Plain-language cards, tables, level ladder, "What this means for you" | Student → *My Progress* |
-| Output should change with different users | Every result is stored per account; plan, assistant, level, goals, badges all come from that user's data | Log in as two demo students |
+| Output should be clear, not graphs | A report card comes first: one sentence, a traffic light (Improving / Steady / Needs support), "This week", "Next step". Charts are behind a *Details* toggle. *Download report (PDF)* prints a clean report | Student → *My Progress*; Therapist → student page |
+| Output should change with different users | Every result is stored per account. *Compare students* shows two students side by side: level, level timeline, plan, reading speeds, assistant answer | Therapist → *Compare students* |
 | Assistant was missing | Intent classifier (87% cross-validated) + personal briefing + optional LLM | Student → *Assistant* |
-| Adaptive learning was missing | Level engine, LinUCB plan with predicted score ± uncertainty, adaptive reading speed, therapist overrides | Student → *Weekly Plan*; Therapist → controls |
+| Adaptive learning was missing | Level engine with a visible **level timeline** ("Beginner → Intermediate on 3 Oct after 2 strong readings"), LinUCB plan with a **Why this plan for you?** box (the bandit's numbers in words), adaptive reading speed, therapist overrides | Student → *My Progress*, *Weekly Plan* |
 | Constants must not be guessed; derive from evidence | Ridge-regression calibration of every weight and threshold from therapist ratings | Therapist → *Model evidence* §2 |
-| Validate output with an expert | Therapist 1–5 ratings, agreement metrics, leave-one-out validation, scatter plot | Therapist → *Model evidence* §1 |
+| Validate output with an expert | Therapist 1–5 ratings → MAE, Pearson r, % within 15, "strong vs expert 4–5" accuracy, Cohen's kappa between two raters. Clinician and synthetic ratings are reported **separately** | Therapist → *Model evidence* §1 |
+| Validate the adaptive learning output | Therapist judges each generated weekly plan (appropriate / partly / not) → % agreement | Therapist → student page; *Model evidence* §4 |
 | Need a clear understanding of the component | This guide, explanations built into every page | — |
+
+### 2.1 Honest labelling of data
+
+The demo seed script (`backend/scripts/seed_demo.py`) creates **synthetic data
+for pipeline testing**: made-up students, attempts and ratings from a formula
+(`_synthetic_rating`). Every such rating is stored with `source: "synthetic"`;
+ratings and plan reviews made from any `@demo.local` account are also
+synthetic. The scoring model fits on clinician ratings whenever any exist,
+and the evidence page always shows the two sources apart. Say this
+openly in the viva and the report: *"The seeded numbers test the pipeline;
+the validation results are the clinician ones in §1."*
+
+### 2.2 Real expert validation protocol (for the report)
+
+1. **Recruit** one speech-language pathologist (hospital speech-therapy unit,
+   university speech and hearing department, or private clinic) for a
+   1–2 hour session. Create them a therapist account with the clinic invite
+   code. Do **not** use a `@demo.local` account, or their ratings will be
+   counted as synthetic.
+2. **Collect** 30–50 real attempts from 8–10 volunteers, across all exercise
+   types (reading at each level, pacing, DAF, picture description).
+3. **Rate:** the SLP opens each student and uses *Your rating* (1–5) in *All
+   work*. Calibration re-runs on every rating.
+4. **Second rater (optional):** a second therapist account rates the same
+   attempts. Each rater sees only their own buttons; Cohen's kappa appears
+   under *Agreement between two raters*.
+5. **Plans:** on 10 student pages the SLP judges *Validate this week's plan*.
+6. **Report** from *Model evidence*: §1 (MAE, Pearson r, % within ±15,
+   strong-vs-4–5 accuracy, kappa) and §4 (% plans appropriate).
+   *Rating sheet (CSV)* downloads every rating with rater and timestamp.
+7. **Keep proof:** signed letter or email from the SLP, the CSV rating sheet,
+   photos of the session.
 
 ---
 
@@ -155,9 +188,34 @@ known best exercises, 30 sessions each, fixed seed:
 
 | Strategy | Average reward | Regret (lower is better) | Picks the best exercise (last 10) |
 |---|---|---|---|
-| LinUCB | ~79 | ~262 | ~39% |
-| Random | ~70 | ~558 | ~10% |
-| Fixed rotation | ~70 | ~558 | ~11% |
+| LinUCB (live) | 79.4 | 262 | 39% |
+| LinUCB + exercise features (candidate) | 79.5 | 256 | 52% |
+| Random | 69.5 | 558 | 10% |
+| Fixed rotation | 69.6 | 558 | 11% |
+
+**Say the weakness first:** 39% best-exercise rate after 30 sessions means the
+live engine is still learning. The learning curve is still rising, and regret is
+already half that of a fixed plan.
+
+**Exercise features (before/after):** the live model learns each exercise
+separately, using only student features. `HybridLinUCB` adds exercise features
+`[1, difficulty, difficulty², type one-hot]`, crossed with the student context,
+so evidence from one exercise informs similar ones. α was tuned on separate
+simulated students (live 0.6, hybrid 0.3). On the reported cohort it finds the
+best exercise more often (52% vs 39%) with similar regret. On two larger
+cohorts (200 students each) it again found the best exercise more often
+(56% vs 44%, 52% vs 49%) but its regret was 4–5% *higher* (281 vs 267,
+274 vs 263), so it is reported as a candidate and not switched on. That is an honest, defensible
+result: better at finding the best exercise, slightly costlier exploration.
+
+**Screening severity (integration with Components 1–3):** `POST
+/api/v1/therapy/screening` with `{user_id, severity}`. Severe/moderate start at
+Beginner, mild at Intermediate (only before the first reading, and never over
+a therapist's choice). Exercises recommended for that severity get +0.15 on
+their UCB score, and the others −0.15. With no history every UCB is equal, so the
+screening decides the first plan: severe → Beginner reading + gentle pacing +
+DAF; mild → Intermediate reading + standard pacing + picture description. As
+the student's own scores accumulate, they outweigh the 0.15.
 
 ### 3.5 Assistant intent classifier (`intent_classifier.py`, `assistant.py`)
 
@@ -194,6 +252,14 @@ noisy value = true value + Laplace(0, sensitivity / ε)
 * Releases are cached per data snapshot, so repeating a request cannot average
   the noise away or drain the budget.
 * The page shows the privacy/accuracy trade-off for ε = 0.25 … 5.
+* Every noisy value goes through `privacy.privatize_statistic()`, and each
+  release is recorded with `budget_ledger.spend()`.
+
+**What to claim, exactly:** "Differential privacy is applied to every statistic
+that leaves the clinic." Do **not** say stored data is privatised. The
+student and their therapist see exact results by design, protected by access
+control. DP-SGD for federated training is **future work** (`federated_stub.py`
+is a design only, labelled so in the app).
 
 ### 3.7 Usability evaluation (`survey.py`)
 
@@ -220,6 +286,86 @@ SUS        = 2.5 × Σ item scores        (0–100; 68 = common average benchmar
   breaks the signature.
 * Students can only access their own data (403 otherwise); therapist endpoints
   require the therapist role; therapist sign-up requires a clinic invite code.
+* Login rate limit: 5 wrong passwords for one account within 15 minutes →
+  further attempts get HTTP 429 until the oldest failure expires.
+* Audit log (`audit.py`, `data/audit_log.jsonl`): every therapist change
+  (assignments, level, goals, notes, ratings, plan reviews), screening results
+  and account deletions, with who and when. `GET /api/v1/therapist/audit`.
+* Input validation: Pydantic models with bounds on every request body.
+
+### 3.9 Consent and data rights (`account_data.py`)
+
+* Sign-up requires ticking a consent statement (what is stored, voice never
+  recorded, the right to download or delete, guardian agreement for under-18s).
+  The consent version and time are saved on the account.
+* Privacy tab → **Download my data** (everything stored, as JSON) and **Delete
+  my account**. Deletion removes the account, records (and ratings on them),
+  settings, plan reviews and survey response, then re-fits the calibration.
+  This covers access and erasure under Sri Lanka's Personal Data Protection Act
+  No. 9 of 2022.
+* Future work: a separate parent/guardian account linked to a child's account.
+
+### 3.10 Clinical measure: %SS (`scoring.py`)
+
+The score's features (voicing, pauses, volume, speed) measure *practice
+quality*, not stuttering itself. They don't detect repetitions,
+prolongations or blocks. If a teammate's ASR / disfluency detector sends
+`disfluencies` (a count) with a result, the score adds
+**%SS = disfluencies / syllables × 100**, the standard clinical measure, at a
+starting weight of −3 points per %SS. That weight is re-estimated from expert
+ratings like every other weight. Without a count, the feature is 0 and nothing
+changes.
+
+---
+
+## 3b. The therapy and adaptive learning, explained simply
+
+**The approach is fluency shaping:** teach a slower, smoother, controlled way
+of speaking, and practise it until it becomes natural.
+
+* **Breathing warm-up:** relaxed breathing lowers tension; many blocks start
+  with a tight breath or throat.
+* **Pacing:** rate control. Words are highlighted at a target speed; slower
+  speech gives the speech muscles time. The speed is personal (±10% per
+  result, kept within 70–130%).
+* **Graded reading (Beginner → Intermediate → Advanced):** the therapy
+  *hierarchy*. Master easy speech first, then raise the difficulty.
+* **Picture description:** spontaneous speech, the step towards real
+  conversation (harder than reading aloud).
+* **DAF:** your voice is played back about 50–100 ms late, which slows speech and
+  reduces stuttering for many people. The delay is calibrated per user.
+* **Real-time feedback:** "Take your time", "a little louder", "nice and
+  steady", coached like a therapist would.
+
+**One line for the viva:** *"The therapist teaches the technique in the
+clinic. SpeakFree provides daily structured home practice with feedback and
+sends the results back to the therapist."* It is a therapy **assistant**, not a
+replacement.
+
+**Three layers of adaptation:**
+
+1. **Level staircase (2-up / 2-down):** the same method as hearing tests. It
+   keeps practice neither boring nor stressful.
+2. **Speed:** +10% after a strong attempt, −10% after a difficult one.
+3. **Weekly plan (LinUCB):** for each exercise it predicts the score plus an
+   uncertainty bonus for rarely tried ones, and picks the highest total.
+   *Analogy:* at a restaurant you mostly order the dish you know is good, but
+   sometimes try a new one in case it's even better.
+
+---
+
+## 3c. Gaps an examiner may raise, and the honest answer
+
+| Gap | Status |
+|---|---|
+| Differential privacy "not used" | Applied to every statistic leaving the clinic (cohort report, via `privatize_statistic`). Not applied to the student's own or the treating therapist's exact view, by design. Wording in the app corrected. |
+| Federated learning | Design only. Presented as **future work**. |
+| Integration with Components 1–3 | `POST /api/v1/therapy/screening`: severity sets the starting level and the first plan; severity tags on exercises now differ. The therapist can also enter it. Still to do: call it from the Component 1 screening page; the biomarker endpoint is not yet used by the frontend. |
+| Score measures voice activity, not stuttering | %SS feature ready (§3.10); needs the disfluency count from a teammate's detector. |
+| JSON-file storage | Known limitation: move to SQLite/PostgreSQL with SQLAlchemy (future work). |
+| Not deployed | Future work: backend on Render/Railway, frontend on Vercel, HTTPS. |
+| Phone use / reminders | Future work: installable PWA, daily reminders. |
+| Real users | Run a 2-week pilot with 5–10 users: first-week vs last-week score, and SUS (§3.7). |
 
 ---
 
@@ -245,29 +391,50 @@ Therapist invite code for new therapist sign-ups: `SPEAKFREE-CLINIC`
 (change with the `THERAPIST_INVITE_CODE` environment variable).
 Remove demo data with `python -m scripts.seed_demo --clean`.
 
-**Important:** the demo's expert ratings come from a *simulated* therapist so
-the evidence page has content. For the final report, have a real speech
-therapist rate real attempts on the student pages; the same page then shows
-real validation results.
+**Important:** the demo's ratings are **synthetic data for pipeline testing**
+(see §2.1). The evidence page labels them as synthetic and keeps them apart
+from real results. For the final report, follow the protocol in §2.2.
 
-### Suggested 6-minute demo script
+### Packaging the submission
 
-1. **Student (amal@demo.local)** — Practice tab: reading levels with locks;
-   start a Beginner reading with the breathing warm-up; save the result and open
-   *How this score was worked out*.
-2. **Weekly Plan** — point at "Predicted score ≈ … (± …)" and *How the plan is
-   chosen*.
-3. **Assistant** — ask "Why did I get this score?", "Am I meeting my goals?",
-   "I talk too fast". Show the intent/confidence tag.
-4. **My Progress** — plain-language summary, goals, badges, first vs latest.
-5. **Therapist (dr.silva@demo.local)** — alerts, student table; open Nimali:
-   assign an exercise, add a goal, rate an attempt.
-6. **Model evidence** — expert agreement before/after calibration, learned
-   constants, LinUCB vs random, assistant accuracy, usability (SUS), DP trade-off.
+Don't zip the working folder. It contains `backend/data/` (accounts, the
+token-signing key `auth_secret.key`), `.env` and `venv/`. All of these are
+gitignored, so build the zip from git instead (from the repository root):
+
+```powershell
+git archive --format=zip -o speakfree-component4.zip HEAD
+```
+
+This contains only committed files. Commit your changes first.
+
+### 3-minute demo script (assistant + adaptive learning first)
+
+1. **(0:00) Student `amal@demo.local` → My Progress.** Read the report card
+   aloud: traffic light, one sentence, *This week*, *Next step*. Point at the
+   level timeline ("Beginner → Intermediate on … after 2 strong readings").
+   Open *Details* only to show the charts are still there.
+2. **(0:40) Weekly Plan.** Read *Why this plan for you?*: level, recent
+   average, trend, comfort. Then one item: "expects about 68, fairly sure,
+   ranked #1 of 9".
+3. **(1:10) Assistant.** Ask "What should I practise next?" and "Why did I get
+   this score?". Show the intent/confidence tag.
+4. **(1:40) Therapist `dr.silva@demo.local` → Compare students** (Kasun vs
+   Ravi): different level, timeline, plan, reading speed and assistant answer
+   to the same question. *"Same engine, different history, different output."*
+5. **(2:20) Model evidence.** §1: clinician vs synthetic split, MAE / r /
+   within ±15, strong-vs-4–5, kappa. §4: % plans judged appropriate.
+6. **(2:50) Student page → Print / save PDF report** — the take-home report
+   for a therapist or parent.
 
 ---
 
 ## 5. Likely questions
+
+**Aren't your expert ratings simulated?** The seeded ones are, and they are
+labelled *synthetic data for pipeline testing* in the code, the database
+(`source: "synthetic"`) and on the evidence page. They are never mixed with
+clinician ratings: once any clinician rating exists, the model fits only on
+clinician ratings. The validation figures in the report are the clinician ones.
 
 **Is the score a clinical stuttering measure?** No — it is a practice-quality
 score from on-device measurements. That is why it is validated against

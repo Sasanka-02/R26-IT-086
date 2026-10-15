@@ -1,5 +1,13 @@
 export type ExerciseType = "pacing" | "daf" | "picture" | "reading";
 export type SeverityLevel = "mild" | "moderate" | "severe" | "unknown";
+
+/** Severity received from the screening components (1–3). */
+export interface Screening {
+  severity: SeverityLevel;
+  source: string;
+  by: string;
+  at: string;
+}
 export type ReadingLevel = "beginner" | "intermediate" | "advanced";
 export type SelfRating = "easy" | "ok" | "hard";
 
@@ -54,6 +62,28 @@ export interface LevelState {
   set_by_therapist: boolean;
   strong_threshold: number;
   weak_threshold: number;
+  history: LevelEvent[];
+}
+
+/** One move on the reading-level ladder, replayed from the student's own attempts. */
+export interface LevelEvent {
+  at: string;
+  from: string | null;
+  to: string;
+  direction: "up" | "down" | "mastered" | "therapist";
+  reason: string;
+}
+
+export type ReportStatus = "improving" | "steady" | "needs_support";
+
+/** Plain-language summary shown before any chart. */
+export interface ReportCard {
+  status: ReportStatus;
+  label: string;
+  headline: string;
+  this_week: string;
+  next_step: string;
+  reasons: string[];
 }
 
 export interface UserExercisesResponse {
@@ -154,6 +184,14 @@ export interface ProgressSummary {
     last_done: string;
   }[];
   weekly: { label: string; sessions: number; minutes: number; average_score: number | null }[];
+  daily: { date: string; sessions: number; average_score: number | null }[];
+  history: {
+    attempt: number;
+    completed_at: string;
+    score: number;
+    title: string;
+    exercise_type: ExerciseType;
+  }[];
   recent: {
     id: string;
     title: string;
@@ -168,6 +206,7 @@ export interface ProgressSummary {
   badges: Badge[];
   goals: GoalProgress[];
   first_vs_latest: FirstVsLatest[];
+  report_card: ReportCard;
 }
 
 export interface PlanExercise {
@@ -180,12 +219,19 @@ export interface PlanExercise {
   times_practised: number;
   predicted_score: number | null;
   uncertainty: number | null;
+  /** The bandit's numbers for this exercise, in words. */
+  explanation: string;
+  rank?: number;
+  compared?: number;
 }
 
 export interface WeeklyPlanResponse {
   user_id: string;
   level: LevelState;
   exercises: PlanExercise[];
+  screening: Screening | null;
+  /** The context the plan was built from, in words. */
+  why: string[];
   context: { level: number; recent_average: number; trend: number; comfort: number };
 }
 

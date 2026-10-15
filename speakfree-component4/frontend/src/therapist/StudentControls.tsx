@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { getUserExercises } from "../therapy/therapyApi";
+import { getUserExercises, submitScreening } from "../therapy/therapyApi";
 import { errorMessage } from "../api/client";
-import { GoalProgress, ReadingLevel, TherapyExercise } from "../types/therapy";
+import { GoalProgress, ReadingLevel, SeverityLevel, TherapyExercise } from "../types/therapy";
 import { GoalMetric, TherapistSettings } from "../types/therapist";
 import { addGoal, addNote, removeGoal, setAssignedExercises, setLevelOverride } from "./therapistApi";
 import { formatDate, Panel } from "./ui";
@@ -36,6 +36,7 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
   const [goalTarget, setGoalTarget] = useState(GOAL_OPTIONS[0].suggested);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [severity, setSeverity] = useState<SeverityLevel>(settings.screening?.severity ?? "moderate");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -156,6 +157,39 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
                 className="rounded-full bg-teal-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               >
                 Apply
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Screening result</h3>
+            <p className="text-xs text-ink-soft">
+              {settings.screening
+                ? `Current: ${settings.screening.severity} (${settings.screening.source}, ${formatDate(settings.screening.at)}).`
+                : "Normally sent by the screening component."}{" "}
+              Sets the starting level (severe/moderate → Beginner, mild → Intermediate) until the first reading, and
+              steers the plan towards suitable exercises.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <select
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value as SeverityLevel)}
+                className="rounded-lg border border-teal-100 bg-white px-3 py-1.5 text-sm"
+              >
+                {(["mild", "moderate", "severe", "unknown"] as const).map((s) => (
+                  <option key={s} value={s}>
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </option>
+                ))}
+              </select>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  run(() => submitScreening(email, severity, "Entered by therapist"), "Screening result saved.")
+                }
+                className="rounded-full bg-teal-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              >
+                Save
               </button>
             </div>
           </div>

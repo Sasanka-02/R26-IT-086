@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
-from app.therapy import auth
+from app.therapy import audit, auth
 from app.therapy.adaptive import (
     LEVELS,
     attempt_feedback,
@@ -16,7 +16,7 @@ from app.therapy.assistant import answer, build_briefing
 from app.therapy.bandit import recommend_weekly_plan
 from app.therapy.biomarker import compute_delta_vector, overall_progress_score
 from app.therapy.dashboard import build_progress_summary
-from app.therapy.exercises import EXERCISE_BANK, get_exercise, recommend_exercises, syllables_per_word
+from app.therapy.exercises import EXERCISE_BANK, START_LEVEL, get_exercise, recommend_exercises, syllables_per_word
 from app.therapy.federated_stub import get_federated_architecture
 from app.therapy.privacy import budget_ledger
 from app.therapy.progress_store import add_record, get_records, normalize_user_id
@@ -31,13 +31,14 @@ from app.therapy.schemas import (
     ExerciseType,
     LiveMetric,
     PrivacyBudgetResponse,
+    ScreeningRequest,
     SessionSummary,
     SeverityLevel,
     StartSessionRequest,
     StartSessionResponse,
 )
 from app.therapy.session_store import end_session, get_session, start_session
-from app.therapy.therapist_store import get_settings
+from app.therapy.therapist_store import get_settings, set_screening
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/therapy", tags=["therapy"])
@@ -180,6 +181,7 @@ async def submit_result(payload: ExerciseResultRequest, user: dict = Depends(aut
         "measured_wpm": _measured_wpm(exercise, payload.syllables, payload.duration_seconds),
         "target_wpm": payload.target_wpm or exercise.target_wpm,
         "self_rating": payload.self_rating.value,
+        "disfluencies": payload.disfluencies,
     }
     score, breakdown = score_attempt(attempt)
     stored = add_record(payload.user_id, {**attempt, "score": score, "score_breakdown": breakdown})
@@ -210,6 +212,29 @@ async def get_weekly_plan(user_id: str, user: dict = Depends(auth.current_user))
     auth.ensure_can_access(user, user_id)
     plan = recommend_weekly_plan(get_records(user_id), get_settings(user_id))
     return {"user_id": normalize_user_id(user_id), **plan}
+
+
+# --- Integration with Components 1–3: screening result -------------------
+
+@router.post("/screening")
+async def submit_screening(payload: ScreeningRequest, user: dict = Depends(auth.current_user)):
+    """Receives the stuttering severity from the screening components. It sets
+    the starting reading level (severe/moderate -> Beginner, mild ->
+    Intermediate) while the student has no reading attempts, and steers the
+    weekly plan towards exercises recommended for that severity."""
+    auth.ensure_can_access(user, payload.user_id)
+    records = get_records(payload.user_id)
+    has_reading = any(r["exercise_type"] == "reading" for r in records)
+    start = START_LEVEL.get(payload.severity) if not has_reading else None
+    settings = set_screening(payload.user_id, payload.severity.value, payload.source, user["email"], start)
+    audit.log(user["email"], "screening.received", normalize_user_id(payload.user_id),
+              severity=payload.severity.value, source=payload.source, starting_level=start)
+    return {
+        "screening": settings["screening"],
+        "starting_level_applied": start,
+        "level": level_state(records, settings["level_override"]),
+        "plan": recommend_weekly_plan(records, settings),
+    }
 
 
 # --- Therapy Assistant ---------------------------------------------------

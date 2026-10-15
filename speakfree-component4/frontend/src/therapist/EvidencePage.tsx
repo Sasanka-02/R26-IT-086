@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { CohortReport, EvidenceReport, FitMetrics } from "../types/therapist";
-import { getCohortReport, getEvidence } from "./therapistApi";
+import { Download } from "lucide-react";
+import { CohortReport, EvidenceReport, FitMetrics, SourceValidation } from "../types/therapist";
+import { downloadRatingsSheet, getCohortReport, getEvidence } from "./therapistApi";
 import { AgreementScatter, HorizontalBars, MultiLineChart } from "./charts";
-import { formatDate, Panel, PortalHeader, StatTile } from "./ui";
+import { formatDate, Panel, StatTile } from "./ui";
+import AppShell from "../components/AppShell";
 
 function MetricsRow({ label, m, note }: { label: string; m: FitMetrics | null; note?: string }) {
   return (
@@ -19,41 +21,46 @@ function MetricsRow({ label, m, note }: { label: string; m: FitMetrics | null; n
   );
 }
 
-function ExpertValidation({ scoring, ratings }: Pick<EvidenceReport, "scoring" | "ratings">) {
-  const v = scoring.validation;
+function SourceBlock({
+  v,
+  ratings,
+}: {
+  v: SourceValidation | null;
+  ratings: EvidenceReport["ratings"];
+}) {
+  if (!v) {
+    return (
+      <p className="rounded-xl bg-paper p-4 text-sm text-ink-soft">
+        {ratings.length === 1 ? "Only 1 rating so far — at least 2 are needed." : "No ratings from this source yet."}
+      </p>
+    );
+  }
+  const best = v.calibrated_model_loo ?? v.shown_scores;
+  const sm = v.strong_match;
+  const ir = v.inter_rater;
   return (
-    <Panel
-      title="1 · Expert validation of the score"
-      subtitle="Therapists rate attempts 1–5 on each student's page. Every rating is compared with the app's score."
-    >
+    <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Expert ratings collected" value={scoring.n_ratings} hint={`${scoring.min_ratings} needed to calibrate`} />
+        <StatTile label="Ratings" value={v.n} />
         <StatTile
-          label="Scoring model in use"
-          value={scoring.active === "calibrated" ? "Calibrated" : "Starting values"}
-          hint={scoring.fitted_at ? `updated ${formatDate(scoring.fitted_at, true)}` : undefined}
+          label="Mean absolute error"
+          value={best.mae}
+          hint={v.calibrated_model_loo ? "calibrated model, leave-one-out" : "scores students saw"}
         />
-        <StatTile label="Mean error (shown scores)" value={v ? v.shown_scores.mae : "—"} hint="points out of 100" />
-        <StatTile label="Correlation with therapist" value={v?.shown_scores.pearson_r ?? "—"} hint="Pearson r (1 = perfect)" />
+        <StatTile label="Pearson r" value={best.pearson_r ?? "—"} hint="1 = perfect agreement" />
+        <StatTile label="Within ±15 points" value={`${best.within_15}%`} />
       </div>
-
-      {ratings.length === 0 ? (
-        <p className="mt-4 rounded-xl bg-paper p-4 text-sm text-ink-soft">
-          No expert ratings yet. Open a student, then use the <strong>Expert rating</strong> column in “All work”
-          to rate attempts. Results appear here immediately.
-        </p>
-      ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div>
-            <p className="text-sm font-medium text-ink">App score vs therapist score</p>
-            <p className="text-xs text-ink-soft">Each dot is one rated attempt; the diagonal line is perfect agreement.</p>
-            <AgreementScatter
-              data={ratings.map((r) => ({ auto: r.auto_score, expert: r.expert_score, title: r.title }))}
-            />
-          </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div>
+          <p className="text-sm font-medium text-ink">App score vs expert score</p>
+          <p className="text-xs text-ink-soft">Each dot is one rated attempt; the diagonal line is perfect agreement.</p>
+          <AgreementScatter
+            data={ratings.map((r) => ({ auto: r.auto_score, expert: r.expert_score, title: r.title }))}
+          />
+        </div>
+        <div className="space-y-4">
           <div className="overflow-x-auto">
-            <p className="text-sm font-medium text-ink">Agreement with the therapist</p>
-            <table className="mt-2 w-full text-left text-sm tabular-nums">
+            <table className="w-full text-left text-sm tabular-nums">
               <thead className="text-xs text-ink-soft">
                 <tr className="border-b border-teal-100">
                   <th className="py-2 pr-3 font-medium">Model</th>
@@ -64,20 +71,170 @@ function ExpertValidation({ scoring, ratings }: Pick<EvidenceReport, "scoring" |
                 </tr>
               </thead>
               <tbody>
-                <MetricsRow label="Scores students saw" m={v?.shown_scores ?? null} />
-                <MetricsRow label="Starting-value model" m={v?.prior_model ?? null} />
+                <MetricsRow label="Scores students saw" m={v.shown_scores} />
+                <MetricsRow label="Starting-value model" m={v.prior_model} />
                 <MetricsRow
                   label="Calibrated model"
-                  m={v?.calibrated_model_loo ?? null}
+                  m={v.calibrated_model_loo}
                   note="Leave-one-out: each rating is predicted by a model fitted without it"
                 />
               </tbody>
             </table>
-            <p className="mt-2 text-xs text-ink-soft">
-              MAE = mean absolute error, RMSE = root-mean-square error (lower is better).
+          </div>
+          <div className="rounded-xl bg-paper px-4 py-3 text-sm">
+            <p className="font-semibold text-ink">Does “strong” match the expert's 4–5?</p>
+            <p className="mt-1 text-ink">
+              {sm.accuracy}% agreement on {sm.n} attempts (strong = score ≥ {sm.threshold}).
+            </p>
+            <p className="mt-0.5 text-xs text-ink-soft">
+              Expert rated {sm.expert_good} as 4–5; the app called {sm.flagged_strong} strong. Sensitivity{" "}
+              {sm.sensitivity ?? "—"}% · specificity {sm.specificity ?? "—"}% · based on the {sm.based_on}.
             </p>
           </div>
+          <div className="rounded-xl bg-paper px-4 py-3 text-sm">
+            <p className="font-semibold text-ink">Agreement between two raters</p>
+            {ir.n_pairs === 0 ? (
+              <p className="mt-1 text-xs text-ink-soft">
+                Needs a second rater: a second therapist account rates the same attempts on the student pages.
+              </p>
+            ) : (
+              <>
+                <p className="mt-1 text-ink">
+                  Cohen's kappa {ir.kappa ?? "—"} · weighted kappa {ir.weighted_kappa ?? "—"}
+                </p>
+                <p className="mt-0.5 text-xs text-ink-soft">
+                  {ir.n_pairs} attempts rated twice · exact agreement {ir.exact_agreement}% · within one point{" "}
+                  {ir.within_one}%. Weighted kappa uses quadratic weights (a 4-vs-5 disagreement costs less than
+                  1-vs-5).
+                </p>
+              </>
+            )}
+          </div>
         </div>
+      </div>
+    </>
+  );
+}
+
+function ExpertValidation({ scoring, ratings }: Pick<EvidenceReport, "scoring" | "ratings">) {
+  const [sheetError, setSheetError] = useState(false);
+  const clinician = ratings.filter((r) => r.source === "clinician");
+  const synthetic = ratings.filter((r) => r.source === "synthetic");
+  const real = scoring.n_clinician > 0;
+  return (
+    <Panel
+      title="1 · Expert validation of the score"
+      subtitle="Therapists rate attempts 1–5 on each student's page. Every rating is compared with the app's score. Real clinician ratings and synthetic test data are always reported separately."
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div
+          className={`max-w-3xl rounded-xl border px-4 py-3 text-sm text-ink ${
+            real ? "border-teal-200 bg-teal-50/60" : "border-amber-200 bg-amber-50"
+          }`}
+          role="note"
+        >
+          {real ? (
+            <>
+              <strong>Scoring model fitted on {scoring.n_clinician} real clinician ratings.</strong> Synthetic ratings
+              are left out of fitting and shown separately below.{" "}
+              {scoring.active === "prior" &&
+                `Starting values stay in use until ${scoring.min_ratings} clinician ratings exist.`}
+            </>
+          ) : (
+            <>
+              <strong>No clinician ratings yet.</strong> The results below use synthetic ratings generated by the demo
+              seed script to test the pipeline. They are not expert validation. Ratings from a speech-language
+              pathologist replace them automatically.
+            </>
+          )}
+        </div>
+        <button
+          onClick={() => downloadRatingsSheet().catch(() => setSheetError(true))}
+          className="no-print flex items-center gap-1.5 rounded-full border border-teal-200 px-4 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-50"
+        >
+          <Download size={14} />
+          Rating sheet (CSV)
+        </button>
+      </div>
+      {sheetError && <p className="mt-2 text-sm text-red-700">Couldn't download the rating sheet.</p>}
+
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatTile label="Clinician ratings" value={scoring.n_clinician} hint={`${scoring.min_ratings} needed to calibrate`} />
+        <StatTile label="Synthetic ratings" value={scoring.n_synthetic} hint="seed script · pipeline testing only" />
+        <StatTile
+          label="Scoring model in use"
+          value={scoring.active === "calibrated" ? "Calibrated" : "Starting values"}
+          hint={scoring.data_source ? `fitted on ${scoring.data_source} ratings` : undefined}
+        />
+        <StatTile label="Last fitted" value={scoring.fitted_at ? formatDate(scoring.fitted_at) : "—"} />
+      </div>
+
+      <h3 className="mt-6 text-sm font-semibold text-ink">Real clinician ratings</h3>
+      <div className="mt-2">
+        {clinician.length === 0 ? (
+          <p className="rounded-xl bg-paper p-4 text-sm text-ink-soft">
+            None yet. Log in with a real therapist account, open a student, and use the <strong>Your rating</strong>{" "}
+            column in “All work”. Results appear here immediately.
+          </p>
+        ) : (
+          <SourceBlock v={scoring.validation_by_source.clinician} ratings={clinician} />
+        )}
+      </div>
+
+      {synthetic.length > 0 && (
+        <details className="mt-6 rounded-xl border border-dashed border-amber-200 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-ink">
+            Synthetic data for pipeline testing ({synthetic.length} ratings) — not expert validation
+          </summary>
+          <p className="mb-3 mt-2 text-xs text-ink-soft">
+            Made by a formula in scripts/seed_demo.py (and by @demo.local accounts). These only show that rating →
+            calibration → evidence works end to end.
+          </p>
+          <SourceBlock v={scoring.validation_by_source.synthetic} ratings={synthetic} />
+        </details>
+      )}
+    </Panel>
+  );
+}
+
+function PlanValidation({ plan }: { plan: EvidenceReport["plan_validation"] }) {
+  const stats = plan.clinician.n > 0 ? plan.clinician : null;
+  return (
+    <Panel
+      title="4 · Expert validation of the adaptive plan"
+      subtitle="A therapist judges the weekly plan generated for each student as appropriate, partly appropriate or not appropriate (from the student's page). Aim for 10+ plans across different students."
+    >
+      {stats ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatTile label="Plans reviewed" value={stats.n} hint={`${stats.students} students`} />
+          <StatTile label="Judged appropriate" value={`${stats.appropriate_pct}%`} hint={`${stats.counts.appropriate} plans`} />
+          <StatTile label="Appropriate or partly" value={`${stats.acceptable_pct}%`} hint={`${stats.counts.partly} partly`} />
+          <StatTile label="Not appropriate" value={stats.counts.not_appropriate} />
+        </div>
+      ) : (
+        <p className="rounded-xl bg-paper p-4 text-sm text-ink-soft">
+          No clinician plan reviews yet. Open a student and use <strong>Validate this week's plan</strong>.
+        </p>
+      )}
+      {plan.synthetic.n > 0 && (
+        <p className="mt-3 text-xs text-ink-soft">
+          Left out: {plan.synthetic.n} review{plan.synthetic.n === 1 ? "" : "s"} from demo accounts (synthetic).
+        </p>
+      )}
+      {plan.recent.length > 0 && (
+        <ul className="mt-4 space-y-1 text-sm">
+          {plan.recent.map((r) => (
+            <li key={r.at} className="text-ink">
+              {plan.labels[r.verdict]}
+              <span className="text-xs text-ink-soft">
+                {" "}
+                · {r.student} · {r.level} · {formatDate(r.at)}
+                {r.source === "synthetic" ? " · synthetic" : ""}
+              </span>
+              {r.note && <span className="block text-xs text-ink-soft">“{r.note}”</span>}
+            </li>
+          ))}
+        </ul>
       )}
     </Panel>
   );
@@ -135,6 +292,8 @@ function Constants({ scoring }: Pick<EvidenceReport, "scoring">) {
 
 function AdaptiveEvaluation({ adaptive }: Pick<EvidenceReport, "adaptive">) {
   const series = Object.entries(adaptive.labels).map(([key, label]) => ({ key, label }));
+  const live = adaptive.summary.find((s) => s.strategy === "linucb");
+  const hybrid = adaptive.summary.find((s) => s.strategy === "hybrid");
   return (
     <Panel
       title="3 · Adaptive learning engine (LinUCB) — simulation"
@@ -171,6 +330,22 @@ function AdaptiveEvaluation({ adaptive }: Pick<EvidenceReport, "adaptive">) {
           </tbody>
         </table>
       </div>
+      {live && hybrid && (
+        <div className="mt-4 space-y-2 rounded-xl bg-paper px-4 py-3 text-sm text-ink">
+          <p>
+            <strong>Limitation:</strong> after {adaptive.rounds} sessions the live engine settles on each student's best
+            exercise only {live.best_exercise_rate}% of the time. Its reward is still rising in the curve above, so it
+            needs more sessions per student to converge; regret is already about half of a fixed plan's.
+          </p>
+          <p>
+            <strong>Candidate improvement:</strong> adding exercise features (type and difficulty) lets evidence from
+            one exercise inform similar ones. In this simulation it picks the best exercise {hybrid.best_exercise_rate}%
+            of the time (vs {live.best_exercise_rate}%), with regret {hybrid.cumulative_regret} vs{" "}
+            {live.cumulative_regret}. On other simulated cohorts its regret was slightly higher, so it is reported here
+            rather than switched on. α was tuned for both on separate simulated students.
+          </p>
+        </div>
+      )}
     </Panel>
   );
 }
@@ -178,7 +353,7 @@ function AdaptiveEvaluation({ adaptive }: Pick<EvidenceReport, "adaptive">) {
 function AssistantEvaluation({ assistant }: Pick<EvidenceReport, "assistant">) {
   return (
     <Panel
-      title="4 · Assistant intent classifier"
+      title="5 · Assistant intent classifier"
       subtitle="Multinomial Naive Bayes on normalised words, evaluated by leave-one-out cross-validation."
     >
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -376,9 +551,8 @@ export default function EvidencePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-paper">
-      <PortalHeader />
-      <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
+    <AppShell>
+      <main className="mx-auto max-w-6xl space-y-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-600">Model evidence</p>
           <h1 className="mt-1 font-display text-3xl font-semibold text-ink">Validation &amp; evaluation</h1>
@@ -399,12 +573,13 @@ export default function EvidencePage() {
             <ExpertValidation scoring={evidence.scoring} ratings={evidence.ratings} />
             <Constants scoring={evidence.scoring} />
             <AdaptiveEvaluation adaptive={evidence.adaptive} />
+            <PlanValidation plan={evidence.plan_validation} />
             <AssistantEvaluation assistant={evidence.assistant} />
             <UsabilityEvaluation usability={evidence.usability} />
           </>
         )}
         <PrivateCohortReport />
       </main>
-    </div>
+    </AppShell>
   );
 }

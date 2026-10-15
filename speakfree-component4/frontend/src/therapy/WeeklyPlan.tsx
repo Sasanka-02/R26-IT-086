@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ListChecks, Play } from "lucide-react";
+import { HelpCircle, ListChecks, Play } from "lucide-react";
 import { getWeeklyPlan } from "./therapyApi";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
 import { WeeklyPlanResponse } from "../types/therapy";
@@ -65,6 +65,17 @@ export default function WeeklyPlan({ onStart }: WeeklyPlanProps) {
         Chosen for you by the adaptive learning engine from your own results. It updates
         every time you save an exercise.
       </p>
+      <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50/60 px-4 py-3">
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <HelpCircle size={15} className="text-teal-600" />
+          Why this plan for you?
+        </p>
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-sm text-ink">
+          {plan.why.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
       <ol className="mt-4 space-y-3">
         {plan.exercises.map((ex, i) => (
           <li key={ex.id} className="rounded-xl bg-paper px-4 py-3">
@@ -98,7 +109,8 @@ export default function WeeklyPlan({ onStart }: WeeklyPlanProps) {
                   : "Not tried yet — the engine is exploring it"}
               </span>
             </div>
-            <p className="mt-2 text-sm text-ink-soft">Why: {ex.reason}</p>
+            <p className="mt-2 text-sm text-ink">{ex.explanation}</p>
+            {ex.source === "bandit" && <p className="mt-1 text-xs text-ink-soft">{ex.reason}</p>}
           </li>
         ))}
       </ol>

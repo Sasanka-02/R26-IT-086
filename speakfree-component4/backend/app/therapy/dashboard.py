@@ -3,13 +3,14 @@ SO3 - Personalized Dashboard.
 
 Builds a plain-language progress summary from the user's own practice
 records: totals, streak, reading level, per-exercise breakdown, a
-week-by-week table and recent attempts. Designed to be read as text and
-tables rather than charts.
+week-by-week table and recent attempts, plus a score history and daily
+activity series for the progress charts.
 """
 
 from datetime import datetime, timedelta, timezone
 
 from app.therapy.adaptive import earned_badges, level_state, verdict
+from app.therapy.bandit import recommend_weekly_plan
 from app.therapy.therapist_store import get_settings, goal_progress
 
 TYPE_LABELS = {
@@ -109,6 +110,37 @@ def _weekly(records: list[dict], now: datetime, weeks: int = 4) -> list[dict]:
     return rows
 
 
+def _daily(records: list[dict], today, days: int = 14) -> list[dict]:
+    """Exercises and average score for each of the last `days` days, oldest first."""
+    rows = []
+    for i in range(days - 1, -1, -1):
+        day = today - timedelta(days=i)
+        on_day = [r for r in records if _parse(r["completed_at"]).date() == day]
+        rows.append(
+            {
+                "date": day.isoformat(),
+                "sessions": len(on_day),
+                "average_score": _avg([r["score"] for r in on_day]),
+            }
+        )
+    return rows
+
+
+def _history(records: list[dict], limit: int = 30) -> list[dict]:
+    """Every attempt's score in order (most recent `limit`), for the trend chart."""
+    start = max(0, len(records) - limit)
+    return [
+        {
+            "attempt": start + i + 1,
+            "completed_at": r["completed_at"],
+            "score": r["score"],
+            "title": r["title"],
+            "exercise_type": r["exercise_type"],
+        }
+        for i, r in enumerate(records[start:])
+    ]
+
+
 def _highlights(records: list[dict], level: dict, streak: int) -> list[str]:
     best = max(records, key=lambda r: r["score"])
     notes = [f"Your best result so far: {best['score']} in “{best['title']}”."]
@@ -124,10 +156,101 @@ def _highlights(records: list[dict], level: dict, streak: int) -> list[str]:
     return notes
 
 
+REPORT_STATUS = {
+    "improving": "Improving",
+    "steady": "Steady",
+    "needs_support": "Needs support",
+}
+
+
+def _report_card(records: list[dict], level: dict, settings: dict, now: datetime) -> dict:
+    """The progress page's first card: one sentence, a traffic light, what
+    happened this week and the next step — no charts needed to read it."""
+    plan = recommend_weekly_plan(records, settings)
+    first = plan["exercises"][0] if plan["exercises"] else None
+    next_step = f"Next: {first['title']}. {first['explanation']}" if first else "Next: pick any exercise to start."
+    if not records:
+        return {
+            "status": "steady",
+            "label": "Getting started",
+            "headline": "No exercises saved yet — your report starts with your first exercise.",
+            "this_week": "Nothing practised yet this week.",
+            "next_step": next_step,
+            "reasons": [],
+        }
+
+    week_ago = now - timedelta(days=7)
+    this_week = [r for r in records if _parse(r["completed_at"]) > week_ago]
+    last_week = [r for r in records if week_ago - timedelta(days=7) < _parse(r["completed_at"]) <= week_ago]
+    trend = _trend(records)
+    recent_moves = [h for h in level["history"] if _parse(h["at"]) > now - timedelta(days=14)]
+    hard = sum(1 for r in records[-5:] if r["self_rating"] == "hard")
+    days_since = (now - _parse(records[-1]["completed_at"])).days
+
+    support: list[str] = []
+    if days_since >= 7:
+        support.append(f"No practice for {days_since} days.")
+    if trend["label"] == "Dipped a little":
+        support.append(trend["detail"])
+    if hard >= 2:
+        support.append(f"{hard} of the last 5 exercises felt hard.")
+    if any(h["direction"] == "down" for h in recent_moves):
+        support.append("Reading level was moved down recently to keep practice comfortable.")
+    gains: list[str] = []
+    if trend["label"] == "Improving":
+        gains.append(trend["detail"])
+    for h in recent_moves:
+        if h["direction"] == "up":
+            gains.append(f"Moved from {h['from']} to {h['to']} {h['reason']}.")
+        elif h["direction"] == "mastered":
+            gains.append(f"Completed the final reading stage {h['reason']}.")
+
+    if support:
+        status = "needs_support"
+        if days_since >= 7 and len(support) == 1:
+            headline = f"It's been {days_since} days since your last exercise — a short session this week will get you going again."
+        else:
+            headline = "This has been a harder patch — practice will stay at a comfortable level for now."
+    elif gains:
+        status = "improving"
+        headline = f"You're improving — your recent scores average {_avg([r['score'] for r in records[-3:]])}."
+    else:
+        status = "steady"
+        headline = f"You're holding steady at about {_avg([r['score'] for r in records[-3:]])} out of 100."
+    if len(records) < 4 and not support:
+        headline = "A good start — a few more exercises will show which way your scores are going."
+
+    if this_week:
+        avg = _avg([r["score"] for r in this_week])
+        minutes = round(sum(r["duration_seconds"] for r in this_week) / 60)
+        week_text = (
+            f"This week you did {len(this_week)} exercise{'s' if len(this_week) != 1 else ''} "
+            f"({minutes} min) with an average score of {avg}"
+        )
+        if last_week:
+            before = _avg([r["score"] for r in last_week])
+            change = "up from" if avg > before else ("down from" if avg < before else "the same as")
+            week_text += f", {change} {before} last week"
+        week_text += "."
+    else:
+        week_text = f"You haven't practised this week yet — your last exercise was {days_since} days ago."
+
+    return {
+        "status": status,
+        "label": REPORT_STATUS[status],
+        "headline": headline,
+        "this_week": week_text,
+        "next_step": next_step,
+        "reasons": support or gains,
+    }
+
+
 def build_progress_summary(user_id: str, records: list[dict]) -> dict:
     settings = get_settings(user_id)
     level = level_state(records, settings["level_override"])
     goals = goal_progress(settings["goals"], records)
+    now = datetime.now(timezone.utc)
+    report_card = _report_card(records, level, settings, now)
     if not records:
         return {
             "user_id": user_id,
@@ -142,14 +265,16 @@ def build_progress_summary(user_id: str, records: list[dict]) -> dict:
             "trend": _trend(records),
             "by_type": [],
             "weekly": [],
+            "daily": [],
+            "history": [],
             "recent": [],
             "highlights": [],
             "badges": earned_badges(records, level, 0, 0),
             "goals": goals,
             "first_vs_latest": [],
+            "report_card": report_card,
         }
 
-    now = datetime.now(timezone.utc)
     streak = _streak_days(records, now.date())
 
     by_type = []
@@ -195,9 +320,12 @@ def build_progress_summary(user_id: str, records: list[dict]) -> dict:
         "trend": _trend(records),
         "by_type": by_type,
         "weekly": _weekly(records, now),
+        "daily": _daily(records, now.date()),
+        "history": _history(records),
         "recent": recent,
         "highlights": _highlights(records, level, streak),
         "badges": earned_badges(records, level, streak, _best_streak(records)),
         "goals": goals,
         "first_vs_latest": _first_vs_latest(records),
+        "report_card": report_card,
     }

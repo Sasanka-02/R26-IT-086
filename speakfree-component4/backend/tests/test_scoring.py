@@ -74,3 +74,49 @@ def test_thresholds_fall_back_with_one_class():
     pred = np.array([50.0, 60.0, 70.0])
     t, acc = scoring._best_threshold(pred, np.array([True, True, True]), 75)
     assert (t, acc) == (75, None)
+
+
+def _rated(rating, source, by="dr@clinic.lk", second=None):
+    rec = {"id": f"r{np.random.randint(1e9)}", "completed_at": "2026-10-01T10:00:00+00:00",
+           "title": "t", "exercise_type": "reading", "score": 60,
+           "expert": {"rating": rating, "by": by, "source": source}, **attempt()}
+    if second is not None:
+        rec["expert_reviews"] = {by: rec["expert"], "dr2@clinic.lk": {"rating": second, "by": "dr2@clinic.lk"}}
+    return rec
+
+
+def test_synthetic_ratings_are_kept_apart_from_clinician_ratings():
+    for i in range(10):
+        add_record("s@x.com", _rated(1 + i % 5, "synthetic", by="dr.silva@demo.local"))
+    cal = scoring.calibrate()
+    assert cal["data_source"] == "synthetic"
+    assert cal["n_synthetic"] == 10 and cal["n_clinician"] == 0
+
+    add_record("s@x.com", _rated(4, "clinician"))
+    cal = scoring.calibrate()
+    # One real rating replaces the synthetic pool: too few to calibrate, so the prior is used.
+    assert cal["data_source"] == "clinician"
+    assert cal["n_ratings"] == 1 and cal["active"] == "prior"
+    assert cal["validation_by_source"]["synthetic"]["n"] == 10
+
+
+def test_unlabelled_demo_ratings_count_as_synthetic():
+    assert scoring.rating_source({"rating": 3, "by": "dr.silva@demo.local"}) == "synthetic"
+    assert scoring.rating_source({"rating": 3, "by": "slp@hospital.lk"}) == "clinician"
+
+
+def test_cohen_kappa():
+    assert scoring.cohen_kappa([1, 2, 3, 4, 5], [1, 2, 3, 4, 5]) == 1.0
+    assert scoring.cohen_kappa([1, 2, 3, 4, 5], [1, 2, 3, 4, 5], weighted=True) == 1.0
+    near = scoring.cohen_kappa([1, 2, 3, 4, 5], [2, 2, 3, 4, 4], weighted=True)
+    far = scoring.cohen_kappa([1, 2, 3, 4, 5], [5, 4, 3, 2, 1], weighted=True)
+    assert near > 0.7 > far
+
+
+def test_inter_rater_agreement_reported():
+    for a, b in [(4, 4), (3, 4), (2, 2), (5, 5), (1, 2)]:
+        add_record("s@x.com", _rated(a, "clinician", second=b))
+    v = scoring.calibrate()["validation"]
+    assert v["inter_rater"]["n_pairs"] == 5
+    assert v["inter_rater"]["exact_agreement"] == 60
+    assert v["strong_match"]["n"] == 5

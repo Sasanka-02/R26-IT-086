@@ -18,16 +18,16 @@ import {
   YAxis,
 } from "recharts";
 
-// One series per chart, so one hue: the brand emerald. Identity comes from titles and axes.
-const SERIES = "#1E5E53";
-const SURFACE = "#FCF9F3";
-const GRID = "#E6DFD2";
-const AXIS_TEXT = "#5F6C66";
+// One series per chart, so one hue: the brand mint. Identity comes from titles and axes.
+const SERIES = "#A8DED6";
+const SURFACE = "#26262F";
+const GRID = "#34343F";
+const AXIS_TEXT = "#9C9CAB";
 const TICK = { fill: AXIS_TEXT, fontSize: 12 };
 
 function TooltipCard({ title, lines }: { title: string; lines: string[] }) {
   return (
-    <div className="rounded-lg border border-teal-100 bg-white px-3 py-2 text-xs shadow-md">
+    <div className="rounded-lg border border-snow/10 bg-shell px-3 py-2 text-xs shadow-xl">
       <p className="font-semibold text-ink">{title}</p>
       {lines.map((line) => (
         <p key={line} className="mt-0.5 text-ink-soft">
@@ -59,7 +59,7 @@ export function ColumnChart<T extends Record<string, unknown>>({
         <XAxis dataKey={xKey} tick={TICK} tickLine={false} axisLine={{ stroke: GRID }} interval="preserveStartEnd" minTickGap={12} />
         <YAxis allowDecimals={false} tick={TICK} tickLine={false} axisLine={false} width={40} />
         <Tooltip
-          cursor={{ fill: "rgba(30, 94, 83, 0.06)" }}
+          cursor={{ fill: "rgba(255, 255, 255, 0.04)" }}
           content={({ active, payload }: TooltipProps<number, string>) =>
             active && payload?.length ? (
               <TooltipCard
@@ -100,7 +100,7 @@ export function HorizontalBars<T extends Record<string, unknown>>({
           width={150}
         />
         <Tooltip
-          cursor={{ fill: "rgba(30, 94, 83, 0.06)" }}
+          cursor={{ fill: "rgba(255, 255, 255, 0.04)" }}
           content={({ active, payload }: TooltipProps<number, string>) =>
             active && payload?.length ? (
               <TooltipCard
@@ -178,7 +178,7 @@ export function ScoreLineChart({ data, strongScore = 75 }: { data: ScorePoint[];
 }
 
 // Validated categorical palette (dataviz validator: all checks pass on the card surface).
-export const SERIES_COLORS = ["#118A6F", "#D2702A", "#5566C8"];
+export const SERIES_COLORS = ["#14A085", "#9B6BD6", "#D06F22", "#3F87DD"];
 
 /** Several series over the same x axis, with a legend (identity never by colour alone). */
 export function MultiLineChart({

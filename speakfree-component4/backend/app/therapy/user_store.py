@@ -14,8 +14,14 @@ from pathlib import Path
 from app.therapy.progress_store import normalize_user_id
 
 USERS_FILE = Path(__file__).resolve().parents[2] / "data" / "users.json"
+# Accounts created by scripts/seed_demo.py. Anything they produce is synthetic.
+DEMO_SUFFIX = "@demo.local"
 
 _lock = threading.Lock()
+
+
+def is_demo_account(email: str) -> bool:
+    return normalize_user_id(email).endswith(DEMO_SUFFIX)
 
 
 def _load() -> dict[str, dict]:

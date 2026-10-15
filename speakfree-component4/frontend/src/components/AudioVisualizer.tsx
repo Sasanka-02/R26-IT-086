@@ -34,7 +34,7 @@ export default function AudioVisualizer({
       const h = canvas.height;
       ctx.clearRect(0, 0, width, h);
 
-      ctx.fillStyle = "#F5F9F7";
+      ctx.fillStyle = "#1E1E26";
       ctx.fillRect(0, 0, width, h);
 
       if (analyserNode && isRecording) {
@@ -44,7 +44,7 @@ export default function AudioVisualizer({
       }
 
       ctx.lineWidth = 2;
-      ctx.strokeStyle = isRecording ? "#2F6F62" : "#94a3b8";
+      ctx.strokeStyle = isRecording ? "#A8DED6" : "#6B6B7B";
       ctx.beginPath();
 
       const sliceWidth = width / dataArray.length;
