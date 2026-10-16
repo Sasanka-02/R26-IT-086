@@ -1,0 +1,167 @@
+{
+  "schema_version": "1.0.0",
+  "analysis_id": "an-0001",
+  "session_id": "demo-session-001",
+  "patient_id": "P-001",
+  "age_bracket": 1,
+  "task_type": "picture",
+  "reference_text": null,
+  "transcript": "the boy is Um, the boy is climbing on the tree.",
+  "word_segments": [
+    {
+      "word": "the",
+      "start": 0.0,
+      "end": 0.4,
+      "confidence": 0.95,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "the",
+          "probability": 0.95
+        }
+      ]
+    },
+    {
+      "word": "boy",
+      "start": 0.5,
+      "end": 0.9,
+      "confidence": 0.9,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "boy",
+          "probability": 0.9
+        }
+      ]
+    },
+    {
+      "word": "is",
+      "start": 1.0,
+      "end": 1.4,
+      "confidence": 0.93,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "is",
+          "probability": 0.93
+        }
+      ]
+    },
+    {
+      "word": "Um,",
+      "start": 1.5,
+      "end": 1.9,
+      "confidence": 0.4,
+      "is_dysfluency_candidate": true,
+      "tokens": [
+        {
+          "text": "Um,",
+          "probability": 0.4
+        }
+      ]
+    },
+    {
+      "word": "the",
+      "start": 2.0,
+      "end": 2.4,
+      "confidence": 0.94,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "the",
+          "probability": 0.94
+        }
+      ]
+    },
+    {
+      "word": "boy",
+      "start": 2.5,
+      "end": 2.9,
+      "confidence": 0.88,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "boy",
+          "probability": 0.88
+        }
+      ]
+    },
+    {
+      "word": "is",
+      "start": 3.0,
+      "end": 3.4,
+      "confidence": 0.92,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "is",
+          "probability": 0.92
+        }
+      ]
+    },
+    {
+      "word": "climbing",
+      "start": 3.5,
+      "end": 3.9,
+      "confidence": 0.5,
+      "is_dysfluency_candidate": true,
+      "tokens": [
+        {
+          "text": "climbing#0",
+          "probability": 0.55
+        },
+        {
+          "text": "climbing#1",
+          "probability": 0.45
+        }
+      ]
+    },
+    {
+      "word": "on",
+      "start": 4.0,
+      "end": 4.4,
+      "confidence": 0.91,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "on",
+          "probability": 0.91
+        }
+      ]
+    },
+    {
+      "word": "the",
+      "start": 4.5,
+      "end": 4.9,
+      "confidence": 0.96,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "the",
+          "probability": 0.96
+        }
+      ]
+    },
+    {
+      "word": "tree.",
+      "start": 5.0,
+      "end": 5.4,
+      "confidence": 0.96,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "tree.",
+          "probability": 0.96
+        }
+      ]
+    }
+  ],
+  "overall_confidence_percent": 81.25,
+  "dysfluency_threshold": 0.6,
+  "wer": null,
+  "acoustic_features": {
+    "snr_db": 21.7,
+    "word_count": 11,
+    "duration_seconds": 6.2
+  }
+}

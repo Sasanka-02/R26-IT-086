@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+librosa
+numpy
+openai-whisper
+pydantic
+transformers
+cmudict
+scipy
+scikit-learn
