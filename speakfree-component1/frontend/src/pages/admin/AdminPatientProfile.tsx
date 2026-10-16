@@ -5,7 +5,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CalendarDays, Image as ImageIcon, MessageSquareText, MessagesSquare, Mic, MicOff, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, HeartPulse, Workflow, Image as ImageIcon, MessageSquareText, MessagesSquare, Mic, MicOff, UserRound } from "lucide-react";
 import { api } from "../../api/client";
 import { ErrorBox, RiskBadge, ScoreRing, Spinner } from "../../components/ui";
 import { TASK_LABEL, type AdminPatientProfile as Profile, type TaskType } from "../../types";
@@ -63,6 +63,7 @@ export default function AdminPatientProfile() {
             <p className="text-sm text-ink-soft">{p.id} · {ACCOUNT_LABEL[p.owner_role] ?? p.owner_role}</p>
           </div>
           <RiskBadge hint={p.latest_severity_hint} label={p.latest_label} />
+          <Link to={`/admin/patients/${p.id}/therapy`} className="btn-outline"><HeartPulse size={16} /> Therapy monitor (C4)</Link>
         </div>
         <dl className="mt-6 grid gap-4 border-t border-line pt-5 sm:grid-cols-2 lg:grid-cols-5">
           <Info label="Age · bracket">{p.age} years{p.age_bracket ? ` · ${p.age_bracket.id} (${p.age_bracket.label})` : ""}</Info>
@@ -93,9 +94,14 @@ export default function AdminPatientProfile() {
                       </div>
                       <div className="mt-2"><RiskBadge hint={s.severity_hint} label={s.label} /></div>
                     </div>
-                    <Link to={`/admin/patients/${p.id}/sessions/${s.session_id}`} className="btn-primary self-start md:self-center">
-                      Open session analysis <ArrowRight size={16} />
-                    </Link>
+                    <div className="flex flex-col gap-2 self-start md:self-center">
+                      <Link to={`/admin/patients/${p.id}/sessions/${s.session_id}`} className="btn-primary">
+                        Open session analysis <ArrowRight size={16} />
+                      </Link>
+                      <Link to={`/admin/pipeline/${s.session_id}`} className="btn-lav justify-center">
+                        <Workflow size={15} /> Pipeline C2 → C3 → C4
+                      </Link>
+                    </div>
                   </div>
 
                   <ul className="mt-4 divide-y divide-line rounded-xl border border-line">

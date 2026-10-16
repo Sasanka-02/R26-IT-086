@@ -213,3 +213,94 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# ============================================================================= integrated pipeline (C2 → C3 → C4)
+class PipelineRun(Base):
+    """
+    One run of the backend pipeline for a finalised screening session:
+    C1 session summary → C2 articulation report → C3 severity report → C4 therapy profile.
+    Visible only to the admin; patients see the C1 results page and their therapy plan.
+    """
+
+    __tablename__ = "pipeline_runs"
+
+    session_id: Mapped[str] = mapped_column(ForeignKey("screening_sessions.id", ondelete="CASCADE"), primary_key=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True)
+    status: Mapped[str] = mapped_column(String(20))  # completed | partial | failed
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    articulation_score: Mapped[float | None] = mapped_column(Float, nullable=True)      # C2
+    primary_disorder: Mapped[str | None] = mapped_column(String(20), nullable=True)     # C3
+    severity_level: Mapped[int | None] = mapped_column(Integer, nullable=True)          # C3
+    risk_level: Mapped[str | None] = mapped_column(String(10), nullable=True)           # C3
+    therapy_focus: Mapped[str | None] = mapped_column(String(20), nullable=True)        # C4
+    c2_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    c3_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stage_timings_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    patient: Mapped[Patient] = relationship()
+
+
+class TherapyProfile(Base):
+    """C4 therapy profile created from one pipeline run. The newest row per patient is active."""
+
+    __tablename__ = "therapy_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("screening_sessions.id", ondelete="CASCADE"), index=True)
+    focus: Mapped[str] = mapped_column(String(20))
+    severity_level: Mapped[int] = mapped_column(Integer)
+    profile_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TherapyAttempt(Base):
+    """One completed therapy exercise (numbers only - never audio)."""
+
+    __tablename__ = "therapy_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True)
+    exercise_id: Mapped[str] = mapped_column(String(60))
+    exercise_type: Mapped[str] = mapped_column(String(20))
+    score: Mapped[int] = mapped_column(Integer)
+    record_json: Mapped[str] = mapped_column(Text)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AssistantMessage(Base):
+    """AI assistant chat log (for the admin's therapy monitor)."""
+
+    __tablename__ = "assistant_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    reply: Mapped[str] = mapped_column(Text)
+    intent: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    source: Mapped[str] = mapped_column(String(20))  # classifier | llm | fallback
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AppointmentRequest(Base):
+    """A patient / guardian asks for a session with a speech-language pathologist; the admin confirms it."""
+
+    __tablename__ = "appointment_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True)
+    preferred_date: Mapped[date] = mapped_column(Date)
+    preferred_time: Mapped[str] = mapped_column(String(20))      # morning | afternoon | evening
+    mode: Mapped[str] = mapped_column(String(20))                # online | in_person
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | confirmed | declined | cancelled
+    admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    patient: Mapped[Patient] = relationship()
+    user: Mapped[User] = relationship()

@@ -26,7 +26,7 @@ def client():
     run_migrations()  # real migration 0001 on the temp DB from conftest.py
     with SessionLocal() as db:
         report = seed(db)
-        assert len(report.inserted) == 84
+        assert len(report.inserted) + len(report.skipped) == 84  # other test modules may have seeded first
         assert len(seed(db).inserted) == 0  # idempotent: a second run inserts nothing
     return TestClient(main.app)  # no `with`: lifespan (startup migration) is not needed here
 

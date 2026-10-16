@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="t d">
+  <title id="t">At the Beach</title>
+  <desc id="d">A sunny beach: two children build a sandcastle, a girl flies a kite, a man reads under an umbrella, a sailboat is on the sea and seagulls fly overhead.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6ec6f1"/>
+      <stop offset="1" stop-color="#cdeefc"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f8fc9"/>
+      <stop offset="1" stop-color="#4cc0d9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- sky -->
+  <rect width="800" height="300" fill="url(#sky)"/>
+  <circle cx="680" cy="80" r="46" fill="#ffd45c"/>
+  <g fill="#ffffff">
+    <ellipse cx="160" cy="80" rx="60" ry="22"/><ellipse cx="200" cy="66" rx="40" ry="22"/>
+    <ellipse cx="470" cy="60" rx="50" ry="18"/><ellipse cx="500" cy="50" rx="30" ry="18"/>
+  </g>
+  <!-- seagulls -->
+  <g stroke="#3a3a3a" stroke-width="4" fill="none" stroke-linecap="round">
+    <path d="M300 120 q12 -12 24 0 q12 -12 24 0"/>
+    <path d="M360 150 q9 -9 18 0 q9 -9 18 0"/>
+    <path d="M560 130 q10 -10 20 0 q10 -10 20 0"/>
+  </g>
+
+  <!-- sea -->
+  <rect y="250" width="800" height="140" fill="url(#sea)"/>
+  <g stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7">
+    <path d="M40 290 q20 -10 40 0 q20 10 40 0"/>
+    <path d="M300 320 q20 -10 40 0 q20 10 40 0"/>
+    <path d="M620 300 q20 -10 40 0 q20 10 40 0"/>
+  </g>
+  <!-- sailboat -->
+  <g>
+    <path d="M520 270 h110 l-18 22 h-74 z" fill="#8a4b2a"/>
+    <line x1="575" y1="270" x2="575" y2="168" stroke="#5b3a29" stroke-width="5"/>
+    <path d="M579 172 l46 92 h-46 z" fill="#ffffff"/>
+    <path d="M571 180 l-40 84 h40 z" fill="#ef476f"/>
+  </g>
+  <!-- foam line -->
+  <path d="M0 390 q50 -16 100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 t100 0 v14 h-800 z" fill="#ffffff" opacity="0.85"/>
+
+  <!-- sand -->
+  <rect y="398" width="800" height="202" fill="#f3d9a4"/>
+  <g fill="#e2c385">
+    <circle cx="90" cy="560" r="4"/><circle cx="260" cy="520" r="3"/><circle cx="420" cy="580" r="4"/>
+    <circle cx="610" cy="560" r="3"/><circle cx="740" cy="520" r="4"/>
+  </g>
+
+  <!-- KITE + GIRL (left) -->
+  <g>
+    <path d="M120 150 l36 -40 l36 40 l-36 50 z" fill="#ff8c42"/>
+    <path d="M120 150 h72 M156 110 v90" stroke="#c75b12" stroke-width="3"/>
+    <path d="M156 200 q-10 30 4 50 q14 20 0 40" stroke="#ef476f" stroke-width="4" fill="none"/>
+    <line x1="156" y1="200" x2="112" y2="395" stroke="#444" stroke-width="2"/>
+    <rect x="90" y="468" width="16" height="70" rx="7" fill="#c68642"/>
+    <rect x="112" y="468" width="16" height="70" rx="7" fill="#c68642"/>
+    <path d="M84 404 q25 -12 50 0 l12 70 h-74 z" fill="#06d6a0"/>
+    <path d="M128 412 q-6 -18 -16 -20" stroke="#c68642" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <path d="M88 414 q-16 30 -8 50" stroke="#c68642" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <circle cx="109" cy="376" r="24" fill="#c68642"/>
+    <path d="M85 376 q-2 -34 24 -34 q28 0 26 34 q-4 -16 -26 -18 q-20 2 -24 18z" fill="#2b1a10"/>
+    <path d="M133 372 q14 20 4 44" stroke="#2b1a10" stroke-width="10" fill="none" stroke-linecap="round"/>
+    <circle cx="101" cy="378" r="3" fill="#111"/><circle cx="117" cy="378" r="3" fill="#111"/>
+    <path d="M102 388 q7 6 14 0" stroke="#7a3e1d" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- SANDCASTLE + TWO CHILDREN (centre) -->
+  <g>
+    <rect x="330" y="478" width="130" height="62" fill="#e3bd76"/>
+    <rect x="320" y="440" width="40" height="100" fill="#e9c784"/>
+    <rect x="430" y="440" width="40" height="100" fill="#e9c784"/>
+    <rect x="372" y="430" width="46" height="60" fill="#e9c784"/>
+    <path d="M320 440 h8 v-8 h8 v8 h8 v-8 h8 v8 h8 v-8" fill="none" stroke="#e9c784" stroke-width="0"/>
+    <g fill="#e9c784">
+      <rect x="320" y="430" width="10" height="12"/><rect x="335" y="430" width="10" height="12"/><rect x="350" y="430" width="10" height="12"/>
+      <rect x="430" y="430" width="10" height="12"/><rect x="445" y="430" width="10" height="12"/><rect x="460" y="430" width="10" height="12"/>
+    </g>
+    <path d="M384 490 a11 14 0 0 1 22 0 v14 h-22 z" fill="#b8913f"/>
+    <line x1="395" y1="430" x2="395" y2="396" stroke="#5b3a29" stroke-width="3"/>
+    <path d="M396 396 l22 8 l-22 8 z" fill="#ef476f"/>
+    <!-- bucket + spade -->
+    <path d="M490 512 h36 l-6 34 h-24 z" fill="#118ab2"/>
+    <path d="M490 512 q18 -22 36 0" stroke="#0b6a89" stroke-width="3" fill="none"/>
+    <line x1="296" y1="548" x2="276" y2="508" stroke="#ffd166" stroke-width="5" stroke-linecap="round"/>
+    <path d="M270 496 l14 -4 l2 18 l-12 2z" fill="#ffd166"/>
+    <!-- boy kneeling left -->
+    <ellipse cx="282" cy="550" rx="34" ry="12" fill="#3a86ff"/>
+    <path d="M254 470 q24 -12 48 0 l6 70 h-60 z" fill="#ff595e"/>
+    <path d="M300 482 q20 18 26 34" stroke="#f1c27d" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <path d="M258 482 q-10 30 18 60" stroke="#f1c27d" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <circle cx="278" cy="444" r="24" fill="#f1c27d"/>
+    <path d="M254 440 q2 -30 26 -30 q24 0 22 30 q-6 -14 -24 -14 q-18 0 -24 14z" fill="#e8a33d"/>
+    <circle cx="272" cy="446" r="3" fill="#111"/><circle cx="288" cy="446" r="3" fill="#111"/>
+    <path d="M273 456 q7 6 14 0" stroke="#a0522d" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <!-- girl kneeling right -->
+    <ellipse cx="520" cy="560" rx="30" ry="10" fill="#8338ec"/>
+    <path d="M494 486 q24 -12 48 0 l6 70 h-60 z" fill="#ffbe0b"/>
+    <path d="M498 498 q-20 10 -30 26" stroke="#8d5524" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <path d="M540 498 q-2 24 -16 30" stroke="#8d5524" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <circle cx="518" cy="460" r="24" fill="#8d5524"/>
+    <path d="M494 456 q2 -30 24 -30 q26 0 24 30 q-6 -14 -24 -14 q-18 0 -24 14z" fill="#1d1d1d"/>
+    <circle cx="496" cy="440" r="10" fill="#1d1d1d"/><circle cx="540" cy="440" r="10" fill="#1d1d1d"/>
+    <circle cx="511" cy="462" r="3" fill="#111"/><circle cx="526" cy="462" r="3" fill="#111"/>
+    <path d="M512 472 q7 6 14 0" stroke="#5a2d0c" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- UMBRELLA + MAN READING (right) -->
+  <g>
+    <line x1="680" y1="330" x2="660" y2="560" stroke="#6b4f3a" stroke-width="6"/>
+    <path d="M580 350 q100 -90 200 -20 z" fill="#ef476f"/>
+    <path d="M580 350 q33 -48 66 -60 q-14 40 -16 52z M646 290 q40 -14 66 -2 q-12 22 -10 50z" fill="#ffffff" opacity="0.9"/>
+    <!-- towel -->
+    <path d="M600 540 l170 -10 l14 40 l-170 12 z" fill="#06d6a0"/>
+    <path d="M630 538 l12 40 M670 536 l12 40 M710 534 l12 40 M750 532 l12 40" stroke="#ffffff" stroke-width="5"/>
+    <!-- man sitting -->
+    <path d="M660 520 h70 l6 26 h-78 z" fill="#264653"/>
+    <path d="M726 524 l40 6 l0 14 l-40 -2 z" fill="#264653"/>
+    <ellipse cx="770" cy="540" rx="12" ry="7" fill="#f1c27d"/>
+    <path d="M662 436 q30 -12 60 0 l4 86 h-68 z" fill="#f4f1de"/>
+    <path d="M668 452 q16 34 38 40" stroke="#f1c27d" stroke-width="14" fill="none" stroke-linecap="round"/>
+    <path d="M718 452 q4 34 -10 40" stroke="#f1c27d" stroke-width="14" fill="none" stroke-linecap="round"/>
+    <!-- book -->
+    <path d="M684 476 l26 8 l26 -8 v34 l-26 8 l-26 -8 z" fill="#118ab2"/>
+    <line x1="710" y1="484" x2="710" y2="518" stroke="#ffffff" stroke-width="3"/>
+    <rect x="684" y="412" width="16" height="22" fill="#f1c27d"/>
+    <circle cx="692" cy="392" r="26" fill="#f1c27d"/>
+    <path d="M664 388 q2 -14 28 -16 q26 2 28 16 z" fill="#ffd166"/>
+    <ellipse cx="692" cy="376" rx="40" ry="8" fill="#ffd166"/>
+    <rect x="676" y="390" width="14" height="9" rx="3" fill="#222"/><rect x="694" y="390" width="14" height="9" rx="3" fill="#222"/>
+    <line x1="690" y1="394" x2="694" y2="394" stroke="#222" stroke-width="2"/>
+    <path d="M686 410 q6 4 12 0" stroke="#a0522d" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- beach ball + crab -->
+  <g>
+    <circle cx="200" cy="560" r="24" fill="#ffffff"/>
+    <path d="M200 536 a24 24 0 0 1 22 14 l-22 10z" fill="#ef476f"/>
+    <path d="M178 550 a24 24 0 0 1 22 -14 v24z" fill="#118ab2"/>
+    <path d="M200 584 a24 24 0 0 1 -22 -14 l22 -10z" fill="#ffd166"/>
+    <ellipse cx="590" cy="578" rx="18" ry="11" fill="#e63946"/>
+    <path d="M574 574 l-12 -8 M606 574 l12 -8 M576 584 l-10 6 M604 584 l10 6" stroke="#e63946" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="584" cy="566" r="3" fill="#111"/><circle cx="596" cy="566" r="3" fill="#111"/>
+  </g>
+</svg>

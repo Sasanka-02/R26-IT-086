@@ -86,7 +86,7 @@ export default function ClinicalReport() {
           <Logo subtitle={false} />
           <div className="text-right">
             <h1 className="text-xl font-extrabold text-ink">Clinical Screening Report</h1>
-            <p className="text-xs text-ink-soft">Feature 1 · Speech Screening &amp; Feature Extraction</p>
+            <p className="text-xs text-ink-soft">Speech Screening &amp; Feature Extraction (Component 1)</p>
           </div>
         </header>
 

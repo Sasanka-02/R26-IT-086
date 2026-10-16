@@ -1,23 +1,27 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ClipboardList, Image as ImageIcon, MessageSquareText, MessagesSquare, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Bot, ClipboardList, Flame, HeartPulse, Image as ImageIcon, MessageSquareText, MessagesSquare, ShieldCheck, Sparkles } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useAssessment } from "../context/AssessmentContext";
 import { ScoreRing } from "../components/ui";
 import { friendlyStatus } from "../utils/friendlyStatus";
 import type { SessionListItem } from "../types";
+import type { PlanResponse } from "../types/integration";
 import { BRACKETS } from "../utils/age";
 
 export default function DashboardHome() {
   const { user, activePatient } = useAuth();
   const { completedCount, required } = useAssessment();
   const [sessions, setSessions] = useState<SessionListItem[] | null>(null);
+  const [plan, setPlan] = useState<PlanResponse | null>(null);
 
   useEffect(() => {
     if (!activePatient) return;
     setSessions(null);
+    setPlan(null);
     api.sessions(activePatient.id).then(setSessions).catch(() => setSessions([]));
+    api.therapy.plan(activePatient.id).then(setPlan).catch(() => setPlan(null));
   }, [activePatient]);
 
   const bracket = BRACKETS.find((b) => b.id === activePatient?.age_bracket?.id);
@@ -29,7 +33,7 @@ export default function DashboardHome() {
     <div className="space-y-6">
       <div>
         <h1 className="text-[28px] font-extrabold tracking-tight">Hello, {user?.full_name.split(" ")[0]} 👋</h1>
-        <p className="mt-1 text-sm text-ink-soft">Welcome to SpeakFree – AI-based speech screening with confidence-scored analysis.</p>
+        <p className="mt-1 text-sm text-ink-soft">Welcome to SpeakFree – AI-based speech screening, adaptive therapy and practice support.</p>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -48,7 +52,7 @@ export default function DashboardHome() {
               )}
               <div className="mt-5 flex flex-wrap items-center gap-4">
                 <Link to="/assessment" className="btn-primary px-5 py-3">
-                  <ClipboardList size={18} /> {completedCount > 0 ? "Continue assessment" : "Start assessment"} <ArrowRight size={16} />
+                  <ClipboardList size={18} /> {completedCount > 0 ? "Continue assessment" : latest ? "Start a new screening" : "Start assessment"} <ArrowRight size={16} />
                 </Link>
                 {completedCount > 0 && (
                   <div className="min-w-[180px] flex-1">
@@ -84,6 +88,26 @@ export default function DashboardHome() {
           )}
         </section>
       </div>
+
+      {/* Component 4: today's adaptive therapy practice (after the first screening) */}
+      {plan?.has_profile && (
+        <section className="flex flex-col gap-5 rounded-2xl bg-gradient-to-br from-navy to-lav-500 p-6 text-white shadow-nav md:flex-row md:items-center">
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/15"><HeartPulse size={28} /></span>
+          <div className="flex-1">
+            <div className="text-xs font-semibold uppercase tracking-widest text-white/70">Your therapy plan · {plan.focus.patient_name}</div>
+            <div className="mt-1 text-xl font-extrabold">Today: {plan.today.map((e) => e.title.split(" - ")[0]).join(" · ")}</div>
+            <div className="mt-1 flex flex-wrap gap-4 text-sm text-white/80">
+              <span>{plan.level.label} level</span>
+              <span className="inline-flex items-center gap-1"><Flame size={14} /> {plan.progress.streak_days}-day streak</span>
+              <span>{plan.progress.total_sessions} exercises done</span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link to={`/therapy/exercise/${plan.today[0].id}`} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-navy hover:bg-lav-50">Start today's practice <ArrowRight size={16} /></Link>
+            <Link to="/therapy/assistant" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/40 px-4 py-3 text-sm font-semibold hover:bg-white/10"><Bot size={16} /> Assistant</Link>
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-5 md:grid-cols-3">
         {[

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import AuthFlow from "./components/AuthFlow";
-import AppLayout, { PlaceholderPage } from "./components/AppLayout";
+import AppLayout from "./components/AppLayout";
 import AsrConfidenceDashboard from "./components/AsrConfidenceDashboard";
 import { Spinner } from "./components/ui";
 import ClinicalReport from "./pages/ClinicalReport";
@@ -13,7 +13,20 @@ import ProgressPage from "./pages/ProgressPage";
 import SessionDashboard from "./pages/SessionDashboard";
 import TaskLibrary from "./pages/TaskLibrary";
 import AdminPatientProfile from "./pages/admin/AdminPatientProfile";
+import AdminAppointments from "./pages/admin/AdminAppointments";
 import AdminPatients from "./pages/admin/AdminPatients";
+import AppointmentsPage from "./pages/AppointmentsPage";
+import ReportsPage from "./pages/ReportsPage";
+import ResourcesPage from "./pages/ResourcesPage";
+import SettingsPage from "./pages/SettingsPage";
+import TherapyReport from "./pages/therapy/TherapyReport";
+import ModelsPage from "./pages/admin/pipeline/ModelsPage";
+import PipelineOverview from "./pages/admin/pipeline/PipelineOverview";
+import PipelineSession from "./pages/admin/pipeline/PipelineSession";
+import TherapyMonitor from "./pages/admin/pipeline/TherapyMonitor";
+import AssistantPage from "./pages/therapy/AssistantPage";
+import ExerciseSession from "./pages/therapy/ExerciseSession";
+import TherapyPlan from "./pages/therapy/TherapyPlan";
 import AssessmentOverview from "./pages/assessment/AssessmentOverview";
 import AnalysePage from "./pages/assessment/AnalysePage";
 import { PicturePage, QuestionsPage, ScenarioPage } from "./pages/assessment/TaskPages";
@@ -36,10 +49,16 @@ function AdminOnly({ children }: { children: ReactNode }) {
   return user?.role === "admin" ? <>{children}</> : <Navigate to="/" replace />;
 }
 
+/** Patient-facing therapy pages: the admin uses the therapy monitor instead. */
+function NotAdmin({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  return user?.role === "admin" ? <Navigate to="/admin/pipeline" replace /> : <>{children}</>;
+}
+
 /** Home: the admin starts in the patient directory, everyone else on their dashboard. */
 function Home() {
   const { user } = useAuth();
-  return user?.role === "admin" ? <Navigate to="/admin/patients" replace /> : <DashboardHome />;
+  return user?.role === "admin" ? <Navigate to="/admin/pipeline" replace /> : <DashboardHome />;
 }
 
 /** Session results: admin → technical dashboard, everyone else → simple patient view. */
@@ -55,6 +74,7 @@ export default function App() {
       <Route path="/login" element={<PublicOnly><AuthFlow mode="login" /></PublicOnly>} />
       <Route path="/signup" element={<PublicOnly><AuthFlow mode="signup" /></PublicOnly>} />
       <Route path="/sessions/:sessionId/report" element={<Protected><ClinicalReport /></Protected>} />
+      <Route path="/therapy/report" element={<Protected><TherapyReport /></Protected>} />
       <Route element={<Protected><AppLayout /></Protected>}>
         <Route index element={<Home />} />
         <Route path="assessment" element={<AssessmentOverview />} />
@@ -67,13 +87,20 @@ export default function App() {
         <Route path="admin/patients" element={<AdminOnly><AdminPatients /></AdminOnly>} />
         <Route path="admin/patients/:patientId" element={<AdminOnly><AdminPatientProfile /></AdminOnly>} />
         <Route path="admin/patients/:patientId/sessions/:sessionId" element={<AdminOnly><SessionDashboard /></AdminOnly>} />
+        <Route path="admin/patients/:patientId/therapy" element={<AdminOnly><TherapyMonitor /></AdminOnly>} />
+        <Route path="admin/pipeline" element={<AdminOnly><PipelineOverview /></AdminOnly>} />
+        <Route path="admin/pipeline/:sessionId" element={<AdminOnly><PipelineSession /></AdminOnly>} />
+        <Route path="admin/models" element={<AdminOnly><ModelsPage /></AdminOnly>} />
         <Route path="progress" element={<ProgressPage />} />
         <Route path="task-library" element={<TaskLibrary />} />
-        <Route path="therapy-plan" element={<PlaceholderPage title="Therapy Plan" owner="Feature 4 – AI Therapy Assistant" description="Your personalised therapy plan and daily exercises, built around your screening results, are coming soon." />} />
-        <Route path="reports" element={<PlaceholderPage title="Reports" owner="Features 1–3" description="Combined screening, articulation and severity reports for clinicians." />} />
-        <Route path="resources" element={<PlaceholderPage title="Resources" owner="SpeakFree team" description="Guides and practice materials for patients and families." />} />
-        <Route path="appointments" element={<PlaceholderPage title="Appointments" owner="SpeakFree platform" description="Booking a session with a speech-language pathologist is coming soon. Until then, use Contact Support and we will help you." />} />
-        <Route path="settings" element={<PlaceholderPage title="Settings" owner="SpeakFree platform" description="Account, privacy and notification settings." />} />
+        <Route path="therapy-plan" element={<NotAdmin><TherapyPlan /></NotAdmin>} />
+        <Route path="therapy/exercise/:exerciseId" element={<NotAdmin><ExerciseSession /></NotAdmin>} />
+        <Route path="therapy/assistant" element={<NotAdmin><AssistantPage /></NotAdmin>} />
+        <Route path="reports" element={<NotAdmin><ReportsPage /></NotAdmin>} />
+        <Route path="resources" element={<ResourcesPage />} />
+        <Route path="appointments" element={<NotAdmin><AppointmentsPage /></NotAdmin>} />
+        <Route path="admin/appointments" element={<AdminOnly><AdminAppointments /></AdminOnly>} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

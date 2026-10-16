@@ -199,9 +199,9 @@ function LoginForm() {
           </Field>
 
           <div className="pb-2">
-            <span className="label">Password</span>
+            <label htmlFor="login-password" className="label">Password</label>
             <div className="relative">
-              <PasswordInput value={password} onChange={setPassword} autoComplete="current-password" placeholder="Your password" />
+              <PasswordInput id="login-password" value={password} onChange={setPassword} autoComplete="current-password" placeholder="Your password" />
             </div>
           </div>
 

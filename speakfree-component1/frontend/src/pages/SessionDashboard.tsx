@@ -207,6 +207,7 @@ export default function SessionDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Link to={`/admin/pipeline/${data.session_id}`} className="btn-lav"><Sparkles size={16} /> C2 → C3 → C4</Link>
           <button onClick={() => setShowJson((v) => !v)} className="btn-ghost"><Braces size={16} /> {showJson ? "Hide" : "Show"} JSON</button>
           <Link to={`/sessions/${data.session_id}/report`} target="_blank" className="btn-ghost"><FileText size={16} /> Clinical report</Link>
           <button onClick={() => downloadJson(`speakfree-c1-session-${data.session_id}.json`, data)} className="btn-primary"><Download size={16} /> Export</button>

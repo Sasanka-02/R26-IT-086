@@ -23,8 +23,10 @@ def _list(name: str, default: str) -> list[str]:
 
 @dataclass(frozen=True)
 class Settings:
-    app_name: str = "SpeakFree C1 - Speech Screening & Feature Extraction"
-    schema_version: str = "1.1.0"  # 1.1.0: task_type "questions", model.rejected_segments, session summary
+    app_name: str = "SpeakFree - Integrated Speech Screening & Therapy Platform (C1-C4)"
+    # 1.1.0: task_type "questions", model.rejected_segments, session summary
+    # 1.2.0: model_features.acoustic_biomarker_windows (TORGO features for Component 3)
+    schema_version: str = "1.2.0"
 
     # ---- Persistence (SQLite by default, PostgreSQL in production) ----
     # PostgreSQL example: postgresql+psycopg://user:pass@localhost:5432/speakfree  (pip install "psycopg[binary]")
@@ -79,6 +81,12 @@ class Settings:
     enable_noise_reduction: bool = _bool("ENABLE_NOISE_REDUCTION", True)
     enable_hubert: bool = _bool("ENABLE_HUBERT", False)
     hubert_model: str = os.getenv("HUBERT_MODEL", "facebook/hubert-base-ls960")
+
+    # ---- Integration (Components 2-4) ----
+    # TORGO-style acoustic windows computed while the audio is in memory (Component 3 stage 1).
+    enable_acoustic_biomarkers: bool = _bool("ENABLE_ACOUSTIC_BIOMARKERS", True)
+    # Run C2 -> C3 -> C4 automatically when a screening session is finalised.
+    run_pipeline_on_finalize: bool = _bool("RUN_PIPELINE_ON_FINALIZE", True)
 
     # ---- Upload limits ----
     max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "25"))

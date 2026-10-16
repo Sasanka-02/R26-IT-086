@@ -22,3 +22,13 @@ openai-whisper>=20240930
 # Tests:
 pytest>=8.0
 httpx>=0.27                # required by FastAPI's TestClient (tests/test_db.py)
+
+# ---- Integrated platform (Components 2-4 run inside this backend) ----
+# Component 3 models (speakfree-component3/backend/models/*.joblib) were saved with this exact
+# scikit-learn - pickles are version-sensitive, so keep the pin (or retrain: python training/train_all.py).
+scikit-learn==1.9.1
+joblib>=1.4
+# Component 3 training scripts only:
+pandas>=2.2
+# Optional - Component 4 AI assistant LLM fallback (set ANTHROPIC_API_KEY to enable):
+# anthropic>=1.0

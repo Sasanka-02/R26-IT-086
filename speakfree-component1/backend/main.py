@@ -1,6 +1,8 @@
 """
 SpeakFree – Component 1: Noise-Robust Speech Screening & Feature Extraction
-FastAPI application (REST + WebSocket)
+FastAPI application (REST + WebSocket) - also the host of the integrated platform:
+finalising a session runs Component 2 → 3 → 4 in the backend (integration/pipeline.py) and
+integration/routes.py serves the admin pipeline dashboards and the patient therapy plan.
 
 Run:   uvicorn main:app --reload --port 8000 --timeout-graceful-shutdown 3
 Docs:  http://localhost:8000/docs
@@ -27,6 +29,9 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from integration.pipeline import run_session_pipeline
+from integration.routes import router as integration_router
+from account_routes import router as account_router
 from age_brackets import MAX_AGE, MIN_AGE, age_from_dob, bracket_for_age, bracket_info
 from audio_preprocessing import AudioDecodeError, decode_audio, preprocess, waveform_peaks
 from auth import (
@@ -115,6 +120,10 @@ app.add_middleware(
 )
 # Task images (backend/static/tasks/<task_id>.<ext>) – never audio.
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
+# Components 2–4: admin pipeline dashboards, patient therapy plan, AI assistant, live coaching
+app.include_router(integration_router)
+# Account settings + appointment requests
+app.include_router(account_router)
 
 
 # ============================================================================= helpers
@@ -180,9 +189,12 @@ def get_asr():
 def health():
     from asr_service import WhisperConfidenceASR
 
+    from integration import COMPONENT_DIRS
+
     return {
         "status": "ok",
         "component": "C1-speech-screening",
+        "components": {f"C{n}": path.is_dir() for n, path in COMPONENT_DIRS.items()},
         "schema_version": settings.schema_version,
         "whisper_model": settings.whisper_model,
         "whisper_loaded": WhisperConfidenceASR.is_loaded(),
@@ -193,8 +205,12 @@ def health():
 
 @app.post("/api/v1/system/warmup", tags=["system"])
 async def warmup():
-    """Pre-load Whisper so the first real analysis is fast."""
+    """Pre-load Whisper (and compile the Component 3 acoustic features) so the first real analysis is fast."""
     await run_in_threadpool(get_asr)
+    if settings.enable_acoustic_biomarkers:
+        from integration.hooks import warmup as integration_warmup
+
+        await run_in_threadpool(integration_warmup)
     return {"whisper_loaded": True, "model": settings.whisper_model}
 
 
@@ -347,6 +363,13 @@ def run_pipeline(path: str, task_type: str, reference_text: str | None, keywords
         threshold=settings.dysfluency_threshold,
     )
 
+    # 5) numeric features for Component 3 (TORGO acoustic windows) – computed now because audio is never kept
+    windows = []
+    if settings.enable_acoustic_biomarkers:
+        from integration.hooks import acoustic_biomarker_windows
+
+        windows = acoustic_biomarker_windows(pre.raw_audio, pre.sample_rate, pre.speech_intervals)
+
     return {
         "transcript": tr.transcript,
         "reference_text": reference,
@@ -374,6 +397,7 @@ def run_pipeline(path: str, task_type: str, reference_text: str | None, keywords
             "verbatim_prompt": bool(settings.verbatim_prompt),
             "rejected_segments": tr.rejected_segments,
         },
+        "model_features": {"acoustic_biomarker_windows": windows},
         "processing_time_ms": int((time.perf_counter() - t0) * 1000),
     }
 
@@ -531,6 +555,14 @@ def finalize_session(session_id: str, body: FinalizeSessionRequest, user: User =
     row.summary_json = json.dumps(summary)
     row.created_at = utcnow()
     db.commit()
+
+    # ---- integrated pipeline: C2 articulation → C3 severity → C4 therapy profile (backend only) ----
+    if settings.run_pipeline_on_finalize:
+        try:
+            run_session_pipeline(db, session_id)
+        except Exception:  # never fail the patient's screening because of a later stage
+            log.exception("Integrated pipeline failed for session %s", session_id)
+            db.rollback()
     return summary
 
 

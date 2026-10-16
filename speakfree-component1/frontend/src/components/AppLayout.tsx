@@ -7,6 +7,9 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Bell,
   BookOpen,
+  Bot,
+  Brain,
+  Workflow,
   CalendarDays,
   ChevronDown,
   ClipboardList,
@@ -34,11 +37,15 @@ import { ErrorBox, Logo } from "./ui";
 
 // roles: who sees the link (omitted = every role except admin)
 const NAV: { to: string; label: string; icon: ReactNode; roles?: Role[] }[] = [
+  { to: "/admin/pipeline", label: "Analysis Pipeline", icon: <Workflow size={18} />, roles: ["admin"] },
   { to: "/admin/patients", label: "Patients", icon: <Users size={18} />, roles: ["admin"] },
+  { to: "/admin/appointments", label: "Appointments", icon: <CalendarDays size={18} />, roles: ["admin"] },
+  { to: "/admin/models", label: "Models & Methods", icon: <Brain size={18} />, roles: ["admin"] },
   { to: "/", label: "Dashboard", icon: <Home size={18} /> },
   { to: "/assessment", label: "Assessment Tasks", icon: <ClipboardList size={18} /> },
   { to: "/progress", label: "My Progress", icon: <TrendingUp size={18} /> },
   { to: "/therapy-plan", label: "Therapy Plan", icon: <HeartPulse size={18} /> },
+  { to: "/therapy/assistant", label: "AI Assistant", icon: <Bot size={18} /> },
   { to: "/reports", label: "Reports", icon: <FileText size={18} /> },
   { to: "/resources", label: "Resources", icon: <BookOpen size={18} /> },
   { to: "/appointments", label: "Appointments", icon: <CalendarDays size={18} /> },

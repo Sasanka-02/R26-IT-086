@@ -165,6 +165,8 @@ class AnalyzeResponse(BaseModel):
     preprocessing: dict
     waveform_peaks: list[float]
     model: dict
+    # schema 1.2.0 - numeric features for later components (never audio)
+    model_features: dict | None = None
 
 
 class AnalysisSummary(BaseModel):

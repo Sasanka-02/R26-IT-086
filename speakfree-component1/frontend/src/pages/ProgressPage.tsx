@@ -5,6 +5,8 @@ import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, Spinner } from "../components/ui";
 import type { SessionListItem } from "../types";
+import type { PlanResponse } from "../types/integration";
+import { StatTile, TrendLine } from "../components/charts";
 import { friendlyStatus } from "../utils/friendlyStatus";
 
 /** Overall speech score across screenings – one simple line, no technical metrics. */
@@ -33,11 +35,14 @@ function TrendChart({ points }: { points: SessionListItem[] }) {
 export default function ProgressPage() {
   const { activePatient } = useAuth();
   const [sessions, setSessions] = useState<SessionListItem[] | null>(null);
+  const [plan, setPlan] = useState<PlanResponse | null>(null);
 
   useEffect(() => {
     if (!activePatient) return;
     setSessions(null);
+    setPlan(null);
     api.sessions(activePatient.id).then(setSessions).catch(() => setSessions([]));
+    api.therapy.plan(activePatient.id).then(setPlan).catch(() => setPlan(null));
   }, [activePatient]);
 
   if (!activePatient) return <div className="card p-6 muted">No patient selected.</div>;
@@ -56,6 +61,23 @@ export default function ProgressPage() {
         </div>
         <TrendChart points={sessions} />
       </section>
+
+      {plan?.has_profile && (
+        <section className="card p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-bold">Therapy practice · {plan.focus.patient_name}</h2>
+            <Link to="/therapy-plan" className="text-sm font-semibold text-brand hover:underline">Open my plan →</Link>
+          </div>
+          <div className="mb-5 grid gap-3 sm:grid-cols-4">
+            <StatTile label="Exercises" value={plan.progress.total_sessions} />
+            <StatTile label="Minutes" value={plan.progress.total_minutes} />
+            <StatTile label="Average score" value={plan.progress.average_score ?? "–"} />
+            <StatTile label="Level" value={plan.level.label} sub={plan.progress.trend.label} />
+          </div>
+          <TrendLine points={plan.progress.history.map((h) => ({ x: String(h.attempt), y: h.score, label: `${h.title} · ${new Date(h.completed_at).toLocaleDateString()}` }))}
+            threshold={{ value: plan.level.strong_threshold, label: "strong" }} />
+        </section>
+      )}
 
       <section className="card p-6">
         <h2 className="mb-3 font-bold">Your screenings</h2>

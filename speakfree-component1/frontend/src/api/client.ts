@@ -1,4 +1,7 @@
 // Thin fetch wrapper around the Component 1 FastAPI backend.
+import type {
+  AdminTherapy, AttemptPayload, AttemptResult, Briefing, ChatReply, ModelsInfo, PipelineDetail, PipelineOverview, PlanResponse,
+} from "../types/integration";
 import type { AdminPatientProfile, AdminPatientRow, AdminTask, AnalysisSummary, AnalyzeResponse, Patient, Role, SessionListItem, SessionSummary, TaskSet, TokenResponse, User } from "../types";
 
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
@@ -89,11 +92,40 @@ export interface AnalyzePayload {
   taskId: string;
 }
 
+export interface Appointment {
+  id: number;
+  patient_id: string;
+  patient_name: string;
+  preferred_date: string;
+  preferred_time: "morning" | "afternoon" | "evening";
+  mode: "online" | "in_person";
+  reason: string;
+  status: "pending" | "confirmed" | "declined" | "cancelled";
+  admin_note: string | null;
+  scheduled_at: string | null;
+  created_at: string;
+  requested_by?: string;
+  requested_by_email?: string;
+  requested_by_role?: string;
+}
+
 export const api = {
   register: (data: RegisterPayload) => request<TokenResponse>("/api/v1/auth/register", { method: "POST", body: JSON.stringify(data) }),
   login: (email: string, password: string) =>
     request<TokenResponse>("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => request<User>("/api/v1/auth/me"),
+  updateMe: (full_name: string) => request<{ full_name: string }>("/api/v1/auth/me", { method: "PATCH", body: JSON.stringify({ full_name }) }),
+  changePassword: (current_password: string, new_password: string) =>
+    request<null>("/api/v1/auth/change-password", { method: "POST", body: JSON.stringify({ current_password, new_password }) }),
+  appointments: {
+    mine: () => request<Appointment[]>("/api/v1/appointments"),
+    create: (body: Omit<Appointment, "id" | "patient_name" | "status" | "admin_note" | "scheduled_at" | "created_at">) =>
+      request<Appointment>("/api/v1/appointments", { method: "POST", body: JSON.stringify(body) }),
+    cancel: (id: number) => request<Appointment>(`/api/v1/appointments/${id}/cancel`, { method: "POST" }),
+    all: (status?: string) => request<Appointment[]>(`/api/v1/admin/appointments${status ? `?status=${status}` : ""}`),
+    decide: (id: number, body: { status: "confirmed" | "declined"; scheduled_at?: string; admin_note?: string }) =>
+      request<Appointment>(`/api/v1/admin/appointments/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  },
   createPatient: (full_name: string, date_of_birth: string) =>
     request<Patient>("/api/v1/patients", { method: "POST", body: JSON.stringify({ full_name, date_of_birth }) }),
   tasks: (patientId: string) => request<TaskSet>(`/api/v1/tasks?patient_id=${encodeURIComponent(patientId)}`),
@@ -121,6 +153,24 @@ export const api = {
   admin: {
     patients: () => request<AdminPatientRow[]>("/api/v1/admin/patients"),
     patient: (id: string) => request<AdminPatientProfile>(`/api/v1/admin/patients/${encodeURIComponent(id)}`),
+    // integrated pipeline (Components 2–4) – admin only
+    pipeline: () => request<PipelineOverview>("/api/v1/admin/pipeline"),
+    pipelineRun: (sessionId: string) => request<PipelineDetail>(`/api/v1/admin/pipeline/${encodeURIComponent(sessionId)}`),
+    rerunPipeline: (sessionId: string) =>
+      request<{ status: string; error: string | null }>(`/api/v1/admin/pipeline/${encodeURIComponent(sessionId)}/rerun`, { method: "POST" }),
+    models: () => request<ModelsInfo>("/api/v1/admin/models"),
+    therapy: (patientId: string) => request<AdminTherapy>(`/api/v1/admin/patients/${encodeURIComponent(patientId)}/therapy`),
+  },
+  // Component 4 – patient-safe therapy plan, exercises and AI assistant
+  therapy: {
+    plan: (patientId: string) => request<PlanResponse>(`/api/v1/therapy/${encodeURIComponent(patientId)}/plan`),
+    submit: (patientId: string, body: AttemptPayload) =>
+      request<AttemptResult>(`/api/v1/therapy/${encodeURIComponent(patientId)}/attempts`, { method: "POST", body: JSON.stringify(body) }),
+    briefing: (patientId: string) => request<Briefing>(`/api/v1/therapy/${encodeURIComponent(patientId)}/assistant`),
+    chat: (patientId: string, message: string) =>
+      request<ChatReply>(`/api/v1/therapy/${encodeURIComponent(patientId)}/assistant/chat`, { method: "POST", body: JSON.stringify({ message }) }),
+    liveUrl: (liveId: string, exerciseType: string) =>
+      `${API_BASE.replace(/^http/, "ws")}/ws/therapy-live/${encodeURIComponent(liveId)}?token=${encodeURIComponent(tokenStore.get() ?? "")}&exercise_type=${encodeURIComponent(exerciseType)}`,
   },
   // clinician-only task library (multipart so an image can be uploaded with the fields)
   adminTasks: {

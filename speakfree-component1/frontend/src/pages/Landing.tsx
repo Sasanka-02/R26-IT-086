@@ -2,9 +2,10 @@
  * Landing – public onboarding page for the whole SpeakFree project (all four features),
  * shown before sign-in. Content follows the SpeakFree pitch slides:
  *   hero → the problem → one platform for everyone (AI Analysis Engine) → the four features
- *   → start with a free screening (Feature 1, live) → trust & values → FAQs → "Try it for free" (/login).
+ *   → how it works (screening → backend analysis → adaptive therapy) → trust & values → FAQs → CTA.
  *
- * Wording rule: only claim what exists. Feature 1 is live; Features 2–4 are marked "Coming soon";
+ * Wording rule: only claim what exists. All four features are integrated and live (the
+ * articulation and severity analysis run in the backend and are reviewed by the clinical admin);
  * numbers on the illustrative widgets are labelled "Sample".
  */
 import { useEffect, type ReactNode } from "react";
@@ -80,19 +81,19 @@ const COMPONENTS: { n: number; title: string; icon: ReactNode; live: boolean; te
     points: ["Age-matched tasks for ages 6–20", "Word-level ASR confidence", "Fluency, pronunciation & acoustic features"],
   },
   {
-    n: 2, title: "Articulation & Phoneme Analysis", icon: <ScanText size={20} />, live: false,
-    text: "Phoneme-level alignment pinpoints exactly which speech sounds are affected and refines the articulation score.",
-    points: ["Sound-by-sound accuracy", "Articulation error patterns"],
+    n: 2, title: "Articulation Analysis", icon: <ScanText size={20} />, live: true,
+    text: "An articulation score built from the word-level confidence of every recording – fillers removed, clear words counted, pooled across the whole session.",
+    points: ["Articulation score per recording & session", "Fillers, repetitions, prolongations, long pauses"],
   },
   {
-    n: 3, title: "Disorder & Severity Prediction", icon: <Gauge size={20} />, live: false,
-    text: "Combines screening and articulation results to suggest the likely disorder type and a 1–4 severity level for clinician review.",
-    points: ["Disorder-type prediction", "Explainable severity level"],
+    n: 3, title: "Disorder & Severity Prediction", icon: <Gauge size={20} />, live: true,
+    text: "A trained model cascade – including a dysarthria model built on the TORGO research corpus – suggests the likely disorder type and a 1–4 severity level for clinician review.",
+    points: ["Disorder-type & severity models", "Confidence, uncertainty & explanation trail"],
   },
   {
-    n: 4, title: "AI Therapy Assistant", icon: <HeartHandshake size={20} />, live: false,
-    text: "Personalised, adaptive therapy plans with real-time practice feedback, built on the results of Features 1–3.",
-    points: ["Adaptive weekly therapy plans", "Real-time practice & progress tracking"],
+    n: 4, title: "Adaptive Therapy & AI Assistant", icon: <HeartHandshake size={20} />, live: true,
+    text: "A personal practice plan built from the screening that adapts after every exercise, with live coaching and an AI assistant for your focus area.",
+    points: ["Adaptive plans, levels & goals", "Live coaching & AI practice assistant"],
   },
 ];
 
@@ -100,7 +101,7 @@ const STEPS: { icon: ReactNode; title: string; text: string }[] = [
   { icon: <UserCog size={20} />, title: "Create a free account", text: "Enter the date of birth – SpeakFree picks tasks matched to one of seven age brackets (6–20 years)." },
   { icon: <Mic size={20} />, title: "Record three short tasks", text: "Describe a picture, talk through a scenario and answer a few questions – at home, in a few minutes." },
   { icon: <Sparkles size={20} />, title: "Press Analyse Now", text: "Every word is transcribed and scored, and acoustic features such as speaking rate and pauses are measured." },
-  { icon: <Activity size={20} />, title: "See explainable results", text: "ASR confidence, fluency, pronunciation and a screening level – with the evidence for every score." },
+  { icon: <Activity size={20} />, title: "Get your results & plan", text: "Clear results in plain words – then a personal therapy plan with daily exercises, live coaching and an AI assistant." },
 ];
 
 const VALUES: { icon: ReactNode; title: string; text: string }[] = [
@@ -117,7 +118,8 @@ const FAQS: { id?: string; q: string; a: string }[] = [
   { q: "Who can use SpeakFree?", a: "Young people aged 6–20 can screen themselves, parents and guardians can register a child, and clinicians can manage several patients and the task library." },
   { q: "How long does a screening take?", a: "Usually 5–15 minutes, depending on age: three short tasks – describe a picture, talk through a scenario and answer three questions. Each recording is analysed in a few seconds (the very first one can take a little longer)." },
   { q: "What happens to my recordings?", a: "Recordings stay in your own browser until you press Analyse Now. They are then analysed and deleted from the server straight away. Only the scores and transcript are stored, linked to a pseudonymous patient ID." },
-  { q: "Does it cost anything?", a: "No. Creating an account and running a screening is free." },
+  { q: "What happens after the screening?", a: "Your recordings are analysed further in the background (articulation and severity analysis, reviewed by our clinical team). You then get a personal therapy plan: short daily exercises that adapt to how you do, live coaching while you practise and an AI assistant to answer your questions. A new screening every few weeks updates the plan." },
+  { q: "Does it cost anything?", a: "No. Creating an account, running a screening and using the therapy plan is free." },
   { id: "faq-accessibility", q: "Is SpeakFree accessible?", a: "SpeakFree runs in the web browser on computers and phones – there is no app to install. Forms and task choices can be used with the keyboard, pictures have text descriptions for screen readers, animations are reduced when your device asks for reduced motion, and you can upload an audio file instead of recording live." },
   { q: "What do I need?", a: "A device with a microphone and a quiet room. Browsers only allow microphone recording on secure (https) pages." },
 ];
@@ -494,13 +496,13 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------- how it works (Feature 1, live) */}
+      {/* ------------------------------------------------------------- how it works */}
       <section id="how" className="scroll-mt-20 py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="max-w-2xl">
             <div className="chip bg-ok-soft text-ok">Available now</div>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-navy sm:text-4xl">Start with a free speech screening – results in minutes</h2>
-            <p className="mt-3 text-ink-soft">No waiting room and no manual scoring. SpeakFree does the first screening step at home and shows exactly why each score is what it is.</p>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-navy sm:text-4xl">From a free screening to everyday therapy</h2>
+            <p className="mt-3 text-ink-soft">No waiting room and no manual scoring. Screen at home in minutes, then practise with a plan that adapts to you.</p>
           </div>
           <ol className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((s, i) => (
@@ -575,7 +577,7 @@ export default function Landing() {
           <div className="absolute -bottom-24 -left-10 h-72 w-72 rounded-full bg-lav-500/20" aria-hidden />
           <div className="relative">
             <h2 className="mx-auto max-w-3xl text-3xl font-extrabold tracking-tight sm:text-4xl">Together, let's build a world where every voice is heard and understood.</h2>
-            <p className="mx-auto mt-3 max-w-xl text-white/75">Start with a free speech screening today – create an account, record three short tasks and get explainable results in minutes.</p>
+            <p className="mx-auto mt-3 max-w-xl text-white/75">Start with a free speech screening today – record three short tasks, get clear results in minutes and a therapy plan that grows with you.</p>
             <Link to={user ? "/" : "/login"} className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-7 py-3.5 text-base font-semibold text-navy hover:bg-lav-50">
               {user ? "Go to dashboard" : "Try it for free"} <ArrowRight size={18} />
             </Link>

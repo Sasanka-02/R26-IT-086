@@ -201,9 +201,9 @@ export default function PatientResults() {
             <span className="flex-1"><span className="block text-lg font-bold">Start My Therapy Plan</span><span className="text-sm text-white/75">A plan built around these results</span></span>
             <ArrowRight className="transition group-hover:translate-x-1" />
           </Link>
-          <Link to="/therapy-plan" className="group flex items-center gap-4 rounded-2xl border-2 border-brand/30 bg-brand-soft p-5 text-navy transition hover:border-brand">
+          <Link to="/therapy/assistant" className="group flex items-center gap-4 rounded-2xl border-2 border-brand/30 bg-brand-soft p-5 text-navy transition hover:border-brand">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white text-brand"><Dumbbell size={24} /></span>
-            <span className="flex-1"><span className="block text-lg font-bold">Begin Today's Exercises</span><span className="text-sm text-ink-soft">Short, fun practice for today</span></span>
+            <span className="flex-1"><span className="block text-lg font-bold">Meet Your Practice Assistant</span><span className="text-sm text-ink-soft">Short practice picked for you, plus your AI assistant</span></span>
             <ArrowRight className="transition group-hover:translate-x-1" />
           </Link>
         </div>

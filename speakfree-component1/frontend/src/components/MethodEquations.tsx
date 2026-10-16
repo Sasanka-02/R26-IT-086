@@ -39,13 +39,13 @@ export default function MethodEquations({ threshold = 0.6 }: { threshold?: numbe
       <Eq name="Pronunciation" note="Reading: 0.60·mean(C_word) + 0.40·word_accuracy · other tasks: mean(C_word)">
         100 × mean(C<sub>word</sub>)
       </Eq>
-      <Eq name="Articulation (provisional)" note="Proxy until Feature 2 provides phoneme-level alignment · articulation-rate score vs. age norm">
+      <Eq name="Articulation (provisional)" note="Component 1 proxy · the Component 2 articulation score (A = 100·(0.5·C + 0.5·CWR)) is in the Analysis Pipeline">
         100 × [0.70·pronunciation + 0.30·articulation_rate_score]
       </Eq>
       <Eq name="Overall speech score">
         0.30·ASR + 0.30·Fluency + 0.25·Pronunciation + 0.15·Articulation
       </Eq>
-      <Eq name="Screening level (1–4)" note="Preliminary indicator only – final disorder type and severity come from Feature 3 and clinical judgement.">
+      <Eq name="Screening level (1–4)" note="Preliminary indicator only – the Component 3 severity model and clinical judgement give the final disorder type and level.">
         ≥ 85 → 1 typical · ≥ 70 → 2 mild · ≥ 55 → 3 moderate · &lt; 55 → 4 significant
       </Eq>
       <Eq name="Sound-level findings" note="Spelling-based: mean C_word of all words containing the sound's letter pattern (e.g. /θ/ = 'th').">

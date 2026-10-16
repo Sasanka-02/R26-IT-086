@@ -1,0 +1,180 @@
+{
+  "component": "Component 3 - Multi-Disorder Severity Classification & Risk Prediction",
+  "owner": "I.L.S. Tharushan (IT21315114)",
+  "feature_order": [
+    "articulation_score",
+    "clear_word_ratio",
+    "kept_token_confidence",
+    "asr_confidence",
+    "dysfluency_ratio",
+    "fluency_score",
+    "pronunciation_score",
+    "speech_rate_wpm",
+    "articulation_rate_sps",
+    "pause_rate_per_min",
+    "longest_pause_sec",
+    "filler_rate",
+    "repetition_rate",
+    "prolongation_rate",
+    "long_pauses_per_min",
+    "flagged_sound_count",
+    "dysarthria_probability"
+  ],
+  "model_version": "component3-integrated-v2",
+  "built_at": "2026-10-17T01:39:45",
+  "consumes": "Component 2 hand-off (component3_input, schema 4.0) + TORGO acoustic windows from Component 1",
+  "models": {
+    "disorder_classifier": {
+      "path": "disorder_classifier.joblib",
+      "algorithm": "RandomForestClassifier",
+      "data_source": "SYNTHETIC_DEMO",
+      "clinically_validated": false,
+      "built": true,
+      "metrics": {
+        "accuracy": 0.9011,
+        "macro_f1": 0.9013,
+        "ece_top1": 0.0788,
+        "confusion_matrix": [
+          [
+            204,
+            0,
+            14,
+            7
+          ],
+          [
+            0,
+            225,
+            0,
+            0
+          ],
+          [
+            38,
+            0,
+            179,
+            8
+          ],
+          [
+            15,
+            0,
+            7,
+            203
+          ]
+        ],
+        "confusion_matrix_labels": [
+          "normal",
+          "stuttering",
+          "dysarthria",
+          "articulation"
+        ],
+        "n_train": 2700,
+        "n_test": 900
+      }
+    },
+    "severity_estimator": {
+      "path": "severity_estimator.joblib",
+      "algorithm": "RandomForestClassifier (4 ordered levels)",
+      "data_source": "SYNTHETIC_DEMO",
+      "clinically_validated": false,
+      "built": true,
+      "metrics": {
+        "accuracy": 0.8411,
+        "macro_f1": 0.8509,
+        "mae_levels": 0.1589,
+        "within_one_level": 1.0,
+        "ece_top1": 0.1126,
+        "confusion_matrix": [
+          [
+            168,
+            32,
+            0,
+            0
+          ],
+          [
+            48,
+            221,
+            29,
+            0
+          ],
+          [
+            0,
+            15,
+            234,
+            8
+          ],
+          [
+            0,
+            0,
+            11,
+            134
+          ]
+        ],
+        "confusion_matrix_labels": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "n_train": 2700,
+        "n_test": 900
+      }
+    },
+    "stuttering_multilabel": {
+      "path": "stuttering_multilabel.joblib",
+      "algorithm": "MultiOutputClassifier(RandomForestClassifier)",
+      "data_source": "SYNTHETIC_DEMO",
+      "clinically_validated": false,
+      "built": true,
+      "metrics": {
+        "per_label_f1": {
+          "repetition": 0.8566,
+          "prolongation": 0.8243,
+          "block": 0.7696
+        },
+        "macro_f1": 0.8168,
+        "hamming_loss": 0.0974,
+        "n_train": 2700,
+        "n_test": 900
+      }
+    },
+    "dysarthria_real_torgo": {
+      "path": "dysarthria_real_torgo.joblib",
+      "algorithm": "RandomForestClassifier",
+      "data_source": "TORGO (research dataset)",
+      "validation": "5-fold GroupKFold by speaker (speaker-independent)",
+      "clinically_validated": false,
+      "built": true,
+      "metrics": {
+        "accuracy": 0.7119,
+        "balanced_accuracy": 0.7108,
+        "precision": 0.5569,
+        "recall": 0.7074,
+        "f1": 0.6232,
+        "roc_auc": 0.7741,
+        "confusion_matrix": [
+          [
+            7841,
+            3137
+          ],
+          [
+            1631,
+            3943
+          ]
+        ],
+        "confusion_matrix_labels": [
+          "healthy",
+          "dysarthria"
+        ],
+        "validation": "5-fold GroupKFold by speaker_id (speaker-independent)",
+        "n_samples": 16552,
+        "n_speakers": 15,
+        "n_features": 25
+      }
+    }
+  },
+  "disclaimer": "DEMO models are trained on synthetic data to demonstrate the pipeline and MUST NOT be reported as clinically validated or as research-valid accuracy. Only the TORGO dysarthria model is trained on real research data.",
+  "cascade": [
+    "stage 1: TORGO RandomForest on Component 1 acoustic windows -> P(dysarthria)",
+    "stage 2: RandomForest disorder classifier + RandomForest severity estimator + multi-label stuttering RF",
+    "fusion: rule-guarded unified severity score with uncertainty (component3/unified_score.py)"
+  ]
+}

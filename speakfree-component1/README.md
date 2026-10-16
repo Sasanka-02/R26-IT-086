@@ -243,3 +243,29 @@ Clinicians also get a **Task Library** page in the sidebar to add, edit, activat
 * **Unfinished sessions** are kept in the browser's IndexedDB so a page reload does not lose recordings; they are
   deleted from the browser as soon as the session has been analysed.
 * Age-norm ranges in `scoring.py` are approximate and should be calibrated with the clinical supervisor.
+
+---
+
+## 7. Integration with Components 2–4 (this backend is the host app)
+
+See the project root `README.md` for the full picture. In short:
+
+* **Schema 1.2.0** of `/api/v1/analyze` adds `model_features.acoustic_biomarker_windows`: numeric
+  TORGO-style features (no audio) computed while the recording is in memory, for Component 3.
+  `ENABLE_ACOUSTIC_BIOMARKERS=false` turns it off.
+* **`POST /api/v1/sessions/{id}/finalize`** now also runs `integration/pipeline.py`:
+  C2 articulation report → C3 severity report → C4 therapy profile, stored in `pipeline_runs` and
+  `therapy_profiles` (migration `0002`). A failure there never fails the patient's screening.
+  `RUN_PIPELINE_ON_FINALIZE=false` turns it off.
+* New endpoints (`integration/routes.py`):
+
+| Method | Path | Who |
+|---|---|---|
+| GET | `/api/v1/admin/pipeline` | admin – every run + KPIs |
+| GET / POST | `/api/v1/admin/pipeline/{session_id}` · `/rerun` | admin – C1/C2/C3/C4 detail, re-run |
+| GET | `/api/v1/admin/models` | admin – C2 equations, C3 model card, C4 engine settings |
+| GET | `/api/v1/admin/patients/{id}/therapy` | admin – therapy monitor |
+| GET | `/api/v1/therapy/{patient_id}/plan` | owner – patient-safe adaptive plan |
+| POST | `/api/v1/therapy/{patient_id}/attempts` | owner – save an exercise result |
+| GET / POST | `/api/v1/therapy/{patient_id}/assistant` · `/chat` | owner – AI assistant |
+| WS | `/ws/therapy-live/{live_id}?token=` | live coaching (metrics only) |
