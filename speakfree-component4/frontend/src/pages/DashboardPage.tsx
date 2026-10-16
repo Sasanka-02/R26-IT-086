@@ -6,6 +6,7 @@ import { usePracticeHistory } from "../context/PracticeHistoryContext";
 import AppShell from "../components/AppShell";
 import BadgeShowcase from "../components/BadgeShowcase";
 import TherapistNotesCard from "../components/TherapistNotesCard";
+import HomeworkCard from "../components/HomeworkCard";
 import { Card, KpiTile, MeterBar, ScorePill } from "../components/ui";
 import {
   DailyActivityChart,
@@ -53,9 +54,14 @@ export default function DashboardPage() {
             </h1>
             <p className="mt-1 text-sm text-ink-soft">
               {progress?.has_data
-                ? `${progress.trend.label} · Reading level ${progress.level.label}`
-                : "Start with a Beginner reading — your plan adapts as you practise."}
+                ? `${progress.trend.label} · Level ${progress.level.label}`
+                : "Start with your Beginner exercise — your plan adapts as you practise."}
             </p>
+            {progress && (
+              <p className="mt-2 inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">
+                {progress.age_group_label} · {progress.age_range}
+              </p>
+            )}
           </div>
           <button
             onClick={startTherapy}
@@ -67,6 +73,7 @@ export default function DashboardPage() {
         </div>
 
         <TherapistNotesCard />
+        <HomeworkCard />
 
         {progressError && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-ink" role="alert">

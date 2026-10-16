@@ -17,19 +17,18 @@ EXERCISE_BANK: list[TherapyExercise] = [
         type=ExerciseType.READING,
         level=ReadingLevel.BEGINNER,
         difficulty=1,
-        title="Reading — Beginner: Sam and Max",
+        title="Reading — Beginner: Morning News",
         description=(
-            "Short, simple sentences. Read slowly and follow the highlight. "
-            "Start each sentence with a soft, easy breath."
+            "A short news-style paragraph. Read slowly with the highlight and start "
+            "each sentence with a soft, easy breath."
         ),
-        target_wpm=80,
+        target_wpm=120,
         passage=(
-            "Sam has a red ball. He takes it to the park. "
-            "The sun is warm and the sky is blue. "
-            "Sam throws the ball to his dog, Max. "
-            "Max runs fast and brings it back. "
-            "They play until lunch time. "
-            "Then they walk home together, happy and tired."
+            "Colombo will have light rain this afternoon, the weather office said. "
+            "Trains on the coastal line are running on time. "
+            "A new bus service between Kandy and Nuwara Eliya starts next Monday. "
+            "Tea prices rose slightly at this week's auction. "
+            "Schools reopen on the first of next month."
         ),
         recommended_for=[SeverityLevel.SEVERE, SeverityLevel.MODERATE, SeverityLevel.UNKNOWN],
     ),
@@ -352,6 +351,220 @@ WORD_EXERCISES: list[TherapyExercise] = [
 # uses the original exercises) and existing arm indices stay unchanged.
 EXERCISE_BANK.extend(WORD_EXERCISES)
 WORD_LADDER_IDS = {ex.word_level: ex.id for ex in WORD_EXERCISES if ex.word_level is not None}
+
+# --- Practice by age group ----------------------------------------------------------
+#
+# Every age group has its own Beginner -> Intermediate -> Advanced ladder (an
+# exercise is on a ladder when it has a `level`); a level can hold several
+# exercises, and the level engine counts only the student's own group.
+#
+#   child (6–13):  picture words -> phrases & short sentences -> a short story
+#   teen (14–20):  school/hobby reading -> class presentations -> role-plays
+#   adult (21+):   news reading -> everyday role-plays -> interviews & work talks
+#
+# Role-plays show a situation and the lines the other person says; the student
+# answers out loud (recorded like picture description).
+
+_KIDS, _TEENS, _ADULTS = ["child"], ["teen"], ["adult"]
+
+
+def _roleplay(id, groups, level, difficulty, title, situation, lines, examples):
+    return TherapyExercise(
+        id=id, type=ExerciseType.ROLEPLAY, level=level, difficulty=difficulty, age_groups=groups,
+        title=title, description=situation, prompts=lines, example_sentences=examples, recommended_for=_ALL,
+    )
+
+
+AGE_EXERCISES: list[TherapyExercise] = [
+    # --- Child ladder ---
+    TherapyExercise(
+        id="child-words", type=ExerciseType.WORDS, level=ReadingLevel.BEGINNER, difficulty=1, age_groups=_KIDS,
+        title="Kids Beginner — Picture words",
+        description="Look at the picture, press Listen, then say the word slowly. Easy, soft starts!",
+        words=_cards([
+            ("eye", 1, "👁️"), ("egg", 1, "🥚"), ("moon", 1, "🌙"), ("sun", 1, "☀️"),
+            ("ball", 1, "⚽"), ("dog", 1, "🐶"), ("cat", 1, "🐱"), ("cup", 1, "🥤"),
+        ]),
+        recommended_for=_ALL,
+    ),
+    TherapyExercise(
+        id="child-phrases", type=ExerciseType.WORDS, level=ReadingLevel.INTERMEDIATE, difficulty=2, age_groups=_KIDS,
+        title="Kids Intermediate — Little phrases",
+        description="Two words, then short sentences. Say them in one smooth breath.",
+        words=_cards([
+            ("big ball", 2, "⚽"), ("red car", 2, "🚗"), ("my dog", 2, "🐶"), ("hot sun", 2, "☀️"),
+            ("I see a cat.", 4, "🐱"), ("The sun is hot.", 4, "☀️"), ("I like mangoes.", 4, "🥭"),
+            ("We ride a tuk-tuk.", 5, "🛺"),
+        ]),
+        recommended_for=_ALL,
+    ),
+    TherapyExercise(
+        id="child-story", type=ExerciseType.READING, level=ReadingLevel.ADVANCED, difficulty=3, age_groups=_KIDS,
+        title="Kids Advanced — Sam and Max (story + tongue twister)",
+        description="A tiny story to read slowly with the highlight. Finish with a fun tongue twister!",
+        target_wpm=70,
+        passage=(
+            "Sam has a red ball. He throws it to his dog, Max. "
+            "Max runs fast and brings it back. They are happy and tired. "
+            "Red lorry, yellow lorry, red lorry, yellow lorry!"
+        ),
+        recommended_for=_ALL,
+    ),
+    TherapyExercise(
+        id="child-pacing", type=ExerciseType.PACING, difficulty=1, age_groups=_KIDS,
+        title="Slow Snail Pacing — The Little Boat",
+        description="Read like a slow snail 🐌 — follow the yellow word and don't rush.",
+        target_wpm=70,
+        passage="A little boat sails on the sea. The wind is soft. A fish jumps up. Splash! The boat goes home.",
+        recommended_for=_ALL,
+    ),
+    # --- Teen ladder ---
+    TherapyExercise(
+        id="teen-school", type=ExerciseType.READING, level=ReadingLevel.BEGINNER, difficulty=1, age_groups=_TEENS,
+        title="Teen Beginner — A Day at School",
+        description="A short paragraph about school life. Read with the highlight and start each sentence softly.",
+        target_wpm=105,
+        passage=(
+            "School starts at half past seven, so I leave home early with my friends. "
+            "We usually talk about cricket or a new song on the way. "
+            "The first lesson is maths, which is hard but useful. "
+            "At the interval we share snacks in the canteen. "
+            "After school I stay for drama practice twice a week."
+        ),
+        recommended_for=_ALL,
+    ),
+    TherapyExercise(
+        id="teen-hobby", type=ExerciseType.READING, level=ReadingLevel.BEGINNER, difficulty=1, age_groups=_TEENS,
+        title="Teen Beginner — My Weekend Hobby",
+        description="A short paragraph about a hobby. Pause at the commas and keep a steady pace.",
+        target_wpm=110,
+        passage=(
+            "On Saturdays I play cricket with my cousins in the ground near our house. "
+            "We do not have proper stumps, so we use a chair and a few bricks. "
+            "My younger brother always wants to bat first, and we always let him. "
+            "When it gets too hot, we stop for king coconut water and argue about the score."
+        ),
+        recommended_for=_ALL,
+    ),
+    _roleplay("teen-present-self", _TEENS, ReadingLevel.INTERMEDIATE, 2, "Teen Intermediate — Introduce yourself to the class",
+              "It's the first day with a new class teacher. Stand up and introduce yourself for about one minute.",
+              ["What is your name and which school did you come from?", "What do you like doing after school?",
+               "Which subject do you enjoy most, and why?", "What is one thing you want to do this year?"],
+              ["Good morning everyone, my name is Dinuli and I came from a school in Kandy.",
+               "After school I like playing badminton and drawing.",
+               "My favourite subject is science, because I like doing experiments.",
+               "This year I want to join the debating team."]),
+    _roleplay("teen-present-sport", _TEENS, ReadingLevel.INTERMEDIATE, 2, "Teen Intermediate — My favourite sport (1-minute talk)",
+              "Give a one-minute class presentation about your favourite sport.",
+              ["Which sport is it, and how did you start?", "What are the basic rules?",
+               "Who is a player you admire?", "Why should others try it?"],
+              ["My favourite sport is cricket. I started playing with my father when I was seven.",
+               "Each team bats and bowls, and the team with more runs wins.",
+               "I admire Kumar Sangakkara because he was calm under pressure.",
+               "Everyone should try it — it teaches teamwork and patience."]),
+    _roleplay("teen-roleplay-teacher", _TEENS, ReadingLevel.ADVANCED, 3, "Teen Advanced — Answering the teacher",
+              "Your teacher asks you a question in front of the class. Answer clearly in two or three sentences.",
+              ["Teacher: Can you explain what photosynthesis is?", "Teacher: Why do you think it's important?",
+               "Teacher: Can you give an example from everyday life?"],
+              ["Photosynthesis is how plants make food using sunlight, water and carbon dioxide.",
+               "It's important because it gives us oxygen and food.",
+               "For example, the paddy fields need sunlight to grow rice."]),
+    _roleplay("teen-roleplay-food", _TEENS, ReadingLevel.ADVANCED, 3, "Teen Advanced — Ordering kottu with friends",
+              "You're at a kottu stall with friends and it's your turn to order for everyone.",
+              ["Seller: What would you like?", "Seller: Chicken or vegetable? Spicy?",
+               "Seller: Anything to drink?", "Seller: That's 2,400 rupees."],
+              ["Can we have three chicken kottu and one vegetable kottu, please?",
+               "Medium spicy for all of them, please.", "Four bottles of water, thank you.",
+               "Here you are. Can we have the bill, please?"]),
+    _roleplay("teen-roleplay-friend", _TEENS, ReadingLevel.ADVANCED, 3, "Teen Advanced — Phone call to a friend",
+              "Call a friend to plan going to the cinema this weekend.",
+              ["Friend: Hello? Who's this?", "Friend: Which film do you want to see?",
+               "Friend: What time should we meet?", "Friend: How are we getting there?"],
+              ["Hi, it's Kavindu. Are you free on Saturday?", "Let's watch the new animated film.",
+               "The show starts at four, so let's meet at half past three.", "We can take a tuk-tuk from my place."]),
+    _roleplay("teen-roleplay-interview", _TEENS, ReadingLevel.ADVANCED, 3, "Teen Advanced — University admission interview",
+              "You are being interviewed for a place on a university course. Answer each question calmly.",
+              ["Interviewer: Why do you want to study this course?", "Interviewer: Tell us about a project you are proud of.",
+               "Interviewer: How do you handle pressure before exams?", "Interviewer: Do you have any questions for us?"],
+              ["I want to study engineering because I enjoy solving practical problems.",
+               "I built a small solar lamp for our science exhibition.",
+               "I make a timetable and take short breaks so I don't panic.",
+               "Yes — are there chances to do research in the first year?"]),
+    # --- Adult ladder (reading-beginner/intermediate/advanced are on it too) ---
+    _roleplay("adult-roleplay-doctor", _ADULTS, ReadingLevel.INTERMEDIATE, 2, "Adult Intermediate — Booking a doctor's appointment",
+              "Phone a clinic to book an appointment with a doctor.",
+              ["Receptionist: Good morning, City Medical Centre. How can I help?", "Receptionist: Which doctor would you like to see?",
+               "Receptionist: Is Thursday at 5.30 suitable?", "Receptionist: Can I have your name and phone number?"],
+              ["Good morning, I'd like to book an appointment, please.",
+               "I'd like to see Dr. Fernando, the general physician.",
+               "Thursday at 5.30 is fine, thank you.",
+               "My name is Sunil Perera and my number is 077 123 4567."]),
+    _roleplay("adult-roleplay-restaurant", _ADULTS, ReadingLevel.INTERMEDIATE, 2, "Adult Intermediate — Ordering at a restaurant",
+              "You're at a restaurant with a colleague. Order for both of you and ask about the bill.",
+              ["Waiter: Are you ready to order?", "Waiter: Would you like rice and curry or fried rice?",
+               "Waiter: Anything to drink?", "Waiter: Would you like the bill now?"],
+              ["Yes, we're ready, thank you.", "Two rice and curry, please — one with fish and one vegetarian.",
+               "Two lime juices, please.", "Yes please, and can I pay by card?"]),
+    _roleplay("adult-roleplay-work-intro", _ADULTS, ReadingLevel.INTERMEDIATE, 2, "Adult Intermediate — Introducing yourself at work",
+              "It's your first day at a new office. Introduce yourself to your team at the morning meeting.",
+              ["Manager: Everyone, this is our new team member.", "Colleague: What did you do before joining us?",
+               "Colleague: What will you be working on?", "Manager: Anything else you'd like to share?"],
+              ["Good morning, everyone. I'm Nadeesha and I've joined as an accountant.",
+               "Before this, I worked at a bank in Colombo for three years.",
+               "I'll be handling the monthly reports and supplier payments.",
+               "I'm looking forward to working with you all."]),
+    _roleplay("adult-interview-about", _ADULTS, ReadingLevel.ADVANCED, 3, "Adult Advanced — Job interview: Tell me about yourself",
+              "A job interview for a role you'd like. Answer the interviewer's questions in full sentences.",
+              ["Interviewer: Tell me about yourself.", "Interviewer: Why do you want this job?",
+               "Interviewer: Where do you see yourself in five years?"],
+              ["I'm a marketing graduate with two years of experience in digital campaigns.",
+               "This role matches my skills, and I admire your company's work in tourism.",
+               "In five years I'd like to be leading a small team."]),
+    _roleplay("adult-interview-strengths", _ADULTS, ReadingLevel.ADVANCED, 3, "Adult Advanced — Job interview: Strengths and weaknesses",
+              "The interviewer asks about your strengths and how you handle challenges.",
+              ["Interviewer: What are your strengths?", "Interviewer: What is one weakness you're working on?",
+               "Interviewer: Tell me about a difficult situation at work and what you did."],
+              ["I'm organised, and I stay calm when deadlines are close.",
+               "I used to avoid speaking in meetings, so I now prepare two points in advance.",
+               "When a supplier delivered late, I rearranged the schedule and kept the client informed."]),
+    _roleplay("adult-presentation", _ADULTS, ReadingLevel.ADVANCED, 3, "Adult Advanced — A 2-minute work presentation",
+              "Present a short update to your team about a project. Aim for about two minutes.",
+              ["What is the project and why does it matter?", "What has been done so far?",
+               "What problems came up and how were they solved?", "What happens next, and what do you need from the team?"],
+              ["Today I'll update you on the new customer feedback system.",
+               "We have collected 300 responses in the first month.",
+               "Response rates were low at first, so we added SMS reminders.",
+               "Next month we'll share a report, and I'd like two volunteers to review it."]),
+    _roleplay("adult-meeting", _ADULTS, ReadingLevel.ADVANCED, 3, "Adult Advanced — Speaking up in a meeting",
+              "In a team meeting, the manager asks for opinions. Give your view and a suggestion.",
+              ["Manager: Does anyone have concerns about the new schedule?", "Colleague: I think it will work fine.",
+               "Manager: What would you suggest instead?"],
+              ["I have one concern: the Friday deadline clashes with month-end closing.",
+               "I agree it can work, but we may need one more day.",
+               "Could we move the deadline to Monday and review progress on Thursday?"]),
+]
+
+# Which age groups each existing exercise suits. Original readings form the
+# adult ladder; pacing speeds are personalised per group (PACE_RANGE).
+_AGE_TAGS = {
+    "reading-beginner": _ADULTS, "reading-intermediate": _ADULTS, "reading-advanced": _ADULTS,
+    "pacing-easy-1": ["teen", "adult"], "pacing-standard-1": ["teen", "adult"],
+    "daf-1": ["teen", "adult"],
+    "picture-1": ["child", "teen"], "picture-2": ["child", "teen", "adult"], "picture-3": ["teen", "adult"],
+}
+for _ex in EXERCISE_BANK:
+    if _ex.id in _AGE_TAGS:
+        _ex.age_groups = _AGE_TAGS[_ex.id]
+    elif _ex.type == ExerciseType.WORDS:
+        _ex.age_groups = _KIDS  # the word ladder and the Sri Lankan bonus set
+EXERCISE_BANK.extend(AGE_EXERCISES)
+
+# Comfortable highlight speeds (words/min) for each age group.
+PACE_RANGE = {"child": (60, 80), "teen": (100, 130), "adult": (120, 150)}
+
+
+def exercises_for(age_group: str) -> list[TherapyExercise]:
+    return [ex for ex in EXERCISE_BANK if age_group in ex.age_groups]
 
 EXERCISES_BY_ID: dict[str, TherapyExercise] = {ex.id: ex for ex in EXERCISE_BANK}
 

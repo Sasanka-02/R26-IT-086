@@ -1,12 +1,12 @@
 import csv
 import io
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from app.therapy import account_data, audit, auth, pilot, plan_review
+from app.therapy import account_data, appointments, audit, auth, messages, pilot, plan_review
 from app.therapy.adaptive import LEVELS, personal_target_wpm
 from app.therapy.assistant import answer
 from app.therapy.bandit import recommend_weekly_plan
@@ -28,7 +28,17 @@ from app.therapy.therapist_store import (
     set_assigned,
     set_level_override,
 )
-from app.therapy.user_store import create_user, get_user, is_demo_account, public, update_user
+from app.therapy.user_store import (
+    AGE_GROUPS,
+    GUARDIAN_CONSENT_UNDER,
+    age_group_for,
+    age_group_of,
+    create_user,
+    get_user,
+    is_demo_account,
+    public,
+    update_user,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["auth & therapist"])
 
@@ -43,6 +53,32 @@ class SignupRequest(BaseModel):
     invite_code: str | None = None
     # Informed consent to store practice results (PDPA No. 9 of 2022).
     consent: bool = False
+    # Students only: age decides the practice group; under 18 needs a guardian's agreement.
+    age: int | None = None
+    guardian_consent: bool = False
+
+
+class AgeRequest(BaseModel):
+    age: int
+    guardian_consent: bool = False
+
+
+def _age_fields(age: int | None, guardian_consent: bool) -> dict:
+    """Validates a student's age and returns the fields to store."""
+    if age is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Please enter your age.")
+    try:
+        group = age_group_for(age)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    if age < GUARDIAN_CONSENT_UNDER and not guardian_consent:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "A parent or guardian must agree to this account for anyone under 18."
+        )
+    fields = {"age": age, "age_group": group}
+    if age < GUARDIAN_CONSENT_UNDER:
+        fields["guardian_consent_at"] = datetime.now(timezone.utc).isoformat()
+    return fields
 
 
 class LoginRequest(BaseModel):
@@ -61,6 +97,7 @@ async def signup(payload: SignupRequest):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Please read and agree to how your data is used before creating an account."
         )
+    age_fields = _age_fields(payload.age, payload.guardian_consent) if role == "student" else {}
     if role == "therapist" and payload.invite_code != auth.THERAPIST_INVITE_CODE:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "A valid clinic invite code is required for therapist accounts.")
     existing = get_user(payload.email)
@@ -71,7 +108,7 @@ async def signup(payload: SignupRequest):
         user = update_user(payload.email, {"registered_at": existing["registered_at"]})
     user = update_user(
         payload.email,
-        {"consent": {"version": CONSENT_VERSION, "at": datetime.now(timezone.utc).isoformat()}},
+        {"consent": {"version": CONSENT_VERSION, "at": datetime.now(timezone.utc).isoformat()}, **age_fields},
     )
     return _session(user)
 
@@ -99,6 +136,16 @@ async def login(payload: LoginRequest):
         auth.clear_failed_logins(payload.email)
         user = update_user(payload.email, {"last_login": now})
     return _session(user)
+
+
+@router.put("/auth/me/age")
+async def set_my_age(payload: AgeRequest, user: dict = Depends(auth.current_user)):
+    """One-time step for students who signed up before ages were collected."""
+    if user["role"] != "student":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only student accounts have an age group.")
+    account = update_user(user["email"], _age_fields(payload.age, payload.guardian_consent))
+    audit.log(user["email"], "age.set", user["email"], age_group=account["age_group"])
+    return public(account)
 
 
 @router.get("/auth/me")
@@ -130,6 +177,104 @@ async def delete_my_account(user: dict = Depends(auth.current_user)):
     result = account_data.delete(user["email"])
     audit.log(user["email"], "account.deleted", user["email"])
     return result
+
+
+# --- Messages between student and therapist ---------------------------------------
+
+class MessageRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=messages.MAX_LENGTH)
+
+
+def _named(thread: dict) -> dict:
+    for m in thread["messages"]:
+        sender = get_user(m["from"])
+        m["from_name"] = sender["name"] if sender else m["from"]
+    return thread
+
+
+@router.get("/messages/{student}")
+async def get_messages(student: str, user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, student)
+    return _named(messages.thread(student, user["role"]))
+
+
+@router.post("/messages/{student}")
+async def post_message(student: str, payload: MessageRequest, user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, student)
+    audit.log(user["email"], "message.sent", normalize_user_id(student))
+    try:
+        return _named(messages.send(student, user["email"], user["role"], payload.text))
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+
+
+@router.post("/messages/{student}/read")
+async def read_messages(student: str, user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, student)
+    return _named(messages.mark_read(student, user["role"]))
+
+
+# --- Appointments ----------------------------------------------------------------
+
+class SlotRequest(BaseModel):
+    start: datetime  # ISO 8601 with timezone, e.g. 2026-10-20T09:30:00+05:30
+    minutes: int = Field(default=30, ge=10, le=180)
+    mode: str = "clinic"
+    student: str | None = None  # book straight away for this student
+
+
+def _named_slot(slot: dict) -> dict:
+    therapist = get_user(slot["therapist"])
+    student = get_user(slot["student"]) if slot["student"] else None
+    return {
+        **slot,
+        "therapist_name": therapist["name"] if therapist else slot["therapist"],
+        "student_name": student["name"] if student else slot["student"],
+    }
+
+
+@router.get("/appointments")
+async def list_appointments(user: dict = Depends(auth.current_user)):
+    if user["role"] == "therapist":
+        return {"sessions": [_named_slot(s) for s in appointments.for_therapist()]}
+    data = appointments.for_student(user["email"])
+    return {"booked": [_named_slot(s) for s in data["booked"]], "open": [_named_slot(s) for s in data["open"]]}
+
+
+@router.post("/appointments/slots")
+async def create_slot(payload: SlotRequest, user: dict = Depends(auth.require_therapist)):
+    try:
+        slot = appointments.create_slot(user["email"], payload.start, payload.minutes, payload.mode, payload.student)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    audit.log(user["email"], "appointment.created", slot["student"], start=slot["start"])
+    return _named_slot(slot)
+
+
+@router.post("/appointments/{slot_id}/book")
+async def book_appointment(slot_id: str, user: dict = Depends(auth.current_user)):
+    if user["role"] != "student":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only students book sessions.")
+    try:
+        slot = appointments.book(slot_id, user["email"])
+    except LookupError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+    except ValueError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+    audit.log(user["email"], "appointment.booked", user["email"], start=slot["start"])
+    return _named_slot(slot)
+
+
+@router.post("/appointments/{slot_id}/cancel")
+async def cancel_appointment(slot_id: str, user: dict = Depends(auth.current_user)):
+    try:
+        slot = appointments.cancel(slot_id, user["email"], user["role"])
+    except LookupError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+    except PermissionError as e:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e))
+    audit.log(user["email"], "appointment.cancelled", slot["student"], start=slot["start"])
+    return _named_slot(slot)
 
 
 # --- Usability survey (SUS) -----------------------------------------------------
@@ -184,12 +329,24 @@ async def therapist_student(email: str, _: dict = Depends(auth.require_therapist
 
 # --- Therapist: controls ---------------------------------------------------------
 
+class AssignmentItem(BaseModel):
+    exercise_id: str
+    due: date | None = None
+    times: int = Field(default=1, ge=1, le=14)
+
+
 class AssignRequest(BaseModel):
-    exercise_ids: list[str]
+    # Either plain exercise ids (no due date, once each) or items with homework details.
+    exercise_ids: list[str] = []
+    items: list[AssignmentItem] | None = None
 
 
 class LevelRequest(BaseModel):
     level: str | None
+
+
+class AgeGroupRequest(BaseModel):
+    age_group: str
 
 
 class GoalRequest(BaseModel):
@@ -214,11 +371,30 @@ class ExpertRatingRequest(BaseModel):
 
 @router.put("/therapist/students/{email}/assigned")
 async def assign_exercises(email: str, payload: AssignRequest, user: dict = Depends(auth.require_therapist)):
-    unknown = [e for e in payload.exercise_ids if get_exercise(e) is None]
+    items = (
+        [{"exercise_id": i.exercise_id, "due": i.due.isoformat() if i.due else None, "times": i.times}
+         for i in payload.items]
+        if payload.items is not None
+        else [{"exercise_id": e} for e in payload.exercise_ids]
+    )
+    unknown = [i["exercise_id"] for i in items if get_exercise(i["exercise_id"]) is None]
     if unknown:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown exercises: {', '.join(unknown)}")
-    audit.log(user["email"], "exercises.assigned", normalize_user_id(email), exercise_ids=payload.exercise_ids)
-    return set_assigned(email, payload.exercise_ids, user["email"])
+    audit.log(user["email"], "exercises.assigned", normalize_user_id(email), items=items)
+    return set_assigned(email, items, user["email"])
+
+
+@router.put("/therapist/students/{email}/age-group")
+async def set_student_age_group(email: str, payload: AgeGroupRequest, user: dict = Depends(auth.require_therapist)):
+    """The therapist can move a student to another age group (e.g. a mature
+    13-year-old to teen tasks); the student's age itself is unchanged."""
+    if payload.age_group not in AGE_GROUPS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"age_group must be one of {', '.join(AGE_GROUPS)}")
+    account = update_user(email, {"age_group": payload.age_group, "age_group_set_by": user["email"]})
+    if account is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Student not found")
+    audit.log(user["email"], "age_group.set", normalize_user_id(email), age_group=payload.age_group)
+    return public(account)
 
 
 @router.put("/therapist/students/{email}/level")
@@ -289,7 +465,7 @@ class PlanReviewRequest(BaseModel):
 async def review_plan(email: str, payload: PlanReviewRequest, user: dict = Depends(auth.require_therapist)):
     """Expert validation of the adaptive output: the therapist's judgement of
     the weekly plan currently generated for this student."""
-    plan = recommend_weekly_plan(get_records(email), get_settings(email))
+    plan = recommend_weekly_plan(get_records(email), get_settings(email), age_group=age_group_of(email))
     audit.log(user["email"], "plan.reviewed", normalize_user_id(email), verdict=payload.verdict)
     try:
         return plan_review.add_review(email, plan, payload.verdict, payload.note, user["email"])
@@ -383,16 +559,16 @@ def _compare_column(email: str) -> dict:
         "average_score": summary["average_score"],
         "report_card": summary["report_card"],
         "level": summary["level"],
-        "plan": recommend_weekly_plan(records, settings),
+        "plan": recommend_weekly_plan(records, settings, age_group=summary["age_group"]),
         "reading_speeds": [
             {
                 "title": ex.title,
                 "level": ex.level.value,
                 "base_wpm": ex.target_wpm,
-                "personal_wpm": personal_target_wpm(ex.target_wpm, ex.id, records),
+                "personal_wpm": personal_target_wpm(ex.target_wpm, ex.id, records, summary["age_group"]),
             }
             for ex in EXERCISE_BANK
-            if ex.level is not None and ex.target_wpm
+            if ex.level is not None and ex.target_wpm and summary["age_group"] in ex.age_groups
         ],
         "assistant": answer(normalize_user_id(email), profile["name"], COMPARE_QUESTION, records),
     }

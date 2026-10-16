@@ -18,7 +18,16 @@ from the chosen level at the time of the override.
 
 from datetime import datetime
 
-from app.therapy.exercises import WORD_LADDER_IDS, WORD_LADDER_SIZE, WORD_LEVEL_COUNT, word_stage_label
+from app.therapy.exercises import (
+    PACE_RANGE,
+    WORD_LADDER_IDS,
+    WORD_LADDER_SIZE,
+    WORD_LEVEL_COUNT,
+    exercises_for,
+    get_exercise,
+    word_stage_label,
+)
+from app.therapy.user_store import DEFAULT_AGE_GROUP
 from app.therapy.schemas import SelfRating
 from app.therapy.scoring import SHORT_ATTEMPT_SECONDS, score_with_breakdown, thresholds
 
@@ -134,7 +143,19 @@ def _is_weak(record: dict, t: dict) -> bool:
     return record["score"] < t["weak"] or record["self_rating"] == SelfRating.HARD.value
 
 
-def level_state(records: list[dict], override: dict | None = None) -> dict:
+def _ladder_rung(record: dict, age_group: str) -> int | None:
+    """The level index of a record's exercise on this age group's ladder, or
+    None if the exercise isn't on that ladder. Each age group has its own
+    Beginner -> Intermediate -> Advanced ladder, so levels are tracked per group."""
+    ex = get_exercise(record.get("exercise_id", ""))
+    if ex is None or ex.level is None or age_group not in ex.age_groups:
+        return None
+    return LEVELS.index(ex.level.value)
+
+
+def level_state(
+    records: list[dict], override: dict | None = None, age_group: str = DEFAULT_AGE_GROUP
+) -> dict:
     """Replays the user's reading attempts to find their current level."""
     t = thresholds()
     level = 0
@@ -160,16 +181,17 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
                 "from": LEVEL_LABELS[LEVELS[level]],
                 "to": LEVEL_LABELS[LEVELS[new_level]] if new_level is not None else "Final stage completed",
                 "direction": direction,
-                "reason": _streak_reason(count, kind, f"{LEVEL_LABELS[LEVELS[level]]} reading", streak_scores),
+                "reason": _streak_reason(count, kind, f"{LEVEL_LABELS[LEVELS[level]]} exercise", streak_scores),
             }
         )
 
     for record in records:
-        if record.get("exercise_type") != "reading" or record.get("level") not in LEVELS:
+        rung = _ladder_rung(record, age_group)
+        if rung is None:
             continue
         if since and datetime.fromisoformat(record["completed_at"]) < since:
             continue
-        if LEVELS.index(record["level"]) != level:
+        if rung != level:
             continue
         if _is_strong(record, t):
             streak_scores = (streak_scores if strong else []) + [record["score"]]
@@ -195,12 +217,12 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
     current = LEVELS[level]
     next_level = LEVELS[level + 1] if level + 1 < len(LEVELS) else None
     if mastered:
-        progress_text = "You have completed the final reading stage. Keep it up to stay fluent!"
+        progress_text = "You have completed the final stage. Keep practising to stay fluent!"
     else:
         remaining = STRONG_TO_MOVE_UP - strong
         target = LEVEL_LABELS[next_level] if next_level else "complete the final stage"
         progress_text = (
-            f"{remaining} more strong {LEVEL_LABELS[current]} reading"
+            f"{remaining} more strong {LEVEL_LABELS[current]} exercise"
             f"{'s' if remaining != 1 else ''} (score {t['strong']}+) to "
             f"{'unlock ' + target if next_level else target}."
         )
@@ -220,6 +242,7 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
         "strong_threshold": t["strong"],
         "weak_threshold": t["weak"],
         "history": history,
+        "age_group": age_group,
     }
 
 
@@ -329,14 +352,20 @@ def level_change_message(before: dict, after: dict) -> str | None:
             "feels comfortable again. You can work your way back up."
         )
     if after["mastered"] and not before["mastered"]:
-        return "Congratulations — you've completed the final reading stage!"
+        return "Congratulations — you've completed the final stage!"
     return None
 
 
-def personal_target_wpm(base_wpm: int, exercise_id: str, records: list[dict]) -> int:
+def personal_target_wpm(
+    base_wpm: int, exercise_id: str, records: list[dict], age_group: str | None = None
+) -> int:
     """Adapts the reading speed to the student: strong attempts speed the
     highlight up 10%, difficult ones slow it down 10%."""
     t = thresholds()
+    if age_group in PACE_RANGE:
+        # Start from a speed that suits the age group: slower for children.
+        lo, hi = PACE_RANGE[age_group]
+        base_wpm = min(hi, max(lo, base_wpm))
     factor = 1.0
     for r in records:
         if r["exercise_id"] != exercise_id:
@@ -356,14 +385,32 @@ BADGES = [
     ("score_90", "Top score", "Scored 90 or more"),
     ("intermediate", "Level up", "Unlocked Intermediate reading"),
     ("advanced", "Final stage", "Unlocked Advanced reading"),
-    ("mastered", "Fluent reader", "Completed the final reading stage"),
+    ("mastered", "Fluent speaker", "Completed the final stage of your ladder"),
     ("explorer", "Explorer", "Tried every type of exercise"),
     ("first_words", "First words", "Finished your first word round"),
     ("word_master", "Word master", "Finished all 7 word levels"),
 ]
 
 
-def earned_badges(records: list[dict], level: dict, streak_days: int, best_streak: int) -> list[dict]:
+# Friendlier titles for children (ages 6–13); descriptions stay the same.
+KID_BADGE_TITLES = {
+    "first_step": "Super Speaker ⭐",
+    "ten_sessions": "Practice Hero 🦸",
+    "streak_3": "Three in a Row 🔥",
+    "streak_7": "Super Week 🌈",
+    "score_90": "Shining Star 🌟",
+    "intermediate": "Level Up! 🚀",
+    "advanced": "Top Level 🏔️",
+    "mastered": "Speaking Champion 🏆",
+    "explorer": "Explorer 🧭",
+    "first_words": "First Words 🐣",
+    "word_master": "Word Wizard 🪄",
+}
+
+
+def earned_badges(
+    records: list[dict], level: dict, streak_days: int, best_streak: int, age_group: str | None = None
+) -> list[dict]:
     types = {r["exercise_type"] for r in records}
     earned = {
         "first_step": len(records) >= 1,
@@ -374,8 +421,13 @@ def earned_badges(records: list[dict], level: dict, streak_days: int, best_strea
         "intermediate": level["level_index"] >= 1,
         "advanced": level["level_index"] >= 2,
         "mastered": level["mastered"],
-        "explorer": {"reading", "pacing", "daf", "picture", "words"} <= types,
+        # Every kind of exercise available to this age group.
+        "explorer": {ex.type.value for ex in exercises_for(age_group or DEFAULT_AGE_GROUP)} <= types,
         "first_words": "words" in types,
         "word_master": word_level_state(records)["level"] > WORD_LEVEL_COUNT,
     }
-    return [{"id": i, "title": t, "description": d, "earned": earned[i]} for i, t, d in BADGES]
+    kid = age_group == "child"
+    return [
+        {"id": i, "title": KID_BADGE_TITLES.get(i, t) if kid else t, "description": d, "earned": earned[i]}
+        for i, t, d in BADGES
+    ]

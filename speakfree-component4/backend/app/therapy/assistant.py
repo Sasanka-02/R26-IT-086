@@ -17,6 +17,7 @@ and the classifier's confidence, so the behaviour is transparent.
 from app.therapy import llm
 from app.therapy.adaptive import LEVEL_LABELS
 from app.therapy.bandit import recommend_weekly_plan
+from app.therapy.exercises import exercises_for
 from app.therapy.dashboard import build_progress_summary
 from app.therapy.intent_classifier import CONFIDENCE_THRESHOLD, classifier
 from app.therapy.therapist_store import get_settings
@@ -94,6 +95,67 @@ EXERCISE_EXPLANATIONS = {
     ),
 }
 
+# --- Talking to each age group -------------------------------------------------
+# child: very short, simple, cheerful, with an emoji; teen: friendly and
+# encouraging; adult: respectful and professional (the default texts above).
+KID_TIPS = {
+    "pause": "Stuck on a word? 🌬️ Take a slow breath and start again, nice and soft. You can do it!",
+    "volume": "Use your big lion voice! 🦁 Breathe in, then speak to the back of the room.",
+    "flow": "Glue your words together like a long snake 🐍 — smooth and slow.",
+    "speed": "Be a slow snail 🐌 — follow the yellow word and don't rush.",
+    "comfort": "Hard today? That's okay! 💛 Try an easy one and have fun.",
+    "challenge": "Wow, you're doing great! ⭐ Try the next level!",
+    "words": "Press 🔊 Listen, take a breath, then say it softly. ⭐",
+}
+KID_EXPLANATIONS = {
+    "words": "Look at the picture, press 🔊 Listen, then say the word! Tap 😊 if it was easy. ⭐",
+    "reading": "Read the little story slowly with the yellow word. One good try moves you up! 🚀",
+    "picture": "Look at the picture and tell me what you see. 🖼️ There are no wrong answers!",
+    "pacing": "Follow the yellow word like a slow snail 🐌. Nice and steady!",
+    "daf": "You hear your own voice a tiny bit late. It helps you talk slowly. 🎧",
+}
+TEEN_CHEERS = {
+    "progress": " Keep it up — you're building a real skill. 💪",
+    "next": " You've got this!",
+    "level": " Every strong attempt counts.",
+    "streak": " Nice consistency!",
+}
+EXERCISE_EXPLANATIONS_ROLEPLAY = (
+    "Role-plays put you in a real situation — a phone call, an interview or a class talk. Read the "
+    "situation, then answer each line out loud. Use the example answers if you get stuck, and pause "
+    "between ideas."
+)
+
+
+def _kid(text: str) -> str:
+    """First sentence only, plus a friendly emoji — short and simple for children."""
+    first = text.split(". ")[0].rstrip(".!")
+    return f"{first}! ⭐"
+
+
+def _exercise_id(age_group: str, kind: str, level: str | None = None) -> str | None:
+    """An exercise of this kind (and level) that suits the age group."""
+    for ex in exercises_for(age_group):
+        if ex.type.value == kind and (level is None or (ex.level and ex.level.value == level)):
+            return ex.id
+    return None
+
+
+def _style(reply: str, intent: str, age_group: str) -> str:
+    if age_group == "child":
+        if intent.startswith("tip_") or intent == "anxiety":
+            key = {"tip_pause": "pause", "tip_volume": "volume", "tip_speed": "speed", "anxiety": "comfort"}[intent]
+            return KID_TIPS[key]
+        if intent.startswith("explain_"):
+            return KID_EXPLANATIONS.get(intent.split("_", 1)[1], _kid(reply))
+        return _kid(reply)
+    if age_group == "teen":
+        if intent in ("greeting", "thanks", "privacy"):
+            return reply
+        return reply + TEEN_CHEERS.get(intent, " You've got this! 💪")
+    return reply
+
+
 FOCUS_TITLES = {
     "pause": "Smoother starts after pauses",
     "volume": "A clear, steady voice",
@@ -133,7 +195,7 @@ def _focus_area(records: list[dict]) -> str:
 def _context(user_id: str, records: list[dict]) -> tuple[dict, dict, dict]:
     settings = get_settings(user_id)
     summary = build_progress_summary(user_id, records)
-    plan = recommend_weekly_plan(records, settings)
+    plan = recommend_weekly_plan(records, settings, age_group=summary["age_group"])
     return settings, summary, plan
 
 
@@ -146,7 +208,7 @@ def build_briefing(user_id: str, name: str, records: list[dict]) -> dict:
         lines = [
             "Welcome! I'm your practice assistant. I learn from every exercise you "
             "complete and adjust your plan to suit you.",
-            f"You're starting at the {level['label']} reading level. {level['progress_text']}",
+            f"You're starting at the {level['label']} level. {level['progress_text']}",
         ]
     else:
         lines = [
@@ -154,7 +216,7 @@ def build_briefing(user_id: str, name: str, records: list[dict]) -> dict:
             f"{'s' if summary['total_sessions'] != 1 else ''} "
             f"({summary['total_minutes']} minutes) with an average score of {summary['average_score']}.",
             f"Trend: {summary['trend']['label']} — {summary['trend']['detail']}",
-            f"Reading level: {level['label']}. {level['progress_text']}",
+            f"Your level: {level['label']}. {level['progress_text']}",
         ]
         if summary["streak_days"] >= 2:
             lines.append(f"You're on a {summary['streak_days']}-day practice streak. Nice!")
@@ -163,10 +225,13 @@ def build_briefing(user_id: str, name: str, records: list[dict]) -> dict:
         lines.append(f"Therapist goals: {len(met)} of {len(summary['goals'])} met this week.")
 
     focus = _focus_area(records)
+    kid = summary["age_group"] == "child"
+    if kid:
+        lines = [_kid(line) for line in lines[:3]]
     return {
-        "greeting": f"Hi {_first_name(name)}!",
+        "greeting": f"Hi {_first_name(name)}! 👋" if kid else f"Hi {_first_name(name)}!",
         "summary": lines,
-        "focus": {"title": FOCUS_TITLES[focus], "tip": GENERAL_TIPS[focus]},
+        "focus": {"title": FOCUS_TITLES[focus], "tip": KID_TIPS[focus] if kid else GENERAL_TIPS[focus]},
         "next_step": {
             "exercise_id": next_ex["id"],
             "title": next_ex["title"],
@@ -181,15 +246,25 @@ def build_briefing(user_id: str, name: str, records: list[dict]) -> dict:
 
 
 def _handle(intent: str, name: str, records: list[dict], summary: dict, plan: dict) -> tuple[str, dict | None]:
+    reply, action = _handle_plain(intent, name, records, summary, plan)
+    if action and action.get("exercise_id") is None:
+        action = None  # that kind of exercise isn't part of this age group's practice
+    return (_style(reply, intent, summary["age_group"]) if reply else reply), action
+
+
+def _handle_plain(intent: str, name: str, records: list[dict], summary: dict, plan: dict) -> tuple[str, dict | None]:
     level = summary["level"]
+    group = summary["age_group"]
+    level_ex = next((e["id"] for e in plan["exercises"] if e["source"] == "level"),
+                    _exercise_id(group, "reading", level["level"]))
     if intent == "greeting":
         return f"Hello {_first_name(name)}! How can I help with your practice today?", None
     if intent == "thanks":
         return "You're welcome! Keep going — every session counts.", None
     if intent == "level":
         return (
-            f"You're at the {level['label']} reading level. {level['progress_text']}",
-            {"exercise_id": f"reading-{level['level']}", "label": f"Start {LEVEL_LABELS[level['level']]} reading"},
+            f"You're at the {level['label']} level. {level['progress_text']}",
+            {"exercise_id": level_ex, "label": f"Start a {LEVEL_LABELS[level['level']]} exercise"},
         )
     if intent == "next":
         first = plan["exercises"][0]
@@ -250,9 +325,12 @@ def _handle(intent: str, name: str, records: list[dict], summary: dict, plan: di
         timed = [r for r in records if r.get("measured_wpm")]
         extra = (f" Your last measured speed was about {timed[-1]['measured_wpm']} words/min "
                  f"(target {timed[-1]['target_wpm']}).") if timed else ""
-        return GENERAL_TIPS["speed"] + extra, {"exercise_id": "pacing-easy-1", "label": "Start Gentle Pacing"}
+        return GENERAL_TIPS["speed"] + extra, {"exercise_id": _exercise_id(group, "pacing"), "label": "Start pacing"}
     if intent == "anxiety":
-        return GENERAL_TIPS["comfort"], {"exercise_id": "reading-beginner", "label": "Start an easy reading"}
+        return GENERAL_TIPS["comfort"], {
+            "exercise_id": _exercise_id(group, "reading", "beginner") or _exercise_id(group, "words", "beginner"),
+            "label": "Start an easy exercise",
+        }
     if intent == "streak":
         return (
             f"Your current streak is {summary['streak_days']} day{'s' if summary['streak_days'] != 1 else ''}. "
@@ -269,15 +347,24 @@ def _handle(intent: str, name: str, records: list[dict], summary: dict, plan: di
     if intent.startswith("explain_"):
         kind = intent.split("_", 1)[1]
         action = {
-            "daf": {"exercise_id": "daf-1", "label": "Start DAF"},
-            "pacing": {"exercise_id": "pacing-easy-1", "label": "Start Gentle Pacing"},
-            "picture": {"exercise_id": "picture-2", "label": "Start Cooking Together"},
-            "reading": {"exercise_id": f"reading-{level['level']}", "label": "Start reading"},
-            "words": {"exercise_id": summary["word_level"]["exercise_id"], "label": "Start word practice"},
+            "daf": {"exercise_id": _exercise_id(group, "daf"), "label": "Start DAF"},
+            "pacing": {"exercise_id": _exercise_id(group, "pacing"), "label": "Start pacing"},
+            "picture": {"exercise_id": _exercise_id(group, "picture"), "label": "Start picture description"},
+            "reading": {"exercise_id": level_ex, "label": "Start your level"},
+            "words": {
+                "exercise_id": summary["word_level"]["exercise_id"] if group == "child" else None,
+                "label": "Start word practice",
+            },
         }[kind]
         reply = EXERCISE_EXPLANATIONS[kind]
         if kind == "reading":
-            reply += f" You're currently at {level['label']}."
+            reply = (
+                f"Your practice has three levels — Beginner, Intermediate and Advanced — made for your age group. "
+                f"One strong attempt unlocks the next level; two hard ones in a row move you back. "
+                f"You're currently at {level['label']}."
+            )
+            if group != "child":
+                reply += " " + EXERCISE_EXPLANATIONS_ROLEPLAY
         if kind == "words":
             reply += f" {summary['word_level']['progress_text']} {GENERAL_TIPS['words']}"
         return reply, action
@@ -292,7 +379,8 @@ FALLBACK = (
 
 def _llm_context(summary: dict, plan: dict, records: list[dict]) -> dict:
     return {
-        "reading_level": summary["level"]["label"],
+        "age_group": summary["age_group"],
+        "practice_level": summary["level"]["label"],
         "word_level": summary["word_level"]["progress_text"],
         "level_progress": summary["level"]["progress_text"],
         "exercises_completed": summary["total_sessions"],
@@ -325,7 +413,7 @@ def answer(user_id: str, name: str, message: str, records: list[dict]) -> dict:
             return {"reply": reply, "action": action, "suggestions": DEFAULT_SUGGESTIONS,
                     "intent": intent, "confidence": round(confidence, 2), "source": "classifier"}
 
-    llm_reply = llm.ask(text, _first_name(name), _llm_context(summary, plan, records))
+    llm_reply = llm.ask(text, _first_name(name), _llm_context(summary, plan, records), summary["age_group"])
     if llm_reply:
         return {"reply": llm_reply, "action": None, "suggestions": DEFAULT_SUGGESTIONS,
                 "intent": intent, "confidence": round(confidence, 2), "source": "llm"}

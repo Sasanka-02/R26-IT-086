@@ -40,6 +40,7 @@ export const TYPE_COLORS: Record<ExerciseType, string> = {
   picture: CATEGORICAL[3],
   // Word practice (added later): gold, a hue distinct from the four above.
   words: "#C9A227",
+  roleplay: "#8C7AE6",
 };
 
 function TooltipCard({ title, lines }: { title: string; lines: string[] }) {

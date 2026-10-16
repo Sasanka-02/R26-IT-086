@@ -1,4 +1,13 @@
-export type ExerciseType = "pacing" | "daf" | "picture" | "reading" | "words";
+export type ExerciseType = "pacing" | "daf" | "picture" | "reading" | "words" | "roleplay";
+
+/** Practice differs by age: child 6–13, teen 14–20, adult 21+. */
+export type AgeGroup = "child" | "teen" | "adult";
+
+export const AGE_GROUP_INFO: Record<AgeGroup, { label: string; ages: string }> = {
+  child: { label: "Kids practice", ages: "Age 6–13" },
+  teen: { label: "Teen practice", ages: "Age 14–20" },
+  adult: { label: "Adult practice", ages: "Age 21+" },
+};
 
 /** One picture card in a word round. */
 export interface WordItem {
@@ -33,6 +42,7 @@ export interface TherapyExercise {
   /** Word ladder position 1–10 (7 word levels + 3 phrase stages); null for the bonus set. */
   word_level?: number | null;
   words?: WordItem[] | null;
+  age_groups?: AgeGroup[];
   difficulty: number;
   recommended_for: SeverityLevel[];
   locked?: boolean;
@@ -114,6 +124,7 @@ export interface WordLevelState {
 }
 
 export interface UserExercisesResponse {
+  age_group?: AgeGroup;
   level: LevelState;
   word_level: WordLevelState;
   exercises: TherapyExercise[];
@@ -240,6 +251,9 @@ export interface ProgressSummary {
   first_vs_latest: FirstVsLatest[];
   report_card: ReportCard;
   word_level: WordLevelState;
+  age_group: AgeGroup;
+  age_group_label: string;
+  age_range: string;
 }
 
 export interface PlanExercise {
@@ -260,6 +274,7 @@ export interface PlanExercise {
 
 export interface WeeklyPlanResponse {
   user_id: string;
+  age_group?: AgeGroup;
   level: LevelState;
   word_level: WordLevelState;
   exercises: PlanExercise[];
@@ -326,4 +341,52 @@ export interface TherapistNote {
 export interface TherapistNotes {
   notes: TherapistNote[];
   unread: number;
+}
+
+/** A therapist-assigned home practice task with its progress. */
+export interface HomeworkItem {
+  exercise_id: string;
+  title?: string;
+  type?: ExerciseType | null;
+  by: string;
+  at: string;
+  due: string | null;
+  times: number;
+  done_count: number;
+  done: boolean;
+  overdue: boolean;
+  days_left: number | null;
+}
+
+export interface HomeworkResponse {
+  items: HomeworkItem[];
+  open: number;
+  overdue: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  from: string;
+  from_name: string;
+  from_role: "student" | "therapist";
+  text: string;
+  at: string;
+  unread: boolean;
+}
+
+export interface ChatThread {
+  messages: ChatMessage[];
+  unread: number;
+}
+
+export interface Appointment {
+  id: string;
+  therapist: string;
+  therapist_name: string;
+  student: string | null;
+  student_name: string | null;
+  start: string;
+  minutes: number;
+  mode: "clinic" | "online";
+  booked_at: string | null;
 }

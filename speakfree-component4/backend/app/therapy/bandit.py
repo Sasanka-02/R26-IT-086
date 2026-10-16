@@ -20,6 +20,7 @@ Therapist-assigned exercises are always placed first.
 import numpy as np
 
 from app.therapy.adaptive import LEVELS, level_state, word_level_state
+from app.therapy.user_store import DEFAULT_AGE_GROUP
 from app.therapy.exercises import EXERCISE_BANK, get_exercise
 
 CONTEXT_DIM = 5  # [bias, level, avg_score, trend, comfort]
@@ -58,7 +59,7 @@ class LinUCBBandit:
         self.pulls[arm] += 1
 
 
-EXERCISE_TYPES = ["reading", "pacing", "daf", "picture", "words"]
+EXERCISE_TYPES = ["reading", "pacing", "daf", "picture", "words", "roleplay"]
 
 
 def exercise_features(ex) -> np.ndarray:
@@ -107,8 +108,10 @@ def math_sqrt(x: float) -> float:
     return float(np.sqrt(max(x, 0.0)))
 
 
-def build_context(records: list[dict], override: dict | None = None) -> np.ndarray:
-    level_index = level_state(records, override)["level_index"]
+def build_context(
+    records: list[dict], override: dict | None = None, age_group: str = DEFAULT_AGE_GROUP
+) -> np.ndarray:
+    level_index = level_state(records, override, age_group)["level_index"]
     recent = [r["score"] for r in records[-5:]]
     avg_score = (sum(recent) / len(recent) / 100) if recent else 0.5
     last3 = [r["score"] for r in records[-3:]]
@@ -232,16 +235,20 @@ def _explain_item(item: dict, level: dict) -> str:
 
 
 def recommend_weekly_plan(
-    records: list[dict], settings: dict | None = None, plan_size: int = PLAN_SIZE
+    records: list[dict],
+    settings: dict | None = None,
+    plan_size: int = PLAN_SIZE,
+    age_group: str = DEFAULT_AGE_GROUP,
 ) -> dict:
     """Plan for one user: therapist-assigned exercises first, then their
-    current reading level, then the highest-UCB exercises of other types."""
+    current level on their age group's ladder, then the highest-UCB
+    exercises of other types — only exercises meant for their age group."""
     settings = settings or {}
     override = settings.get("level_override")
     screening = settings.get("screening")
     severity = screening["severity"] if screening else None
-    level = level_state(records, override)
-    context = build_context(records, override)
+    level = level_state(records, override, age_group)
+    context = build_context(records, override, age_group)
     bandit = train_user_bandit(records)
     arm_index = {ex.id: i for i, ex in enumerate(EXERCISE_BANK)}
     target_difficulty = level["level_index"] + 1
@@ -261,10 +268,12 @@ def recommend_weekly_plan(
         used_ids.add(ex.id)
         used_types.add(ex.type.value)
 
-    reading = next(
-        ex for ex in EXERCISE_BANK if ex.level is not None and ex.level.value == level["level"]
-    )
-    if reading.id not in used_ids:
+    # The current level can hold several exercises (e.g. a reading and two
+    # role-plays); take the one the bandit rates highest for this student.
+    rung = [ex for ex in EXERCISE_BANK
+            if ex.level is not None and ex.level.value == level["level"] and age_group in ex.age_groups]
+    reading = max(rung, key=lambda ex: bandit.arm_score(arm_index[ex.id], context))
+    if not any(ex.id in used_ids for ex in rung):
         arm = arm_index[reading.id]
         chosen.append(
             _item(reading, "level", _reason(reading, records, level), bandit.estimate(arm, context), bandit.pulls[arm])
@@ -276,6 +285,8 @@ def recommend_weekly_plan(
     for i, ex in enumerate(EXERCISE_BANK):
         # Reading and word levels are placed by their own ladders, not the bandit.
         if ex.level is not None or ex.word_level is not None or ex.type.value == "words" or ex.id in used_ids:
+            continue
+        if age_group not in ex.age_groups:
             continue
         mean, bonus = bandit.estimate(i, context)
         level_fit = -0.1 * abs(ex.difficulty - target_difficulty)
@@ -296,20 +307,14 @@ def recommend_weekly_plan(
         chosen.append(item)
         used_types.add(ex.type.value)
 
-    # Children's word ladder: the current word level is added (on top of the
-    # bandit picks) for anyone who practises words or hasn't started reading.
+    # Children also get their current word-ladder level (on top of the bandit picks).
     words = word_level_state(records)
-    reads = any(r["exercise_type"] == "reading" for r in records)
-    if (words["rounds"] or not reads) and words["exercise_id"] not in used_ids:
+    if age_group == "child" and words["exercise_id"] not in used_ids:
         word_ex = get_exercise(words["exercise_id"])
         arm = arm_index[word_ex.id]
-        item = _item(word_ex, "words", _reason(word_ex, records, level), bandit.estimate(arm, context), bandit.pulls[arm])
-        if words["rounds"] and not reads:
-            # A child working on words: the word level is their main exercise,
-            # so it comes first (after anything the therapist assigned).
-            chosen.insert(sum(1 for c in chosen if c["source"] == "therapist"), item)
-        else:
-            chosen.append(item)
+        chosen.append(
+            _item(word_ex, "words", _reason(word_ex, records, level), bandit.estimate(arm, context), bandit.pulls[arm])
+        )
         used_ids.add(word_ex.id)
 
     for item in chosen:
@@ -326,6 +331,7 @@ def recommend_weekly_plan(
             "so the plan favours exercises suited to it.",
         )
     return {
+        "age_group": age_group,
         "level": level,
         "word_level": words,
         "exercises": chosen,

@@ -4,6 +4,7 @@ import { HeartPulse } from "lucide-react";
 import { homePathFor, useAuth, UserRole } from "../context/AuthContext";
 import RolePicker from "../components/RolePicker";
 import { errorMessage } from "../api/client";
+import AgeFields, { ageError } from "../components/AgeFields";
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -15,14 +16,24 @@ export default function SignupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [consent, setConsent] = useState(false);
+  const [age, setAge] = useState("");
+  const [guardian, setGuardian] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (role === "student") {
+      const problem = ageError(age);
+      if (problem) return setError(problem);
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const account = await signup({ email, name, password, role, inviteCode, consent });
+      const account = await signup({
+        email, name, password, role, inviteCode, consent,
+        age: role === "student" ? Number(age) : undefined,
+        guardianConsent: guardian,
+      });
       navigate(homePathFor(account.role));
     } catch (err) {
       setError(errorMessage(err, "Couldn't create the account. Check that the therapy service is running."));
@@ -72,6 +83,9 @@ export default function SignupPage() {
                 placeholder="Jane Doe"
               />
             </div>
+            {role === "student" && (
+              <AgeFields age={age} onAge={setAge} guardian={guardian} onGuardian={setGuardian} />
+            )}
             <div>
               <label className="text-sm font-medium text-ink-soft">Email</label>
               <input

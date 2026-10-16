@@ -25,7 +25,7 @@ def test_starts_at_beginner():
 def test_one_strong_reading_levels_up():
     state = level_state([reading("beginner", 90, minutes=1)])
     assert state["level"] == "intermediate"
-    assert state["history"][0]["reason"] == "after 1 strong Beginner reading (score 90)"
+    assert state["history"][0]["reason"] == "after 1 strong Beginner exercise (score 90)"
 
 
 def test_average_reading_does_not_level_up():
@@ -145,7 +145,7 @@ def test_word_rounds_do_not_change_the_reading_level():
 
 def test_plan_includes_current_word_level():
     records = [word_round(1, 90, minutes=1), word_round(1, 90, minutes=2)]
-    plan = recommend_weekly_plan(records)
+    plan = recommend_weekly_plan(records, age_group="child")
     word_items = [e for e in plan["exercises"] if e["source"] == "words"]
     assert [e["id"] for e in word_items] == ["words-2"]
     # Word exercises are placed by their ladder, never picked by the bandit.
@@ -159,10 +159,9 @@ def test_word_badges():
     assert "first_words" in earned and "word_master" not in earned
 
 
-def test_word_level_leads_the_plan_for_a_child_who_only_does_words():
+def test_word_ladder_is_only_in_a_childs_plan():
     records = [word_round(1, 90, minutes=1)]
-    assert recommend_weekly_plan(records)["exercises"][0]["id"] == "words-2"
-    # Once reading starts, reading keeps first place and words are added after.
-    records.append(reading("beginner", 70, minutes=2))
-    plan = recommend_weekly_plan(records)["exercises"]
-    assert plan[0]["id"] == "reading-beginner" and plan[-1]["id"] == "words-2"
+    child = recommend_weekly_plan(records, age_group="child")["exercises"]
+    assert child[0]["id"] == "child-words" and child[-1]["id"] == "words-2"
+    for group in ("teen", "adult"):
+        assert all(e["type"] != "words" for e in recommend_weekly_plan(records, age_group=group)["exercises"])

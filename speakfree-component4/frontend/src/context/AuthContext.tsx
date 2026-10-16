@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { api, SESSION_KEY, setUnauthorizedHandler } from "../api/client";
+import { AgeGroup } from "../types/therapy";
 
 export type UserRole = "student" | "therapist";
 
@@ -7,6 +8,9 @@ export interface AppUser {
   name: string;
   email: string;
   role: UserRole;
+  /** Students only. Missing for accounts made before ages were collected. */
+  age?: number | null;
+  age_group?: AgeGroup;
 }
 
 interface Session {
@@ -21,6 +25,8 @@ interface SignupInput {
   role: UserRole;
   inviteCode?: string;
   consent: boolean;
+  age?: number;
+  guardianConsent?: boolean;
 }
 
 interface AuthContextValue {
@@ -28,6 +34,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<AppUser>;
   signup: (input: SignupInput) => Promise<AppUser>;
   logout: () => void;
+  /** Replace the stored user (e.g. after setting an age). */
+  updateUser: (user: AppUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -64,12 +72,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUnauthorizedHandler(logout);
   }, []);
 
+  const updateUser = (next: AppUser) => {
+    setSession((current) => {
+      if (!current) return current;
+      const updated = { ...current, user: { ...current.user, ...next } };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Refresh the stored account once per visit, so changes such as an age group
+  // set by the therapist reach the browser.
+  const sessionEmail = session?.user.email;
+  useEffect(() => {
+    if (!sessionEmail) return;
+    api
+      .get("/api/v1/auth/me")
+      .then((res) => updateUser(res.data))
+      .catch(() => {});
+  }, [sessionEmail]);
+
   const login = async (email: string, password: string) => {
     const res = await api.post("/api/v1/auth/login", { email, password });
     return store(res.data);
   };
 
-  const signup = async ({ email, name, password, role, inviteCode, consent }: SignupInput) => {
+  const signup = async ({ email, name, password, role, inviteCode, consent, age, guardianConsent }: SignupInput) => {
     const res = await api.post("/api/v1/auth/signup", {
       email,
       name,
@@ -77,12 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       invite_code: inviteCode || null,
       consent,
+      age: role === "student" ? age : null,
+      guardian_consent: guardianConsent ?? false,
     });
     return store(res.data);
   };
 
   return (
-    <AuthContext.Provider value={{ user: session?.user ?? null, login, signup, logout }}>
+    <AuthContext.Provider value={{ user: session?.user ?? null, login, signup, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

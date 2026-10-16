@@ -5,6 +5,8 @@ import { StudentDetail } from "../types/therapist";
 import { getStudentDetail, rateAttempt } from "./therapistApi";
 import StudentControls from "./StudentControls";
 import PlanReviewPanel from "./PlanReviewPanel";
+import AlertList from "./AlertList";
+import ChatThread from "../components/ChatThread";
 import { LevelTimeline, ReportCard } from "../components/ReportCard";
 import { ColumnChart, ScoreLineChart } from "./charts";
 import {
@@ -134,11 +136,45 @@ export default function TherapistStudentPage() {
 
             <div className="no-print">
               <StudentControls
+                key={`${detail.profile.email}-${detail.profile.age_group}`}
                 email={detail.profile.email}
+                age={detail.profile.age}
+                initialAgeGroup={detail.profile.age_group}
                 settings={detail.settings}
                 goals={summary.goals}
                 onChanged={() => setReload((n) => n + 1)}
               />
+            </div>
+
+            <div className="no-print grid gap-4 lg:grid-cols-2">
+              <Panel title="Messages" subtitle={`Conversation with ${detail.profile.name.split(" ")[0]}`}>
+                <ChatThread student={detail.profile.email} viewerRole="therapist" />
+              </Panel>
+              <div className="space-y-4">
+                {detail.alerts.length > 0 && (
+                  <Panel title="Alerts">
+                    <AlertList alerts={detail.alerts} linkToStudent={false} />
+                  </Panel>
+                )}
+                <Panel title="Homework progress" subtitle="Set due dates and repeats in Therapist controls">
+                  {detail.homework.length === 0 ? (
+                    <p className="text-sm text-ink-soft">No homework set.</p>
+                  ) : (
+                    <ul className="space-y-2 text-sm">
+                      {detail.homework.map((h) => (
+                        <li key={h.exercise_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-paper px-3 py-2">
+                          <span className="text-ink">{h.exercise_id}</span>
+                          <span className={`text-xs ${h.overdue ? "font-semibold text-red-700" : h.done ? "text-teal-700" : "text-ink-soft"}`}>
+                            {h.done_count}/{h.times} done
+                            {h.due ? ` · due ${h.due}` : ""}
+                            {h.overdue ? " · overdue" : h.done ? " · complete" : ""}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Panel>
+              </div>
             </div>
 
             {summary.has_data ? (

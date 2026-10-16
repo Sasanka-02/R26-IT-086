@@ -182,7 +182,7 @@ def test_download_and_delete_my_data(client):
 
 
 def test_word_round_saves_and_climbs_the_ladder(client):
-    h = signup(client, "kid@x.com", name="Nethmi")
+    h = signup(client, "kid@x.com", name="Nethmi", age=9)
     exercises = client.get("/api/v1/therapy/exercises/user/kid@x.com", headers=h).json()
     by_id = {e["id"]: e for e in exercises["exercises"]}
     assert not by_id["words-1"]["locked"] and by_id["words-2"]["locked"]
@@ -284,3 +284,116 @@ def test_second_rater_and_heard_audio_are_kept(client):
     assert reviews[1]["by"] == "Ms Perera (via dr@x.com)" and all(r["heard_audio"] for r in reviews)
     v = client.get("/api/v1/therapist/evidence", headers=therapist).json()["scoring"]["validation_by_source"]
     assert v["clinician"] is None or v["clinician"]["n_heard_audio"] == 1
+
+
+def test_homework_with_due_dates(client):
+    from datetime import date, timedelta
+    therapist = signup(client, "dr@x.com", role="therapist")
+    student = signup(client, "a@x.com", name="Amal Perera")
+    past = (date.today() - timedelta(days=2)).isoformat()
+    future = (date.today() + timedelta(days=5)).isoformat()
+    res = client.put("/api/v1/therapist/students/a@x.com/assigned", headers=therapist, json={"items": [
+        {"exercise_id": "pacing-easy-1", "due": future, "times": 2},
+        {"exercise_id": "daf-1", "due": past},
+    ]})
+    assert res.status_code == 200
+    save_result(client, student, "a@x.com", exercise_id="pacing-easy-1")
+    hw = client.get("/api/v1/therapy/homework/a@x.com", headers=student).json()
+    items = {i["exercise_id"]: i for i in hw["items"]}
+    assert items["pacing-easy-1"]["done_count"] == 1 and not items["pacing-easy-1"]["done"]
+    assert items["pacing-easy-1"]["days_left"] == 5
+    assert items["daf-1"]["overdue"] and hw["overdue"] == 1
+    # Re-saving the assignment keeps the attempt already done.
+    client.put("/api/v1/therapist/students/a@x.com/assigned", headers=therapist,
+               json={"items": [{"exercise_id": "pacing-easy-1", "due": future, "times": 2}]})
+    save_result(client, student, "a@x.com", exercise_id="pacing-easy-1")
+    hw = client.get("/api/v1/therapy/homework/a@x.com", headers=student).json()
+    assert hw["items"][0]["done"] and hw["open"] == 0
+    # Old style (ids only) still works.
+    assert client.put("/api/v1/therapist/students/a@x.com/assigned", headers=therapist,
+                      json={"exercise_ids": ["daf-1"]}).status_code == 200
+
+
+def test_alerts_in_plain_sentences(client, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from app.therapy import therapist
+    therapist_h = signup(client, "dr@x.com", role="therapist")
+    signup(client, "kasun@x.com", name="Kasun Jay")
+    signup(client, "nimali@x.com", name="Nimali F")
+    now = datetime.now(timezone.utc)
+
+    def rec(days_ago, score):
+        return {"id": f"{days_ago}-{score}", "exercise_id": "reading-beginner", "exercise_type": "reading",
+                "level": "beginner", "title": "t", "score": score, "self_rating": "ok", "duration_seconds": 40,
+                "completed_at": (now - timedelta(days=days_ago)).isoformat()}
+    data = {"kasun@x.com": [rec(12, 70), rec(10, 72)],
+            "nimali@x.com": [rec(3, 80), rec(2, 70), rec(1, 60), rec(0, 50)]}
+    monkeypatch.setattr(therapist, "all_records", lambda: data)
+    texts = [a["text"] for a in client.get("/api/v1/therapist/overview", headers=therapist_h).json()["alerts"]]
+    assert "Kasun hasn’t practised for 10 days".replace("’", "'") in texts
+    assert "Nimali's score dropped 3 times in a row" in texts
+
+
+def test_messages_between_student_and_therapist(client):
+    therapist = signup(client, "dr@x.com", role="therapist", name="Dr Silva")
+    student = signup(client, "a@x.com", name="Amal")
+    other = signup(client, "b@x.com")
+    url = "/api/v1/messages/a@x.com"
+    client.post(url, json={"text": "Hi doctor, the DAF feels strange."}, headers=student)
+    seen = client.get(url, headers=therapist).json()
+    assert seen["unread"] == 1 and seen["messages"][0]["from_name"] == "Amal"
+    overview = client.get("/api/v1/therapist/overview", headers=therapist).json()
+    assert overview["unread_messages"] == 1
+    assert any(a["kind"] == "message" for a in overview["alerts"])
+    client.post(url + "/read", headers=therapist)
+    reply = client.post(url, json={"text": "Try a 100 ms delay with headphones."}, headers=therapist).json()
+    assert reply["unread"] == 0
+    assert client.get(url, headers=student).json()["unread"] == 1
+    assert client.get(url, headers=other).status_code == 403
+    assert client.post(url, json={"text": "   "}, headers=student).status_code in (400, 422)
+
+
+def test_appointment_booking(client):
+    from datetime import datetime, timedelta, timezone
+    therapist = signup(client, "dr@x.com", role="therapist", name="Dr Silva")
+    a = signup(client, "a@x.com", name="Amal")
+    b = signup(client, "b@x.com", name="Ravi")
+    start = (datetime.now(timezone.utc) + timedelta(days=2)).replace(microsecond=0)
+    slot = client.post("/api/v1/appointments/slots", headers=therapist,
+                       json={"start": start.isoformat(), "minutes": 30, "mode": "online"}).json()
+    clash = client.post("/api/v1/appointments/slots", headers=therapist,
+                        json={"start": (start + timedelta(minutes=15)).isoformat(), "minutes": 30})
+    assert clash.status_code == 400
+    past = client.post("/api/v1/appointments/slots", headers=therapist,
+                       json={"start": (start - timedelta(days=5)).isoformat()})
+    assert past.status_code == 400
+
+    assert len(client.get("/api/v1/appointments", headers=a).json()["open"]) == 1
+    booked = client.post(f"/api/v1/appointments/{slot['id']}/book", headers=a).json()
+    assert booked["student"] == "a@x.com" and booked["therapist_name"] == "Dr Silva"
+    assert client.post(f"/api/v1/appointments/{slot['id']}/book", headers=b).status_code == 409
+    assert client.post(f"/api/v1/appointments/{slot['id']}/cancel", headers=b).status_code == 403
+    sessions = client.get("/api/v1/appointments", headers=therapist).json()["sessions"]
+    assert sessions[0]["student_name"] == "Amal"
+    client.post(f"/api/v1/appointments/{slot['id']}/cancel", headers=a)
+    assert client.get("/api/v1/appointments", headers=b).json()["open"][0]["id"] == slot["id"]
+
+
+def test_clinic_dashboard_reports_average_improvement(client, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from app.therapy import therapist
+    therapist_h = signup(client, "dr@x.com", role="therapist")
+    signup(client, "a@x.com", name="A")
+    signup(client, "b@x.com", name="B")
+    now = datetime.now(timezone.utc)
+
+    def rec(days_ago, score):
+        return {"id": f"{days_ago}", "exercise_id": "reading-beginner", "exercise_type": "reading",
+                "level": "beginner", "title": "t", "score": score, "self_rating": "ok", "duration_seconds": 40,
+                "completed_at": (now - timedelta(days=days_ago)).isoformat()}
+    data = {"a@x.com": [rec(13, 50), rec(12, 50), rec(1, 70), rec(0, 70)],
+            "b@x.com": [rec(13, 60), rec(12, 60), rec(1, 60), rec(0, 56)]}
+    monkeypatch.setattr(therapist, "all_records", lambda: data)
+    o = client.get("/api/v1/therapist/overview", headers=therapist_h).json()
+    assert o["improvement_students"] == 2 and o["improving_students"] == 1
+    assert o["average_improvement"] == round((20 - 2) / 2, 1)

@@ -29,6 +29,7 @@ from app.therapy.adaptive import LEVELS, LEVEL_LABELS, level_state
 from app.therapy.privacy import budget_ledger, privatize_statistic
 from app.therapy.progress_store import all_records
 from app.therapy.therapist_store import get_settings
+from app.therapy.user_store import age_group_of
 
 LEDGER_ID = "cohort-report"
 GROUPS = 4  # exercises-by-type histogram, level histogram, mean score, score-band histogram
@@ -38,6 +39,7 @@ TYPE_LABELS = {
     "daf": "DAF",
     "picture": "Picture description",
     "words": "Word practice",
+    "roleplay": "Role-plays & talks",
 }
 SCORE_BANDS = [(0, 45, "Below 45"), (45, 65, "45–64"), (65, 80, "65–79"), (80, 101, "80–100")]
 EPSILON_OPTIONS = [0.25, 0.5, 1.0, 2.0, 5.0]
@@ -53,7 +55,7 @@ def _true_stats() -> tuple[dict, str]:
     ).hexdigest()[:16]
     levels = {lvl: 0 for lvl in LEVELS}
     for user_id, recs in data.items():
-        levels[level_state(recs, get_settings(user_id)["level_override"])["level"]] += 1
+        levels[level_state(recs, get_settings(user_id)["level_override"], age_group_of(user_id))["level"]] += 1
     scores = [r["score"] for r in records]
     stats = {
         "students": len(data),

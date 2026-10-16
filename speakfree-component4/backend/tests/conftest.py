@@ -3,7 +3,9 @@ import logging
 import pytest
 from fastapi.testclient import TestClient
 
+import app.therapy.appointments as appointments
 import app.therapy.audit as audit
+import app.therapy.messages as messages
 import app.therapy.auth as auth
 import app.therapy.cohort_report as cohort_report
 import app.therapy.plan_review as plan_review
@@ -29,6 +31,8 @@ def isolated_data(tmp_path, monkeypatch):
     monkeypatch.setattr(survey, "SURVEY_FILE", tmp_path / "surveys.json")
     monkeypatch.setattr(plan_review, "REVIEWS_FILE", tmp_path / "plan_reviews.json")
     monkeypatch.setattr(audit, "AUDIT_FILE", tmp_path / "audit_log.jsonl")
+    monkeypatch.setattr(messages, "MESSAGES_FILE", tmp_path / "messages.json")
+    monkeypatch.setattr(appointments, "APPOINTMENTS_FILE", tmp_path / "appointments.json")
     monkeypatch.setattr(auth, "_failed_logins", {})
     monkeypatch.setattr(cohort_report, "_cache", {})
     monkeypatch.setattr(privacy, "budget_ledger", privacy.PrivacyBudgetLedger())
@@ -41,10 +45,14 @@ def client():
     return TestClient(app)
 
 
-def signup(client, email, role="student", name="Test User", password="secret123"):
+def signup(client, email, role="student", name="Test User", password="secret123", age=30):
+    """Students default to age 30 (adult group); pass age= for a child or teen."""
     body = {"email": email, "name": name, "password": password, "role": role, "consent": True}
     if role == "therapist":
         body["invite_code"] = auth.THERAPIST_INVITE_CODE
+    else:
+        body["age"] = age
+        body["guardian_consent"] = age < 18
     res = client.post("/api/v1/auth/signup", json=body)
     assert res.status_code == 200, res.text
     return {"Authorization": f"Bearer {res.json()['token']}"}

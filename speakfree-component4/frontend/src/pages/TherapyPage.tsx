@@ -4,12 +4,14 @@ import { ArrowLeft, Lock, Search, Star, X } from "lucide-react";
 import { useSession } from "../context/SessionContext";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
 import { startTherapySession, endTherapySession, getUserExercises } from "../therapy/therapyApi";
-import { LevelState, TherapyExercise, WordLevelState } from "../types/therapy";
+import { AGE_GROUP_INFO, LevelState, TherapyExercise, WordLevelState } from "../types/therapy";
 import PacingExercise from "../therapy/PacingExercise";
 import DafExercise from "../therapy/DafExercise";
 import DafCalibration from "../therapy/DafCalibration";
 import PictureDescriptionExercise from "../therapy/PictureDescriptionExercise";
 import WordPracticeExercise from "../therapy/WordPracticeExercise";
+import RolePlayExercise from "../therapy/RolePlayExercise";
+import { useAuth } from "../context/AuthContext";
 import ProgressDashboard from "../therapy/ProgressDashboard";
 import WeeklyPlan from "../therapy/WeeklyPlan";
 import PrivacyPanel from "../therapy/PrivacyPanel";
@@ -72,7 +74,7 @@ function ExerciseCard({
       )}
       <div className="p-5">
         <div className="flex flex-wrap gap-2">
-          {exercise.type === "words" && (
+          {exercise.type === "words" && !exercise.level && (
             <span className="rounded-full bg-[#FFE6A7] px-2.5 py-0.5 text-xs font-semibold text-[#1f2937]">
               {wordBadge(exercise.word_level)}
             </span>
@@ -101,9 +103,9 @@ function ExerciseCard({
         <h3 className="mt-2 font-display font-semibold text-ink">{exercise.title}</h3>
         <p className="mt-1 text-sm text-ink-soft">
           {exercise.locked
-            ? exercise.type === "words"
+            ? exercise.word_level != null
               ? "Finish the word level before this one to unlock it."
-              : "Complete the previous reading level to unlock this one."
+              : "Complete the previous level to unlock this one."
             : exercise.description}
         </p>
       </div>
@@ -115,6 +117,8 @@ export default function TherapyPage() {
   const [params, setParams] = useSearchParams();
   const { sessionId } = useSession();
   const { userId, version } = usePracticeHistory();
+  const { user } = useAuth();
+  const ageGroup = user?.age_group ?? "adult";
   const tabParam = params.get("tab") as Tab | null;
   const tab: Tab = tabParam && TABS.includes(tabParam) ? tabParam : "practice";
   const query = (params.get("q") ?? "").trim().toLowerCase();
@@ -167,6 +171,17 @@ export default function TherapyPage() {
     select(exercise);
   };
 
+  // Links like /therapy?tab=practice&start=<exercise id> (homework "Start") open that exercise.
+  const startParam = params.get("start");
+  useEffect(() => {
+    if (!startParam || exercises.length === 0) return;
+    const exercise = exercises.find((ex) => ex.id === startParam);
+    keepSelection.current = true;
+    setParams({ tab: "practice" }, { replace: true });
+    if (exercise) select(exercise);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startParam, exercises]);
+
   const backToPicker = () => {
     setSelected(null);
     setCalibratedDelay(null);
@@ -187,10 +202,25 @@ export default function TherapyPage() {
   const visible = query
     ? exercises.filter((ex) => `${ex.title} ${ex.description}`.toLowerCase().includes(query))
     : exercises;
-  const reading = visible.filter((ex) => ex.type === "reading");
-  const pictures = visible.filter((ex) => ex.type === "picture");
-  const words = visible.filter((ex) => ex.type === "words");
-  const other = visible.filter((ex) => ex.type === "pacing" || ex.type === "daf");
+  // This age group's Beginner -> Intermediate -> Advanced ladder (readings,
+  // word cards and role-plays), then the children's word ladder, then the rest.
+  const LEVEL_ORDER = ["beginner", "intermediate", "advanced"];
+  const ladder = visible
+    .filter((ex) => ex.level)
+    .sort((a, b) => LEVEL_ORDER.indexOf(a.level!) - LEVEL_ORDER.indexOf(b.level!));
+  const pictures = visible.filter((ex) => ex.type === "picture" && !ex.level);
+  const words = visible.filter((ex) => ex.type === "words" && !ex.level);
+  const other = visible.filter((ex) => (ex.type === "pacing" || ex.type === "daf") && !ex.level);
+  const ladderTitle = {
+    child: "Kids ladder",
+    teen: "Teen ladder",
+    adult: "Your practice ladder",
+  }[ageGroup];
+  const ladderHint = {
+    child: "Picture words → little phrases → a tiny story. One great try unlocks the next level! ⭐",
+    teen: "School readings → class talks → real-life role-plays. One strong attempt unlocks the next level.",
+    adult: "Readings → everyday role-plays → interviews and work talks. One strong attempt unlocks the next level.",
+  }[ageGroup];
 
   const section = (title: string, hint: string, items: TherapyExercise[]) =>
     items.length > 0 && (
@@ -205,9 +235,9 @@ export default function TherapyPage() {
               key={ex.id}
               exercise={ex}
               current={
-                ex.type === "words"
+                ex.word_level != null
                   ? !!wordLevel && ex.word_level === wordLevel.level
-                  : !!level && ex.level === level.level
+                  : !!level && !!ex.level && ex.level === level.level
               }
               onSelect={() => select(ex)}
             />
@@ -236,13 +266,19 @@ export default function TherapyPage() {
                     Choose a practice exercise
                   </h1>
                   <p className="mt-1 text-sm text-ink-soft">
-                    Word cards for children, graded reading, picture description, pacing and
-                    delayed auditory feedback. After each exercise you'll get a score and your plan adapts.
+                    {
+                      {
+                        child: "Picture words, little phrases, stories, pictures and slow snail pacing. Have fun! ⭐",
+                        teen: "School readings, class talks, role-plays, pictures, pacing and DAF.",
+                        adult: "Readings, real-life role-plays, interview practice, pictures, pacing and DAF.",
+                      }[ageGroup]
+                    }{" "}
+                    After each exercise you'll get a score and your plan adapts.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {level && (
                       <p className="inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-medium text-teal-800">
-                        Reading level: {level.label} — {level.progress_text}
+                        {AGE_GROUP_INFO[ageGroup].label} · Your level: {level.label} — {level.progress_text}
                       </p>
                     )}
                     {wordLevel && wordLevel.rounds > 0 && (
@@ -266,22 +302,22 @@ export default function TherapyPage() {
                     </button>
                   </div>
                 )}
+                {section(ladderTitle, ladderHint, ladder)}
                 {section(
-                  "Word practice (children)",
+                  "Word practice",
                   "Picture cards, one word at a time. One good round unlocks the next word level.",
                   words
-                )}
-                {section(
-                  "Reading practice",
-                  "Three levels. One strong reading unlocks the next level.",
-                  reading
                 )}
                 {section(
                   "Picture description",
                   "Describe each picture in your own words.",
                   pictures
                 )}
-                {section("Pacing & DAF", "Techniques for a smooth, steady rhythm.", other)}
+                {section(
+                  ageGroup === "child" ? "Slow snail pacing 🐌" : "Pacing & DAF",
+                  "Techniques for a smooth, steady rhythm.",
+                  other
+                )}
               </>
             )}
 
@@ -295,6 +331,10 @@ export default function TherapyPage() {
 
             {selected && selected.type === "words" && (
               <WordPracticeExercise key={attempt} exercise={selected} />
+            )}
+
+            {selected && selected.type === "roleplay" && (
+              <RolePlayExercise key={attempt} exercise={selected} />
             )}
 
             {selected && selected.type === "daf" && !calibratedDelay && (

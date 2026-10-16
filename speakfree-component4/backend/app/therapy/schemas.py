@@ -9,6 +9,7 @@ class ExerciseType(str, Enum):
     PICTURE = "picture"
     READING = "reading"
     WORDS = "words"  # child-friendly word ladder (picture cards)
+    ROLEPLAY = "roleplay"  # a real-life situation answered out loud (presentations, interviews, calls)
 
 
 class ReadingLevel(str, Enum):
@@ -51,6 +52,8 @@ class TherapyExercise(BaseModel):
     level: ReadingLevel | None = None  # reading ladder only
     word_level: int | None = None  # word ladder position 1–10 (None = bonus set)
     words: list[WordItem] | None = None
+    # Who the exercise is for: "child" (6–13), "teen" (14–20), "adult" (21+).
+    age_groups: list[str] = Field(default_factory=lambda: ["child", "teen", "adult"])
     difficulty: int = 1
     recommended_for: list[SeverityLevel] = Field(default_factory=list)
 

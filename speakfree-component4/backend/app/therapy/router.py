@@ -40,8 +40,14 @@ from app.therapy.schemas import (
     StartSessionResponse,
 )
 from app.therapy.session_store import end_session, get_session, start_session
-from app.therapy.therapist_store import get_settings, mark_notes_read, notes_for_student, set_screening
-from app.therapy.user_store import get_user
+from app.therapy.therapist_store import (
+    get_settings,
+    homework_status,
+    mark_notes_read,
+    notes_for_student,
+    set_screening,
+)
+from app.therapy.user_store import age_group_of, get_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/therapy", tags=["therapy"])
@@ -137,11 +143,14 @@ async def list_user_exercises(user_id: str, user: dict = Depends(auth.current_us
     auth.ensure_can_access(user, user_id)
     records = get_records(user_id)
     settings = get_settings(user_id)
-    level = level_state(records, settings["level_override"])
+    age_group = age_group_of(user_id)
+    level = level_state(records, settings["level_override"], age_group)
     words = word_level_state(records)
     assigned = {a["exercise_id"] for a in settings["assigned"]}
     exercises = []
-    for ex in EXERCISE_BANK:
+    # Only the exercises meant for this student's age group (plus anything
+    # their therapist assigned from another group on purpose).
+    for ex in [e for e in EXERCISE_BANK if age_group in e.age_groups or e.id in assigned]:
         data = ex.model_dump(mode="json")
         data["locked"] = (ex.level is not None and LEVELS.index(ex.level.value) > level["level_index"]) or (
             ex.word_level is not None and ex.word_level > words["level"]
@@ -149,9 +158,9 @@ async def list_user_exercises(user_id: str, user: dict = Depends(auth.current_us
         data["assigned"] = ex.id in assigned
         if ex.target_wpm:
             data["base_wpm"] = ex.target_wpm
-            data["target_wpm"] = personal_target_wpm(ex.target_wpm, ex.id, records)
+            data["target_wpm"] = personal_target_wpm(ex.target_wpm, ex.id, records, age_group)
         exercises.append(data)
-    return {"level": level, "word_level": words, "exercises": exercises}
+    return {"level": level, "word_level": words, "exercises": exercises, "age_group": age_group}
 
 
 def _measured_wpm(exercise, syllables: int | None, duration: float) -> int | None:
@@ -170,7 +179,8 @@ async def submit_result(payload: ExerciseResultRequest, user: dict = Depends(aut
 
     records = get_records(payload.user_id)
     settings = get_settings(payload.user_id)
-    before = level_state(records, settings["level_override"])
+    age_group = age_group_of(payload.user_id)
+    before = level_state(records, settings["level_override"], age_group)
     words_before = word_level_state(records)
     if payload.words_correct is not None and payload.words_total and payload.words_correct > payload.words_total:
         raise HTTPException(status_code=400, detail="words_correct cannot be more than words_total")
@@ -197,7 +207,7 @@ async def submit_result(payload: ExerciseResultRequest, user: dict = Depends(aut
     }
     score, breakdown = score_attempt(attempt)
     stored = add_record(payload.user_id, {**attempt, "score": score, "score_breakdown": breakdown})
-    after = level_state(records + [stored], settings["level_override"])
+    after = level_state(records + [stored], settings["level_override"], age_group)
     words_after = word_level_state(records + [stored])
     level_message = (
         word_level_change_message(words_before, words_after)
@@ -229,7 +239,7 @@ async def get_progress(user_id: str, user: dict = Depends(auth.current_user)):
 @router.get("/plan/{user_id}")
 async def get_weekly_plan(user_id: str, user: dict = Depends(auth.current_user)):
     auth.ensure_can_access(user, user_id)
-    plan = recommend_weekly_plan(get_records(user_id), get_settings(user_id))
+    plan = recommend_weekly_plan(get_records(user_id), get_settings(user_id), age_group=age_group_of(user_id))
     return {"user_id": normalize_user_id(user_id), **plan}
 
 
@@ -251,9 +261,23 @@ async def submit_screening(payload: ScreeningRequest, user: dict = Depends(auth.
     return {
         "screening": settings["screening"],
         "starting_level_applied": start,
-        "level": level_state(records, settings["level_override"]),
-        "plan": recommend_weekly_plan(records, settings),
+        "level": level_state(records, settings["level_override"], age_group_of(payload.user_id)),
+        "plan": recommend_weekly_plan(records, settings, age_group=age_group_of(payload.user_id)),
     }
+
+
+# --- Homework (therapist-assigned home practice) ----------------------------
+
+@router.get("/homework/{user_id}")
+async def get_homework(user_id: str, user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, user_id)
+    items = homework_status(get_settings(user_id)["assigned"], get_records(user_id))
+    for item in items:
+        ex = get_exercise(item["exercise_id"])
+        item["title"] = ex.title if ex else item["exercise_id"]
+        item["type"] = ex.type.value if ex else None
+    items.sort(key=lambda i: (i["done"], i["due"] or "9999"))
+    return {"items": items, "open": sum(1 for i in items if not i["done"]), "overdue": sum(1 for i in items if i["overdue"])}
 
 
 # --- Notes from the therapist (student notifications) ----------------------

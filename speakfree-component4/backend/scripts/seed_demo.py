@@ -34,20 +34,23 @@ from app.therapy import progress_store, scoring, therapist_store, user_store
 from app.therapy.adaptive import level_state
 from app.therapy.auth import hash_password
 from app.therapy import plan_review
-from app.therapy.exercises import EXERCISE_BANK, WORD_LADDER_IDS, get_exercise
+from app.therapy.adaptive import LEVELS
+from app.therapy.exercises import WORD_LADDER_IDS, exercises_for, get_exercise
+from app.therapy.user_store import age_group_for
 from app.therapy.user_store import DEMO_SUFFIX
 
 SUFFIX = DEMO_SUFFIX
 PASSWORD = "demo1234"
 
 STUDENTS = [
-    # name, registered days ago, sessions, skill 0-1, improvement per session, last active days ago
-    ("Amal Perera", 45, 22, 0.45, 0.012, 0),
-    ("Nimali Fernando", 38, 14, 0.62, -0.008, 1),
-    ("Kasun Jayasuriya", 30, 7, 0.5, 0.004, 10),
-    ("Tharushi Wijesinghe", 3, 0, 0.5, 0.0, None),
-    ("Ravi Kumar", 25, 16, 0.7, 0.01, 0),
+    # name, age, registered days ago, sessions, skill 0-1, improvement per session, last active days ago
+    ("Amal Perera", 28, 45, 22, 0.45, 0.012, 0),
+    ("Nimali Fernando", 16, 38, 14, 0.62, -0.008, 1),
+    ("Kasun Jayasuriya", 34, 30, 7, 0.5, 0.004, 10),
+    ("Tharushi Wijesinghe", 15, 3, 0, 0.5, 0.0, None),
+    ("Ravi Kumar", 45, 25, 16, 0.7, 0.01, 0),
 ]
+CHILD_AGE = 9  # Nethmi
 
 
 def _write(path, data):
@@ -72,6 +75,7 @@ def clean() -> None:
 
 def _attempt(rng, ex, skill, when) -> dict:
     live = ex.passage is not None
+    cards = len(ex.words) if ex.words else None
     pauses = int(max(0, rng.poisson(max(0.2, 3.2 * (1 - skill)))))
     ratio = float(np.clip(rng.normal(0.35 + 0.5 * skill, 0.06), 0.15, 0.95)) if live else None
     duration = float(rng.uniform(35, 110))
@@ -93,6 +97,9 @@ def _attempt(rng, ex, skill, when) -> dict:
         "target_wpm": target,
         "self_rating": rating,
     }
+    if cards:  # a word-card round: how many cards were said well
+        attempt["words_total"] = cards
+        attempt["words_correct"] = int(np.clip(round(cards * (0.4 + 0.6 * skill) + rng.normal(0, 1)), 0, cards))
     score, breakdown = scoring.score_with_breakdown(attempt)
     return {
         "id": uuid.uuid4().hex,
@@ -134,15 +141,20 @@ def seed() -> None:
         "password_hash": pw,
     }
 
-    non_reading = [ex for ex in EXERCISE_BANK if ex.level is None and ex.type.value != "words"]
-    for name, reg_ago, n, skill, slope, last_ago in STUDENTS:
+    for name, age, reg_ago, n, skill, slope, last_ago in STUDENTS:
         email = name.split()[0].lower() + SUFFIX
+        group = age_group_for(age)
         users[email] = {
-            "email": email, "name": name, "role": "student",
+            "email": email, "name": name, "role": "student", "age": age, "age_group": group,
             "registered_at": (now - timedelta(days=reg_ago)).isoformat(),
             "last_login": (now - timedelta(days=last_ago if last_ago is not None else reg_ago)).isoformat(),
             "password_hash": pw,
         }
+        # Practice comes only from this student's age group: their ladder on
+        # even attempts, other exercises (pacing, pictures, DAF) in between.
+        mine = exercises_for(group)
+        rungs = [[ex for ex in mine if ex.level and ex.level.value == lv] for lv in LEVELS]
+        others = [ex for ex in mine if ex.level is None and ex.type.value != "words"]
         records = []
         level = 0
         for i in range(n):
@@ -150,12 +162,12 @@ def seed() -> None:
             when = now - timedelta(days=days_ago, hours=float(rng.uniform(0, 6)))
             s = float(np.clip(skill + slope * i, 0.1, 0.95))
             if i % 2 == 0:
-                ex = get_exercise(["reading-beginner", "reading-intermediate", "reading-advanced"][level])
+                ex = rungs[level][int(rng.integers(len(rungs[level])))]
             else:
-                ex = non_reading[int(rng.integers(len(non_reading)))]
+                ex = others[int(rng.integers(len(others)))]
             record = _attempt(rng, ex, s, when)
             records.append(record)
-            level = level_state(records)["level_index"]
+            level = level_state(records, age_group=group)["level_index"]
         if records:
             for record in rng.choice(records, size=min(5, len(records)), replace=False):
                 review = {
@@ -182,7 +194,7 @@ def seed() -> None:
     # hard round at level 3 -> "Word level 3 of 7 — 1 more good round".
     child = "nethmi" + SUFFIX
     users[child] = {
-        "email": child, "name": "Nethmi Silva", "role": "student",
+        "email": child, "name": "Nethmi Silva", "role": "student", "age": CHILD_AGE, "age_group": "child",
         "registered_at": (now - timedelta(days=9)).isoformat(), "last_login": now.isoformat(),
         "password_hash": pw,
     }
@@ -204,6 +216,11 @@ def seed() -> None:
             "completed_at": (now - timedelta(days=8 - i, hours=float(rng.uniform(0, 4)))).isoformat(),
             **attempt, "score": score, "score_breakdown": breakdown,
         })
+    # Plus her kids ladder: picture words went well, so she is on little phrases.
+    for i, exercise_id in enumerate(["child-words", "child-pacing", "child-words"]):
+        when = now - timedelta(days=5 - 2 * i, hours=float(rng.uniform(0, 3)))
+        child_records.append(_attempt(rng, get_exercise(exercise_id), 0.85, when))
+    child_records.sort(key=lambda r: r["completed_at"])
     progress[child] = child_records
 
     settings["amal" + SUFFIX] = {

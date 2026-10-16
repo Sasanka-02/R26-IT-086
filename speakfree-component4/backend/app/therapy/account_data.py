@@ -12,7 +12,7 @@ only the fact that a deletion happened.
 import json
 from datetime import datetime, timezone
 
-from app.therapy import plan_review, progress_store, survey, therapist_store, user_store
+from app.therapy import appointments, messages, plan_review, progress_store, survey, therapist_store, user_store
 from app.therapy.progress_store import normalize_user_id
 from app.therapy.scoring import calibrate
 
@@ -28,6 +28,8 @@ def export(email: str) -> dict:
         "therapist_settings": therapist_store.get_settings(uid),
         "plan_reviews": plan_review.reviews_for(uid),
         "survey_responses": surveys,
+        "messages": messages.thread(uid, "student")["messages"],
+        "appointments": appointments.for_student(uid)["booked"],
         "not_stored": "Voice recordings are never saved or uploaded.",
     }
 
@@ -54,5 +56,7 @@ def delete(email: str) -> dict:
         _rewrite(plan_review.REVIEWS_FILE, lambda r: r["student"] != uid)
     with survey._lock:
         _rewrite(survey.SURVEY_FILE, lambda r: r["user_id"] != uid)
+    messages.delete_student(uid)
+    appointments.delete_student(uid)
     calibrate()
     return {"deleted": uid}

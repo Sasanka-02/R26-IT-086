@@ -10,6 +10,8 @@ import TherapistStudentPage from "./therapist/TherapistStudentPage";
 import EvidencePage from "./therapist/EvidencePage";
 import ComparePage from "./therapist/ComparePage";
 import ValidationSessionPage from "./therapist/ValidationSessionPage";
+import MessagesPage from "./pages/MessagesPage";
+import AppointmentsPage from "./pages/AppointmentsPage";
 
 export default function App() {
   return (
@@ -46,6 +48,30 @@ export default function App() {
         element={
           <ProtectedRoute role="therapist">
             <EvidencePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/messages"
+        element={
+          <ProtectedRoute>
+            <MessagesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/appointments"
+        element={
+          <ProtectedRoute>
+            <AppointmentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/therapist/calendar"
+        element={
+          <ProtectedRoute role="therapist">
+            <AppointmentsPage />
           </ProtectedRoute>
         }
       />

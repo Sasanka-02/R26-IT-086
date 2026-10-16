@@ -1,6 +1,9 @@
 import { api as client, API_BASE_URL } from "../api/client";
 import {
+  Appointment,
   AssistantBriefing,
+  ChatThread,
+  HomeworkResponse,
   AssistantReply,
   DafTrial,
   ExerciseResultInput,
@@ -131,4 +134,47 @@ export async function getMyNotes(userId: string): Promise<TherapistNotes> {
 
 export async function markNotesRead(userId: string): Promise<TherapistNotes> {
   return (await client.post(`/api/v1/therapy/notes/${encodeURIComponent(userId)}/read`)).data;
+}
+
+export async function getHomework(userId: string): Promise<HomeworkResponse> {
+  return (await client.get(`/api/v1/therapy/homework/${encodeURIComponent(userId)}`)).data;
+}
+
+// --- Messages (student and therapist share these) ---
+export async function getMessages(student: string): Promise<ChatThread> {
+  return (await client.get(`/api/v1/messages/${encodeURIComponent(student)}`)).data;
+}
+
+export async function sendMessage(student: string, text: string): Promise<ChatThread> {
+  return (await client.post(`/api/v1/messages/${encodeURIComponent(student)}`, { text })).data;
+}
+
+export async function markMessagesRead(student: string): Promise<ChatThread> {
+  return (await client.post(`/api/v1/messages/${encodeURIComponent(student)}/read`)).data;
+}
+
+// --- Appointments ---
+export async function getStudentAppointments(): Promise<{ booked: Appointment[]; open: Appointment[] }> {
+  return (await client.get("/api/v1/appointments")).data;
+}
+
+export async function getTherapistAppointments(): Promise<{ sessions: Appointment[] }> {
+  return (await client.get("/api/v1/appointments")).data;
+}
+
+export async function createAppointmentSlot(slot: {
+  start: string;
+  minutes: number;
+  mode: "clinic" | "online";
+  student?: string | null;
+}): Promise<Appointment> {
+  return (await client.post("/api/v1/appointments/slots", slot)).data;
+}
+
+export async function bookAppointment(id: string): Promise<Appointment> {
+  return (await client.post(`/api/v1/appointments/${id}/book`)).data;
+}
+
+export async function cancelAppointment(id: string): Promise<Appointment> {
+  return (await client.post(`/api/v1/appointments/${id}/cancel`)).data;
 }

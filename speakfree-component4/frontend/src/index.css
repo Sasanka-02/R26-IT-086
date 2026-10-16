@@ -201,3 +201,28 @@ select:focus {
   .word-burst-piece, .word-pop, .word-sticker { animation: none; }
   .word-burst-piece { display: none; }
 }
+
+/* ---------- Look per age group (set on the app shell for students) ---------- */
+/* Children: bigger text and buttons, rounder and brighter. */
+[data-age-group="child"] main {
+  font-size: 1.0625rem;
+}
+[data-age-group="child"] main button.rounded-full,
+[data-age-group="child"] main button.rounded-xl {
+  min-height: 2.75rem; /* bigger touch targets */
+}
+[data-age-group="child"] main h1,
+[data-age-group="child"] main h2 {
+  font-family: "Baloo 2", "Poppins", sans-serif;
+}
+[data-age-group="child"] .bg-teal-600 {
+  background-color: #2bb3a0;
+}
+/* Adults: calm and professional — no celebration animations. */
+[data-age-group="adult"] .word-burst-piece,
+[data-age-group="adult"] .animate-pulse {
+  animation: none;
+}
+[data-age-group="adult"] .word-sticker {
+  animation: none;
+}

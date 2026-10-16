@@ -2,9 +2,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { getUserExercises, submitScreening } from "../therapy/therapyApi";
 import { errorMessage } from "../api/client";
-import { GoalProgress, ReadingLevel, SeverityLevel, TherapyExercise } from "../types/therapy";
+import { AGE_GROUP_INFO, AgeGroup, GoalProgress, ReadingLevel, SeverityLevel, TherapyExercise } from "../types/therapy";
 import { GoalMetric, TherapistSettings } from "../types/therapist";
-import { addGoal, addNote, removeGoal, setAssignedExercises, setLevelOverride } from "./therapistApi";
+import { addGoal, addNote, removeGoal, setHomework, setLevelOverride, setStudentAgeGroup } from "./therapistApi";
 import { formatDate, Panel } from "./ui";
 
 const GOAL_OPTIONS: { metric: GoalMetric; label: string; suggested: string; min: number; max: number }[] = [
@@ -22,15 +22,21 @@ const LEVEL_OPTIONS: { value: ReadingLevel | ""; label: string }[] = [
 
 interface Props {
   email: string;
+  age?: number | null;
+  initialAgeGroup?: AgeGroup;
   settings: TherapistSettings;
   goals: GoalProgress[];
   onChanged: () => void;
 }
 
 /** The therapist steers the adaptive system: assignments, level, goals and notes. */
-export default function StudentControls({ email, settings, goals, onChanged }: Props) {
+export default function StudentControls({ email, age, initialAgeGroup = "adult", settings, goals, onChanged }: Props) {
+  const [ageGroup, setAgeGroup] = useState<AgeGroup>(initialAgeGroup);
   const [exercises, setExercises] = useState<TherapyExercise[]>([]);
-  const [assigned, setAssigned] = useState<string[]>(settings.assigned.map((a) => a.exercise_id));
+  // Homework: exercise id -> due date (YYYY-MM-DD or "") and how many times to do it.
+  const [homework, setHomeworkState] = useState<Record<string, { due: string; times: number }>>(() =>
+    Object.fromEntries(settings.assigned.map((a) => [a.exercise_id, { due: a.due ?? "", times: a.times ?? 1 }]))
+  );
   const [level, setLevel] = useState<ReadingLevel | "">(settings.level_override?.level ?? "");
   const [goalMetric, setGoalMetric] = useState<GoalMetric>("average_score");
   const [goalTarget, setGoalTarget] = useState(GOAL_OPTIONS[0].suggested);
@@ -60,7 +66,15 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
   };
 
   const toggle = (id: string) =>
-    setAssigned((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setHomeworkState((prev) => {
+      const next = { ...prev };
+      if (next[id]) delete next[id];
+      else next[id] = { due: "", times: 1 };
+      return next;
+    });
+  const updateHomework = (id: string, change: Partial<{ due: string; times: number }>) =>
+    setHomeworkState((prev) => ({ ...prev, [id]: { ...prev[id], ...change } }));
+  const today = new Date().toISOString().slice(0, 10);
 
   const chooseGoalMetric = (metric: GoalMetric) => {
     setGoalMetric(metric);
@@ -114,29 +128,76 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
-          <h3 className="text-sm font-semibold text-ink">Assign exercises</h3>
-          <p className="text-xs text-ink-soft">Assigned exercises appear first in the student's plan.</p>
-          <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto pr-1">
-            {exercises.map((ex) => (
-              <li key={ex.id}>
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-teal-50/60">
-                  <input
-                    type="checkbox"
-                    checked={assigned.includes(ex.id)}
-                    onChange={() => toggle(ex.id)}
-                    className="accent-teal-600"
-                  />
-                  {ex.title}
-                </label>
-              </li>
-            ))}
+          <h3 className="text-sm font-semibold text-ink">Homework</h3>
+          <p className="text-xs text-ink-soft">
+            Tick an exercise, then set a due date and how many times to do it. Homework appears first in the
+            student's plan and on their dashboard; overdue homework shows up in your alerts.
+          </p>
+          <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto pr-1">
+            {exercises.map((ex) => {
+              const hw = homework[ex.id];
+              return (
+                <li key={ex.id} className={`rounded-lg px-2 py-1 ${hw ? "bg-teal-50/60" : ""}`}>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!hw}
+                      onChange={() => toggle(ex.id)}
+                      className="accent-teal-600"
+                    />
+                    {ex.title}
+                  </label>
+                  {hw && (
+                    <div className="ml-6 mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+                      <label className="flex items-center gap-1">
+                        Due
+                        <input
+                          type="date"
+                          min={today}
+                          value={hw.due}
+                          onChange={(e) => updateHomework(ex.id, { due: e.target.value })}
+                          className="rounded border border-teal-100 bg-white px-1.5 py-0.5 text-ink"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1">
+                        Times
+                        <select
+                          value={hw.times}
+                          onChange={(e) => updateHomework(ex.id, { times: Number(e.target.value) })}
+                          className="rounded border border-teal-100 bg-white px-1.5 py-0.5 text-ink"
+                        >
+                          {[1, 2, 3, 4, 5, 7, 10, 14].map((n) => (
+                            <option key={n} value={n}>
+                              {n}×
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           <button
             disabled={busy}
-            onClick={() => run(() => setAssignedExercises(email, assigned), "Assignments saved.")}
+            onClick={() =>
+              run(
+                () =>
+                  setHomework(
+                    email,
+                    Object.entries(homework).map(([exercise_id, h]) => ({
+                      exercise_id,
+                      due: h.due || null,
+                      times: h.times,
+                    }))
+                  ),
+                "Homework saved."
+              )
+            }
             className="mt-2 rounded-full bg-teal-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           >
-            Save assignments
+            Save homework
           </button>
         </div>
 
@@ -161,6 +222,34 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
               <button
                 disabled={busy}
                 onClick={() => run(() => setLevelOverride(email, level || null), "Reading level updated.")}
+                className="rounded-full bg-teal-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Age group</h3>
+            <p className="text-xs text-ink-soft">
+              {age ? `Age ${age}. ` : "Age not given yet. "}Decides which exercises and plan the student gets. Change it
+              if a different level of task suits them better.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <select
+                value={ageGroup}
+                onChange={(e) => setAgeGroup(e.target.value as AgeGroup)}
+                className="rounded-lg border border-teal-100 bg-white px-3 py-1.5 text-sm"
+              >
+                {(Object.keys(AGE_GROUP_INFO) as AgeGroup[]).map((g) => (
+                  <option key={g} value={g}>
+                    {AGE_GROUP_INFO[g].label} ({AGE_GROUP_INFO[g].ages})
+                  </option>
+                ))}
+              </select>
+              <button
+                disabled={busy}
+                onClick={() => run(() => setStudentAgeGroup(email, ageGroup), "Age group updated.")}
                 className="rounded-full bg-teal-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               >
                 Apply

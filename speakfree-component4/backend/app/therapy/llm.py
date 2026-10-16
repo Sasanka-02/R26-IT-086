@@ -27,8 +27,19 @@ feel anxious about speaking. You are not a clinician: do not diagnose, and sugge
 their therapist for medical or clinical questions. If the question is unrelated to speech \
 practice, say briefly what you can help with instead.
 
-Exercises available: graded reading (Beginner, Intermediate, Advanced/final stage), \
-picture description, gentle and standard pacing, delayed auditory feedback (DAF)."""
+Each student practises on a ladder made for their age group (Beginner, Intermediate, Advanced): \
+children (6–13) get picture words, short phrases and a tiny story; teens (14–20) school readings, \
+class presentations and role-plays; adults (21+) news readings, everyday role-plays, job \
+interviews and work presentations. Other exercises: picture description, pacing, and delayed \
+auditory feedback (DAF) for teens and adults."""
+
+# How to talk to each age group (added to the system prompt).
+STYLE = {
+    "child": "The student is a child aged 6–13. Use very short, simple sentences (under 40 words), "
+             "a cheerful tone and one emoji. Never use technical words.",
+    "teen": "The student is a teenager aged 14–20. Be friendly and encouraging, casual but not childish.",
+    "adult": "The student is an adult. Be respectful, calm and professional.",
+}
 
 try:
     import anthropic
@@ -49,7 +60,7 @@ def _get_client():
     return _client
 
 
-def ask(question: str, first_name: str, context: dict) -> str | None:
+def ask(question: str, first_name: str, context: dict, age_group: str = "adult") -> str | None:
     """Returns the model's reply, or None if unavailable or it fails."""
     if not is_enabled():
         return None
@@ -65,7 +76,7 @@ def ask(question: str, first_name: str, context: dict) -> str | None:
             output_config={"effort": "low"},
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
-            system=SYSTEM_PROMPT,
+            system=SYSTEM_PROMPT + "\n\n" + STYLE.get(age_group, STYLE["adult"]),
             messages=[{"role": "user", "content": content}],
         )
     except anthropic.RateLimitError:

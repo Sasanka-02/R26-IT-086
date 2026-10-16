@@ -66,10 +66,50 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def set_assigned(student: str, exercise_ids: list[str], by: str) -> dict:
+def set_assigned(student: str, items: list[dict], by: str) -> dict:
+    """Home-practice assignments: [{exercise_id, due (YYYY-MM-DD or None),
+    times (how many attempts are asked for)}]. Re-saving keeps an existing
+    assignment's start time, so attempts already done still count."""
     def mutate(s):
-        s["assigned"] = [{"exercise_id": e, "by": by, "at": _now()} for e in dict.fromkeys(exercise_ids)]
+        previous = {a["exercise_id"]: a for a in s["assigned"]}
+        assigned = []
+        for item in {i["exercise_id"]: i for i in items}.values():
+            old = previous.get(item["exercise_id"], {})
+            assigned.append({
+                "exercise_id": item["exercise_id"],
+                "by": old.get("by", by),
+                "at": old.get("at", _now()),
+                "due": item.get("due"),
+                "times": max(1, int(item.get("times") or 1)),
+            })
+        s["assigned"] = assigned
     return _update(student, mutate)
+
+
+def homework_status(assigned: list[dict], records: list[dict], today=None) -> list[dict]:
+    """Each assignment with its progress: attempts since it was set, done once
+    `times` attempts are saved, overdue when the due date has passed first."""
+    today = today or datetime.now(timezone.utc).date()
+    out = []
+    for a in assigned:
+        since = datetime.fromisoformat(a["at"])
+        done_count = sum(
+            1 for r in records
+            if r["exercise_id"] == a["exercise_id"] and datetime.fromisoformat(r["completed_at"]) >= since
+        )
+        times = a.get("times", 1)
+        due = a.get("due")
+        done = done_count >= times
+        due_date = datetime.fromisoformat(due).date() if due else None
+        out.append({
+            **a,
+            "times": times,
+            "done_count": min(done_count, times),
+            "done": done,
+            "overdue": bool(due_date and not done and today > due_date),
+            "days_left": (due_date - today).days if due_date else None,
+        })
+    return out
 
 
 def set_level_override(student: str, level: str | None, by: str) -> dict:

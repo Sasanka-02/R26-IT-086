@@ -33,7 +33,9 @@ from app.therapy.exercises import EXERCISE_BANK
 
 # The original exercises only (word rounds were added later at the end of the
 # bank), so the published simulation results stay comparable.
-SIM_EXERCISES = [ex for ex in EXERCISE_BANK if ex.type.value != "words"]
+_ORIGINAL_IDS = ("reading-beginner", "reading-intermediate", "reading-advanced", "pacing-easy-1",
+                 "pacing-standard-1", "daf-1", "picture-1", "picture-2", "picture-3")
+SIM_EXERCISES = [ex for ex in EXERCISE_BANK if ex.id in _ORIGINAL_IDS]
 N_ARMS = len(SIM_EXERCISES)
 HYBRID_ALPHA = 0.3
 

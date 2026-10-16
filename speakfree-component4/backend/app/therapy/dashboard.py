@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.therapy.adaptive import earned_badges, level_state, verdict, word_level_state
 from app.therapy.bandit import recommend_weekly_plan
+from app.therapy.user_store import AGE_GROUPS, age_group_of
 from app.therapy.therapist_store import get_settings, goal_progress
 
 TYPE_LABELS = {
@@ -19,6 +20,7 @@ TYPE_LABELS = {
     "daf": "Delayed auditory feedback",
     "picture": "Picture description",
     "words": "Word practice",
+    "roleplay": "Role-plays & talks",
 }
 
 
@@ -147,7 +149,7 @@ def _highlights(records: list[dict], level: dict, streak: int) -> list[str]:
     notes = [f"Your best result so far: {best['score']} in “{best['title']}”."]
     if streak >= 2:
         notes.append(f"You've practised {streak} days in a row — consistency really helps.")
-    notes.append(f"Reading level: {level['label']}. {level['progress_text']}")
+    notes.append(f"Your level: {level['label']}. {level['progress_text']}")
     words = word_level_state(records)
     if words["rounds"]:
         notes.append(f"Word practice: {words['progress_text']}")
@@ -167,10 +169,10 @@ REPORT_STATUS = {
 }
 
 
-def _report_card(records: list[dict], level: dict, settings: dict, now: datetime) -> dict:
+def _report_card(records: list[dict], level: dict, settings: dict, now: datetime, age_group: str) -> dict:
     """The progress page's first card: one sentence, a traffic light, what
     happened this week and the next step — no charts needed to read it."""
-    plan = recommend_weekly_plan(records, settings)
+    plan = recommend_weekly_plan(records, settings, age_group=age_group)
     first = plan["exercises"][0] if plan["exercises"] else None
     next_step = f"Next: {first['title']}. {first['explanation']}" if first else "Next: pick any exercise to start."
     if not records:
@@ -207,7 +209,7 @@ def _report_card(records: list[dict], level: dict, settings: dict, now: datetime
         if h["direction"] == "up":
             gains.append(f"Moved from {h['from']} to {h['to']} {h['reason']}.")
         elif h["direction"] == "mastered":
-            gains.append(f"Completed the final reading stage {h['reason']}.")
+            gains.append(f"Completed the final stage {h['reason']}.")
 
     if support:
         status = "needs_support"
@@ -249,12 +251,18 @@ def _report_card(records: list[dict], level: dict, settings: dict, now: datetime
     }
 
 
+def _age_info(age_group: str) -> dict:
+    group = AGE_GROUPS[age_group]
+    return {"age_group": age_group, "age_group_label": group["label"], "age_range": group["ages"]}
+
+
 def build_progress_summary(user_id: str, records: list[dict]) -> dict:
     settings = get_settings(user_id)
-    level = level_state(records, settings["level_override"])
+    age_group = age_group_of(user_id)
+    level = level_state(records, settings["level_override"], age_group)
     goals = goal_progress(settings["goals"], records)
     now = datetime.now(timezone.utc)
-    report_card = _report_card(records, level, settings, now)
+    report_card = _report_card(records, level, settings, now, age_group)
     word_level = word_level_state(records)
     if not records:
         return {
@@ -274,11 +282,12 @@ def build_progress_summary(user_id: str, records: list[dict]) -> dict:
             "history": [],
             "recent": [],
             "highlights": [],
-            "badges": earned_badges(records, level, 0, 0),
+            "badges": earned_badges(records, level, 0, 0, age_group),
             "goals": goals,
             "first_vs_latest": [],
             "report_card": report_card,
             "word_level": word_level,
+            **_age_info(age_group),
         }
 
     streak = _streak_days(records, now.date())
@@ -330,9 +339,10 @@ def build_progress_summary(user_id: str, records: list[dict]) -> dict:
         "history": _history(records),
         "recent": recent,
         "highlights": _highlights(records, level, streak),
-        "badges": earned_badges(records, level, streak, _best_streak(records)),
+        "badges": earned_badges(records, level, streak, _best_streak(records), age_group),
         "goals": goals,
         "first_vs_latest": _first_vs_latest(records),
         "report_card": report_card,
         "word_level": word_level,
+        **_age_info(age_group),
     }

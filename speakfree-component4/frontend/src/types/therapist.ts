@@ -1,4 +1,5 @@
 import {
+  AgeGroup,
   AssistantReply,
   ExerciseType,
   GoalMetric,
@@ -6,6 +7,7 @@ import {
   ProgressSummary,
   ReadingLevel,
   ReportCard,
+  HomeworkItem,
   ScorePart,
   Screening,
   SelfRating,
@@ -40,10 +42,28 @@ export interface StudentRow {
   level_label: string;
   streak_days: number;
   status: StudentStatus;
+  unread_messages?: number;
+  age_group?: AgeGroup;
+}
+
+export interface StudentAlert {
+  email: string;
+  name: string;
+  kind: "message" | "not_started" | "inactive" | "score_drop" | "hard" | "homework_overdue";
+  severity: "high" | "medium" | "info";
+  /** Plain sentence, e.g. "Kasun hasn't practised for 10 days". */
+  text: string;
+  detail: string;
 }
 
 export interface CaseloadOverview {
-  alerts: { email: string; name: string; status: StudentStatus }[];
+  alerts: StudentAlert[];
+  average_improvement: number | null;
+  improvement_students: number;
+  improving_students: number;
+  sessions_next_7_days: number;
+  unread_messages: number;
+  homework_overdue: number;
   total_students: number;
   active_this_week: number;
   sessions_this_week: number;
@@ -88,6 +108,8 @@ export interface StudentDetail {
     name: string;
     registered_at: string | null;
     last_login: string | null;
+    age?: number | null;
+    age_group?: AgeGroup;
   };
   row: StudentRow;
   summary: ProgressSummary;
@@ -97,6 +119,8 @@ export interface StudentDetail {
   settings: TherapistSettings;
   plan: Omit<WeeklyPlanResponse, "user_id">;
   plan_reviews: PlanReview[];
+  homework: HomeworkItem[];
+  alerts: StudentAlert[];
 }
 
 export type RatingSource = "clinician" | "synthetic";
@@ -114,7 +138,7 @@ export interface PlanReview {
 }
 
 export interface TherapistSettings {
-  assigned: { exercise_id: string; by: string; at: string }[];
+  assigned: { exercise_id: string; by: string; at: string; due?: string | null; times?: number }[];
   level_override: { level: ReadingLevel; by: string; at: string } | null;
   goals: { id: string; metric: GoalMetric; target: number }[];
   notes: { id: string; text: string; by: string; at: string; shared?: boolean }[];

@@ -15,6 +15,7 @@ import {
   StatusPill,
 } from "./ui";
 import AppShell from "../components/AppShell";
+import AlertList from "./AlertList";
 
 const FILTERS: { key: "all" | StudentStatusKey; label: string }[] = [
   { key: "all", label: "All students" },
@@ -129,44 +130,36 @@ export default function TherapistPortalPage() {
 
         {overview && (
           <>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              <StatTile label="Registered students" value={overview.total_students} />
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <StatTile label="Total patients" value={overview.total_students} />
               <StatTile
                 label="Active this week"
                 value={overview.active_this_week}
-                hint={`of ${overview.total_students} students`}
-              />
-              <StatTile label="Exercises this week" value={overview.sessions_this_week} />
-              <StatTile
-                label="Average score"
-                value={overview.average_score ?? "—"}
-                hint="across all saved exercises"
+                hint={`of ${overview.total_students} · ${overview.sessions_this_week} exercises`}
               />
               <StatTile
-                label="Need follow-up"
-                value={overview.needs_attention}
-                hint="needs attention or inactive"
+                label="Average improvement"
+                value={
+                  overview.average_improvement === null
+                    ? "—"
+                    : `${overview.average_improvement > 0 ? "+" : ""}${overview.average_improvement} pts`
+                }
+                hint={
+                  overview.improvement_students
+                    ? `first vs last week · ${overview.improving_students} of ${overview.improvement_students} improving`
+                    : "needs 7+ days of practice"
+                }
               />
+              <StatTile label="Average score" value={overview.average_score ?? "—"} hint="across all saved exercises" />
+              <StatTile label="Need follow-up" value={overview.needs_attention} hint="needs attention or inactive" />
+              <StatTile label="Sessions next 7 days" value={overview.sessions_next_7_days} hint="booked appointments" />
+              <StatTile label="Unread messages" value={overview.unread_messages} />
+              <StatTile label="Overdue homework" value={overview.homework_overdue} />
             </div>
 
             {overview.alerts.length > 0 && (
-              <Panel title="Needs your attention" subtitle="Students the system flagged for follow-up">
-                <ul className="space-y-2">
-                  {overview.alerts.map((a, i) => (
-                    <li key={`${a.email}-${i}`}>
-                      <button
-                        onClick={() => navigate(`/therapist/students/${encodeURIComponent(a.email)}`)}
-                        className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl bg-paper px-4 py-2.5 text-left text-sm hover:bg-teal-50/60"
-                      >
-                        <span className="font-medium text-ink">{a.name}</span>
-                        <span className="flex items-center gap-2 text-ink-soft">
-                          {a.status.detail}
-                          <StatusPill status={a.status} />
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+              <Panel title="Needs your attention" subtitle="Most urgent first · click a line to open the student">
+                <AlertList alerts={overview.alerts} />
               </Panel>
             )}
 

@@ -26,6 +26,7 @@ const TYPE_LABELS: Record<string, string> = {
   daf: "DAF",
   picture: "Picture",
   words: "Words",
+  roleplay: "Role-play",
 };
 
 interface WeeklyPlanProps {

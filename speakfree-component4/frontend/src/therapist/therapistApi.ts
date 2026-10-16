@@ -1,5 +1,5 @@
 import { api } from "../api/client";
-import { ReadingLevel } from "../types/therapy";
+import { AgeGroup, ReadingLevel } from "../types/therapy";
 import {
   CaseloadOverview,
   CohortReport,
@@ -28,6 +28,18 @@ export async function getStudentDetail(email: string): Promise<StudentDetail> {
 
 export async function setAssignedExercises(email: string, exerciseIds: string[]) {
   return (await api.put(`${student(email)}/assigned`, { exercise_ids: exerciseIds })).data;
+}
+
+/** Homework: each exercise with an optional due date and how many times to do it. */
+export async function setHomework(
+  email: string,
+  items: { exercise_id: string; due: string | null; times: number }[]
+) {
+  return (await api.put(`${student(email)}/assigned`, { items })).data;
+}
+
+export async function setStudentAgeGroup(email: string, ageGroup: AgeGroup) {
+  return (await api.put(`${student(email)}/age-group`, { age_group: ageGroup })).data;
 }
 
 export async function setLevelOverride(email: string, level: ReadingLevel | null) {

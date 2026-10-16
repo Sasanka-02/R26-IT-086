@@ -14,8 +14,10 @@ from app.therapy.dashboard import build_progress_summary
 from app.therapy.plan_review import reviews_for
 from app.therapy.progress_store import all_records, get_records, normalize_user_id
 from app.therapy.scoring import reviews_of
-from app.therapy.therapist_store import get_settings
-from app.therapy.user_store import get_user, list_users
+from app.therapy import appointments, messages, pilot
+from app.therapy.exercises import get_exercise
+from app.therapy.therapist_store import get_settings, homework_status
+from app.therapy.user_store import age_group_of, get_user, list_users
 
 INACTIVE_DAYS = 7
 
@@ -77,14 +79,63 @@ def _student_row(profile: dict, records: list[dict], now: datetime) -> dict:
         "latest_score": records[-1]["score"] if records else None,
         "level": summary["level"]["level"],
         "level_label": summary["level"]["label"],
+        "age_group": summary["age_group"],
         "streak_days": summary["streak_days"],
         "status": _status(summary, records, now),
     }
 
 
+ALERT_ORDER = ["high", "medium", "info"]
+SCORE_DROPS = 3  # consecutive drops that raise an alert
+
+
+def student_alerts(profile: dict, records: list[dict], now: datetime, unread_messages: int = 0) -> list[dict]:
+    """Plain-sentence alerts for one student, e.g. "Kasun hasn't practised
+    for 10 days" or "Nimali's score dropped 3 times in a row"."""
+    first = (profile.get("name") or profile["email"]).split()[0]
+    base = {"email": profile["email"], "name": profile.get("name") or profile["email"]}
+
+    def alert(kind: str, severity: str, text: str, detail: str = "") -> dict:
+        return {**base, "kind": kind, "severity": severity, "text": text, "detail": detail}
+
+    out = []
+    if unread_messages:
+        out.append(alert("message", "info", f"New message from {first}",
+                         f"{unread_messages} unread message{'s' if unread_messages != 1 else ''}."))
+    if not records:
+        registered = profile.get("registered_at")
+        days = (now - _parse(registered)).days if registered else 0
+        if days >= 3:
+            out.append(alert("not_started", "medium", f"{first} hasn't started practising yet",
+                             f"Registered {days} days ago."))
+        return out
+
+    days_idle = (now - _parse(records[-1]["completed_at"])).days
+    if days_idle >= INACTIVE_DAYS:
+        out.append(alert("inactive", "high", f"{first} hasn't practised for {days_idle} days",
+                         "A short message or an easier assignment may help."))
+    last = [r["score"] for r in records[-(SCORE_DROPS + 1):]]
+    if len(last) == SCORE_DROPS + 1 and all(a > b for a, b in zip(last, last[1:])):
+        out.append(alert("score_drop", "high", f"{first}'s score dropped {SCORE_DROPS} times in a row",
+                         " → ".join(str(x) for x in last)))
+    if len(records) >= 3 and all(r["self_rating"] == "hard" for r in records[-3:]):
+        out.append(alert("hard", "medium", f"The last 3 exercises felt hard for {first}",
+                         "Consider an easier plan or a lower level."))
+
+    settings = get_settings(profile["email"])
+    for item in homework_status(settings["assigned"], records):
+        if item["overdue"]:
+            ex = get_exercise(item["exercise_id"])
+            title = ex.title if ex else item["exercise_id"]
+            out.append(alert("homework_overdue", "medium", f"{first} hasn't finished “{title}”",
+                             f"Due {item['due']} · done {item['done_count']} of {item['times']}."))
+    return out
+
+
 def list_students() -> list[dict]:
     now = datetime.now(timezone.utc)
-    rows = [_student_row(p, r, now) for p, r in _students()]
+    unread = messages.unread_for_therapists()
+    rows = [{**_student_row(p, r, now), "unread_messages": unread.get(p["email"], 0)} for p, r in _students()]
     rows.sort(key=lambda row: row["last_active"] or row["registered_at"] or "", reverse=True)
     return rows
 
@@ -101,27 +152,29 @@ def caseload_overview(days: int = 14) -> dict:
     recent = sorted(r["completed_at"] for r in all_recs if _parse(r["completed_at"]) >= since)
 
     scores = [r["score"] for r in all_recs]
+    unread = messages.unread_for_therapists()
     alerts = []
-    for row in rows:
-        if row["status"]["key"] in ("needs_attention", "inactive"):
-            alerts.append(
-                {"email": row["email"], "name": row["name"], "status": row["status"]}
-            )
-        _, recs = next((p, r) for p, r in students if p["email"] == row["email"])
-        if len(recs) >= 3 and all(r["self_rating"] == "hard" for r in recs[-3:]):
-            alerts.append(
-                {
-                    "email": row["email"],
-                    "name": row["name"],
-                    "status": {
-                        "key": "needs_attention",
-                        "label": "3 hard in a row",
-                        "detail": "The last three exercises all felt hard — consider an easier plan.",
-                    },
-                }
-            )
+    for profile, recs in students:
+        alerts += student_alerts(profile, recs, now, unread.get(profile["email"], 0))
+    alerts.sort(key=lambda a: ALERT_ORDER.index(a["severity"]))
+
+    # Average improvement: first week vs last week for every student with
+    # enough practice (the same rule as the pilot study).
+    changes = [
+        c["change"] for c in (pilot.participant(p["email"], r) for p, r in students if r) if c["included"]
+    ]
+    upcoming = appointments.for_therapist()
+    next_week = now + timedelta(days=7)
     return {
         "alerts": alerts,
+        "average_improvement": round(sum(changes) / len(changes), 1) if changes else None,
+        "improvement_students": len(changes),
+        "improving_students": sum(1 for c in changes if c > 0),
+        "sessions_next_7_days": sum(
+            1 for a in upcoming if a["student"] and datetime.fromisoformat(a["start"]) <= next_week
+        ),
+        "unread_messages": sum(unread.values()),
+        "homework_overdue": sum(1 for a in alerts if a["kind"] == "homework_overdue"),
         "total_students": len(rows),
         "active_this_week": sum(
             1 for _, recs in students if recs and _parse(recs[-1]["completed_at"]) >= week_ago
@@ -173,6 +226,8 @@ def student_detail(email: str) -> dict | None:
             "name": profile["name"],
             "registered_at": profile.get("registered_at"),
             "last_login": profile.get("last_login"),
+            "age": profile.get("age"),
+            "age_group": age_group_of(user_id),
         },
         "row": _student_row(profile, records, now),
         "summary": build_progress_summary(user_id, records),
@@ -182,7 +237,9 @@ def student_detail(email: str) -> dict | None:
         ],
         "weekly_sessions": weekly,
         "settings": get_settings(user_id),
-        "plan": recommend_weekly_plan(records, get_settings(user_id)),
+        "homework": homework_status(get_settings(user_id)["assigned"], records),
+        "alerts": student_alerts(profile, records, now),
+        "plan": recommend_weekly_plan(records, get_settings(user_id), age_group=age_group_of(user_id)),
         "plan_reviews": list(reversed(reviews_for(user_id)))[:5],
         "records": [
             {

@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   Bot,
+  CalendarClock,
   CalendarDays,
   ClipboardCheck,
   Columns2,
@@ -13,6 +14,7 @@ import {
   LogOut,
   LucideIcon,
   Menu,
+  MessageCircle,
   Mic,
   Search,
   ShieldCheck,
@@ -40,6 +42,8 @@ const STUDENT_NAV: NavItem[] = [
   { label: "Assistant", icon: Bot, to: "/therapy?tab=assistant", match: therapyTab("assistant") },
   { label: "My Progress", icon: BarChart3, to: "/therapy?tab=progress", match: therapyTab("progress") },
   { label: "Weekly Plan", icon: CalendarDays, to: "/therapy?tab=plan", match: therapyTab("plan") },
+  { label: "Messages", icon: MessageCircle, to: "/messages", match: (p) => p === "/messages" },
+  { label: "Appointments", icon: CalendarClock, to: "/appointments", match: (p) => p === "/appointments" },
   { label: "Privacy", icon: ShieldCheck, to: "/therapy?tab=privacy", match: therapyTab("privacy") },
 ];
 
@@ -49,6 +53,12 @@ const THERAPIST_NAV: NavItem[] = [
     icon: Users,
     to: "/therapist",
     match: (p) => p === "/therapist" || p.startsWith("/therapist/students"),
+  },
+  {
+    label: "Calendar",
+    icon: CalendarClock,
+    to: "/therapist/calendar",
+    match: (p) => p === "/therapist/calendar",
   },
   {
     label: "Validation session",
@@ -184,7 +194,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-shell lg:p-4">
+    <div className="min-h-screen bg-shell lg:p-4" data-age-group={isTherapist ? undefined : user?.age_group}>
       <div className="flex min-h-screen bg-panel lg:min-h-[calc(100vh-2rem)] lg:overflow-hidden lg:rounded-[28px] lg:border lg:border-snow/5">
         {/* Icon rail (md) / full sidebar (xl) */}
         <aside className="sticky top-0 hidden h-screen w-[84px] shrink-0 flex-col border-r border-snow/5 px-3 py-6 md:flex lg:h-[calc(100vh-2rem)] xl:w-64 xl:px-5">
