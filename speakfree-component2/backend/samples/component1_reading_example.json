@@ -1,0 +1,170 @@
+{
+  "schema_version": "1.0.0",
+  "analysis_id": "an-0002",
+  "session_id": "demo-session-002",
+  "patient_id": "P-001",
+  "age_bracket": 1,
+  "task_type": "reading",
+  "reference_text": "The cat sat down. I see a red kite.",
+  "transcript": "the cat um sat sat down I see a wed kite",
+  "word_segments": [
+    {
+      "word": "the",
+      "start": 0.0,
+      "end": 0.4,
+      "confidence": 0.95,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "the",
+          "probability": 0.95
+        }
+      ]
+    },
+    {
+      "word": "cat",
+      "start": 0.5,
+      "end": 0.9,
+      "confidence": 0.93,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "cat",
+          "probability": 0.93
+        }
+      ]
+    },
+    {
+      "word": "um",
+      "start": 1.0,
+      "end": 1.4,
+      "confidence": 0.35,
+      "is_dysfluency_candidate": true,
+      "tokens": [
+        {
+          "text": "um",
+          "probability": 0.35
+        }
+      ]
+    },
+    {
+      "word": "sat",
+      "start": 1.5,
+      "end": 1.9,
+      "confidence": 0.9,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "sat",
+          "probability": 0.9
+        }
+      ]
+    },
+    {
+      "word": "sat",
+      "start": 2.0,
+      "end": 2.4,
+      "confidence": 0.7,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "sat",
+          "probability": 0.7
+        }
+      ]
+    },
+    {
+      "word": "down",
+      "start": 2.5,
+      "end": 2.9,
+      "confidence": 0.92,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "down",
+          "probability": 0.92
+        }
+      ]
+    },
+    {
+      "word": "I",
+      "start": 3.0,
+      "end": 3.4,
+      "confidence": 0.96,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "I",
+          "probability": 0.96
+        }
+      ]
+    },
+    {
+      "word": "see",
+      "start": 3.5,
+      "end": 3.9,
+      "confidence": 0.94,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "see",
+          "probability": 0.94
+        }
+      ]
+    },
+    {
+      "word": "a",
+      "start": 4.0,
+      "end": 4.4,
+      "confidence": 0.9,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "a",
+          "probability": 0.9
+        }
+      ]
+    },
+    {
+      "word": "wed",
+      "start": 4.5,
+      "end": 4.9,
+      "confidence": 0.58,
+      "is_dysfluency_candidate": true,
+      "tokens": [
+        {
+          "text": "wed",
+          "probability": 0.58
+        }
+      ]
+    },
+    {
+      "word": "kite",
+      "start": 5.0,
+      "end": 5.4,
+      "confidence": 0.91,
+      "is_dysfluency_candidate": false,
+      "tokens": [
+        {
+          "text": "kite",
+          "probability": 0.91
+        }
+      ]
+    }
+  ],
+  "overall_confidence_percent": 82.18,
+  "dysfluency_threshold": 0.6,
+  "wer": {
+    "reference_words": 9,
+    "substitutions": 1,
+    "deletions": 0,
+    "insertions": 2,
+    "word_error_rate": 0.3333,
+    "word_accuracy_percent": 66.67
+  },
+  "acoustic_features": {
+    "snr_db": 23.4,
+    "word_count": 11,
+    "duration_seconds": 5.8
+  }
+}
