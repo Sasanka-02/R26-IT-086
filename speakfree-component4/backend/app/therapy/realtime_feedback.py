@@ -6,8 +6,9 @@ lightweight numeric metrics the browser sends — never on raw audio.
 from app.therapy.schemas import FeedbackMessage, LiveMetric
 from app.therapy.session_store import LiveSessionState
 
-QUIET_THRESHOLD = 0.02
+QUIET_THRESHOLD = 0.015  # mean loudness of the voiced part of a 500 ms frame
 LONG_PAUSE_FRAMES = 6  # ~3 seconds at 500ms cadence
+QUIET_FRAMES = 2  # ~1 second of quiet speech before warning
 
 
 def process_metric(state: LiveSessionState, metric: LiveMetric) -> FeedbackMessage | None:
@@ -17,8 +18,11 @@ def process_metric(state: LiveSessionState, metric: LiveMetric) -> FeedbackMessa
 
     if not metric.is_speaking:
         state._was_speaking = False
+        state._quiet_frames = 0
         recent = state.speaking_flags[-LONG_PAUSE_FRAMES:]
-        if len(recent) == LONG_PAUSE_FRAMES and not any(recent):
+        # One silence counts as one long pause, however long it lasts.
+        if len(recent) == LONG_PAUSE_FRAMES and not any(recent) and not state._in_long_pause:
+            state._in_long_pause = True
             state.pause_count += 1
             state.feedback_events += 1
             return FeedbackMessage(
@@ -30,8 +34,11 @@ def process_metric(state: LiveSessionState, metric: LiveMetric) -> FeedbackMessa
 
     just_started = not state._was_speaking
     state._was_speaking = True
+    state._in_long_pause = False
 
-    if metric.rms_energy < QUIET_THRESHOLD:
+    # One warning per stretch of quiet speech, not one per frame.
+    state._quiet_frames = state._quiet_frames + 1 if metric.rms_energy < QUIET_THRESHOLD else 0
+    if state._quiet_frames == QUIET_FRAMES:
         state.feedback_events += 1
         state.quiet_warnings += 1
         return FeedbackMessage(

@@ -117,7 +117,7 @@ export interface TherapistSettings {
   assigned: { exercise_id: string; by: string; at: string }[];
   level_override: { level: ReadingLevel; by: string; at: string } | null;
   goals: { id: string; metric: GoalMetric; target: number }[];
-  notes: { id: string; text: string; by: string; at: string }[];
+  notes: { id: string; text: string; by: string; at: string; shared?: boolean }[];
   screening: Screening | null;
 }
 
@@ -149,6 +149,7 @@ export interface InterRater {
 
 export interface SourceValidation {
   n: number;
+  n_heard_audio: number;
   shown_scores: FitMetrics;
   prior_model: FitMetrics;
   calibrated_model_loo: FitMetrics | null;
@@ -201,6 +202,7 @@ export interface EvidenceReport {
     recent: { student: string; verdict: PlanVerdict; note: string | null; at: string; source: RatingSource; level: string }[];
   };
   assistant: { examples: number; intents: number; accuracy: number; confidence_threshold: number };
+  pilot: PilotReport;
   usability: UsabilitySummary;
   adaptive: {
     students: number;
@@ -264,4 +266,38 @@ export interface CompareColumn {
 export interface CompareResponse {
   question: string;
   students: [CompareColumn, CompareColumn];
+}
+
+export interface PilotParticipant {
+  student: string;
+  name: string;
+  span_days: number;
+  attempts: number;
+  first_week_attempts: number;
+  last_week_attempts: number;
+  first_week_score: number;
+  last_week_score: number;
+  change: number;
+  first_week_pauses: number | null;
+  last_week_pauses: number | null;
+  included: boolean;
+  reason: string | null;
+}
+
+export interface PilotReport {
+  rules: { week_days: number; min_span_days: number; min_attempts_per_week: number };
+  summary: {
+    participants: number;
+    not_yet_included: number;
+    mean_first: number | null;
+    mean_last: number | null;
+    mean_change: number | null;
+    sd_change: number | null;
+    ci95: [number, number] | null;
+    improved: number;
+    worsened: number;
+    no_change: number;
+    sign_test_p: number | null;
+  };
+  participants: PilotParticipant[];
 }

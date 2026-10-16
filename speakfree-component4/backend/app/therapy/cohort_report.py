@@ -37,6 +37,7 @@ TYPE_LABELS = {
     "pacing": "Pacing",
     "daf": "DAF",
     "picture": "Picture description",
+    "words": "Word practice",
 }
 SCORE_BANDS = [(0, 45, "Below 45"), (45, 65, "45–64"), (65, 80, "65–79"), (80, 101, "80–100")]
 EPSILON_OPTIONS = [0.25, 0.5, 1.0, 2.0, 5.0]

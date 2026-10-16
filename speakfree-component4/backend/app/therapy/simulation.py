@@ -31,13 +31,16 @@ import numpy as np
 from app.therapy.bandit import ALPHA, HybridLinUCB, LinUCBBandit
 from app.therapy.exercises import EXERCISE_BANK
 
-N_ARMS = len(EXERCISE_BANK)
+# The original exercises only (word rounds were added later at the end of the
+# bank), so the published simulation results stay comparable.
+SIM_EXERCISES = [ex for ex in EXERCISE_BANK if ex.type.value != "words"]
+N_ARMS = len(SIM_EXERCISES)
 HYBRID_ALPHA = 0.3
 
 
 def _student(rng: np.random.Generator) -> dict:
     skill = rng.uniform(0.2, 0.9)
-    difficulty = np.array([ex.difficulty for ex in EXERCISE_BANK], dtype=float)
+    difficulty = np.array([ex.difficulty for ex in SIM_EXERCISES], dtype=float)
     # Exercises near the student's skill help most; personal preference adds variety.
     fit = 1 - np.abs(difficulty / 3 - skill)
     preference = rng.normal(0, 0.12, N_ARMS)

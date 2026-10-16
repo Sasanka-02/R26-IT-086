@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from app.therapy import account_data, audit, auth, plan_review
+from app.therapy import account_data, audit, auth, pilot, plan_review
 from app.therapy.adaptive import LEVELS, personal_target_wpm
 from app.therapy.assistant import answer
 from app.therapy.bandit import recommend_weekly_plan
@@ -199,11 +199,17 @@ class GoalRequest(BaseModel):
 
 class NoteRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+    shared: bool = True  # show to the student (with a notification)
 
 
 class ExpertRatingRequest(BaseModel):
     rating: int = Field(ge=1, le=5)
     note: str | None = None
+    # A second rater at the same sitting (sharing this login) gives their name,
+    # so their rating is kept separately for inter-rater agreement.
+    rater: str | None = Field(default=None, max_length=80)
+    # True when rated in a validation session while listening to the recording.
+    heard_audio: bool = False
 
 
 @router.put("/therapist/students/{email}/assigned")
@@ -239,8 +245,8 @@ async def delete_goal(email: str, goal_id: str, user: dict = Depends(auth.requir
 
 @router.post("/therapist/students/{email}/notes")
 async def create_note(email: str, payload: NoteRequest, user: dict = Depends(auth.require_therapist)):
-    audit.log(user["email"], "note.added", normalize_user_id(email))
-    return add_note(email, payload.text, user["email"])
+    audit.log(user["email"], "note.added", normalize_user_id(email), shared=payload.shared)
+    return add_note(email, payload.text, user["email"], payload.shared)
 
 
 @router.put("/therapist/students/{email}/records/{record_id}/rating")
@@ -254,15 +260,18 @@ async def rate_attempt(
     existing = next((r for r in get_records(email) if r["id"] == record_id), None)
     if existing is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Attempt not found")
+    rater_name = (payload.rater or "").strip()
+    rater_id = f"{rater_name} (via {user['email']})" if rater_name else user["email"]
     review = {
         "rating": payload.rating,
         "note": (payload.note or "").strip() or None,
-        "by": user["email"],
+        "by": rater_id,
         "at": datetime.now(timezone.utc).isoformat(),
         "source": "synthetic" if is_demo_account(user["email"]) else "clinician",
+        "heard_audio": payload.heard_audio,
     }
     reviews = {r["by"]: r for r in reviews_of(existing)}
-    reviews[user["email"]] = review
+    reviews[rater_id] = review
     record = update_record(
         email, record_id, {"expert": next(iter(reviews.values())), "expert_reviews": reviews}
     )
@@ -308,6 +317,7 @@ async def evidence(_: dict = Depends(auth.require_therapist)):
             for r in rated
         ],
         "plan_validation": plan_review.summary(),
+        "pilot": pilot.report(),
         "assistant": leave_one_out_accuracy(),
         "adaptive": evaluate(),
         "usability": survey.summary(),
@@ -321,18 +331,38 @@ async def ratings_sheet(_: dict = Depends(auth.require_therapist)):
     writer = csv.writer(out)
     writer.writerow(
         ["student", "attempt_id", "exercise", "exercise_type", "completed_at", "app_score",
-         "rater", "rating_1_to_5", "source", "rated_at", "note"]
+         "rater", "rating_1_to_5", "source", "heard_audio", "rated_at", "note"]
     )
     for r in rated_attempts():
         for review in reviews_of(r):
             writer.writerow(
                 [r["user_id"], r["id"], r["title"], r["exercise_type"], r["completed_at"], r["score"],
-                 review.get("by"), review["rating"], rating_source(review), review.get("at"), review.get("note") or ""]
+                 review.get("by"), review["rating"], rating_source(review), bool(review.get("heard_audio")),
+                 review.get("at"), review.get("note") or ""]
             )
     return Response(
         out.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="expert-ratings.csv"'},
+    )
+
+
+@router.get("/therapist/evidence/pilot.csv")
+async def pilot_sheet(_: dict = Depends(auth.require_therapist)):
+    """Pilot study, one row per participant: first week vs last week."""
+    data = pilot.report()
+    out = io.StringIO()
+    columns = ["student", "name", "included", "reason", "span_days", "attempts", "first_week_attempts",
+               "last_week_attempts", "first_week_score", "last_week_score", "change",
+               "first_week_pauses", "last_week_pauses"]
+    writer = csv.writer(out)
+    writer.writerow(columns)
+    for row in data["participants"]:
+        writer.writerow([row[c] if row[c] is not None else "" for c in columns])
+    return Response(
+        out.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="pilot-study.csv"'},
     )
 
 

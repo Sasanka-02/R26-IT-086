@@ -23,7 +23,7 @@ interface CompletionPanelProps {
 }
 
 export default function CompletionPanel({ metrics, onSaved }: CompletionPanelProps) {
-  const { recordCompletion } = usePracticeHistory();
+  const { recordCompletion, hideScore } = usePracticeHistory();
   const [rating, setRating] = useState<SelfRating | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +43,15 @@ export default function CompletionPanel({ metrics, onSaved }: CompletionPanelPro
       setSaving(false);
     }
   };
+
+  if (result && hideScore) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-800">
+        <CheckCircle2 size={18} />
+        Saved. The app's score is hidden until the expert has rated this attempt.
+      </div>
+    );
+  }
 
   if (result) {
     return (

@@ -2,8 +2,10 @@ import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
+  Bell,
   Bot,
   CalendarDays,
+  ClipboardCheck,
   Columns2,
   FlaskConical,
   HeartPulse,
@@ -18,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useTherapistNotes } from "../therapy/useTherapistNotes";
 import { useSession } from "../context/SessionContext";
 
 interface NavItem {
@@ -46,6 +49,12 @@ const THERAPIST_NAV: NavItem[] = [
     icon: Users,
     to: "/therapist",
     match: (p) => p === "/therapist" || p.startsWith("/therapist/students"),
+  },
+  {
+    label: "Validation session",
+    icon: ClipboardCheck,
+    to: "/therapist/validation",
+    match: (p) => p === "/therapist/validation",
   },
   {
     label: "Compare students",
@@ -155,6 +164,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const isTherapist = user?.role === "therapist";
   const items = isTherapist ? THERAPIST_NAV : STUDENT_NAV;
   const [query, setQuery] = useState(() => new URLSearchParams(location.search).get("q") ?? "");
+  const notes = useTherapistNotes();
+
+  const openNotes = () => {
+    if (location.pathname === "/dashboard") document.getElementById("notes")?.scrollIntoView({ behavior: "smooth" });
+    else navigate("/dashboard#notes");
+  };
 
   useEffect(() => {
     setQuery(new URLSearchParams(location.search).get("q") ?? "");
@@ -236,6 +251,25 @@ export default function AppShell({ children }: { children: ReactNode }) {
               />
             </form>
             <div className="ml-auto flex items-center gap-3">
+              {!isTherapist && notes.notes.length > 0 && (
+                <button
+                  onClick={openNotes}
+                  className="relative rounded-full p-2 text-ink-soft hover:bg-snow/[0.06] hover:text-ink"
+                  aria-label={
+                    notes.unread
+                      ? `${notes.unread} new note${notes.unread === 1 ? "" : "s"} from your therapist`
+                      : "Notes from your therapist"
+                  }
+                  title="Notes from your therapist"
+                >
+                  <Bell size={20} />
+                  {notes.unread > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white">
+                      {notes.unread}
+                    </span>
+                  )}
+                </button>
+              )}
               <div className="hidden text-right leading-tight sm:block">
                 <p className="text-sm font-medium text-ink">{user?.name}</p>
                 <p className="text-xs capitalize text-ink-soft">{user?.role}</p>

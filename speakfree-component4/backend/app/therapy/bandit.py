@@ -19,7 +19,7 @@ Therapist-assigned exercises are always placed first.
 
 import numpy as np
 
-from app.therapy.adaptive import LEVELS, level_state
+from app.therapy.adaptive import LEVELS, level_state, word_level_state
 from app.therapy.exercises import EXERCISE_BANK, get_exercise
 
 CONTEXT_DIM = 5  # [bias, level, avg_score, trend, comfort]
@@ -58,7 +58,7 @@ class LinUCBBandit:
         self.pulls[arm] += 1
 
 
-EXERCISE_TYPES = ["reading", "pacing", "daf", "picture"]
+EXERCISE_TYPES = ["reading", "pacing", "daf", "picture", "words"]
 
 
 def exercise_features(ex) -> np.ndarray:
@@ -137,6 +137,8 @@ def train_user_bandit(records: list[dict]) -> LinUCBBandit:
 
 def _reason(exercise, records: list[dict], level: dict) -> str:
     attempts = [r for r in records if r["exercise_id"] == exercise.id]
+    if exercise.word_level is not None:
+        return f"Your word level. {word_level_state(records)['progress_text']}"
     if exercise.level is not None:
         prefix = "Level set by your therapist. " if level.get("set_by_therapist") else ""
         return f"{prefix}Your current reading level is {level['label']}. {level['progress_text']}"
@@ -204,13 +206,18 @@ def _explain_context(records: list[dict], level: dict, context: np.ndarray) -> l
 def _explain_item(item: dict, level: dict) -> str:
     if item["source"] == "therapist":
         return "Your therapist assigned this, so it always comes first."
+    if item["source"] == "words":
+        return (
+            f"This is your word level ({item['title'].split(' — ')[0]}). "
+            "One good round here moves you up the word ladder."
+        )
     if item["source"] == "level":
         if level["mastered"]:
             return "You have completed the final stage — this passage keeps your reading fluent."
         goal = "move you up" if level["next_level"] else "complete the final stage"
         return (
             f"This is the passage for your level ({level['label']}). "
-            f"{level['needed_to_advance']} strong readings in a row here {goal}."
+            f"One strong reading here will {goal}."
         )
     if item["predicted_score"] is None:
         return (
@@ -267,7 +274,8 @@ def recommend_weekly_plan(
 
     candidates = []
     for i, ex in enumerate(EXERCISE_BANK):
-        if ex.level is not None or ex.id in used_ids:
+        # Reading and word levels are placed by their own ladders, not the bandit.
+        if ex.level is not None or ex.word_level is not None or ex.type.value == "words" or ex.id in used_ids:
             continue
         mean, bonus = bandit.estimate(i, context)
         level_fit = -0.1 * abs(ex.difficulty - target_difficulty)
@@ -288,6 +296,22 @@ def recommend_weekly_plan(
         chosen.append(item)
         used_types.add(ex.type.value)
 
+    # Children's word ladder: the current word level is added (on top of the
+    # bandit picks) for anyone who practises words or hasn't started reading.
+    words = word_level_state(records)
+    reads = any(r["exercise_type"] == "reading" for r in records)
+    if (words["rounds"] or not reads) and words["exercise_id"] not in used_ids:
+        word_ex = get_exercise(words["exercise_id"])
+        arm = arm_index[word_ex.id]
+        item = _item(word_ex, "words", _reason(word_ex, records, level), bandit.estimate(arm, context), bandit.pulls[arm])
+        if words["rounds"] and not reads:
+            # A child working on words: the word level is their main exercise,
+            # so it comes first (after anything the therapist assigned).
+            chosen.insert(sum(1 for c in chosen if c["source"] == "therapist"), item)
+        else:
+            chosen.append(item)
+        used_ids.add(word_ex.id)
+
     for item in chosen:
         item["explanation"] = _explain_item(item, level)
         ex = get_exercise(item["id"])
@@ -303,6 +327,7 @@ def recommend_weekly_plan(
         )
     return {
         "level": level,
+        "word_level": words,
         "exercises": chosen,
         "screening": screening,
         "why": why,

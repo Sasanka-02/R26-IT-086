@@ -11,6 +11,8 @@ from app.therapy.adaptive import (
     personal_target_wpm,
     score_attempt,
     verdict,
+    word_level_change_message,
+    word_level_state,
 )
 from app.therapy.assistant import answer, build_briefing
 from app.therapy.bandit import recommend_weekly_plan
@@ -38,7 +40,8 @@ from app.therapy.schemas import (
     StartSessionResponse,
 )
 from app.therapy.session_store import end_session, get_session, start_session
-from app.therapy.therapist_store import get_settings, set_screening
+from app.therapy.therapist_store import get_settings, mark_notes_read, notes_for_student, set_screening
+from app.therapy.user_store import get_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/therapy", tags=["therapy"])
@@ -135,17 +138,20 @@ async def list_user_exercises(user_id: str, user: dict = Depends(auth.current_us
     records = get_records(user_id)
     settings = get_settings(user_id)
     level = level_state(records, settings["level_override"])
+    words = word_level_state(records)
     assigned = {a["exercise_id"] for a in settings["assigned"]}
     exercises = []
     for ex in EXERCISE_BANK:
         data = ex.model_dump(mode="json")
-        data["locked"] = ex.level is not None and LEVELS.index(ex.level.value) > level["level_index"]
+        data["locked"] = (ex.level is not None and LEVELS.index(ex.level.value) > level["level_index"]) or (
+            ex.word_level is not None and ex.word_level > words["level"]
+        )
         data["assigned"] = ex.id in assigned
         if ex.target_wpm:
             data["base_wpm"] = ex.target_wpm
             data["target_wpm"] = personal_target_wpm(ex.target_wpm, ex.id, records)
         exercises.append(data)
-    return {"level": level, "exercises": exercises}
+    return {"level": level, "word_level": words, "exercises": exercises}
 
 
 def _measured_wpm(exercise, syllables: int | None, duration: float) -> int | None:
@@ -165,11 +171,15 @@ async def submit_result(payload: ExerciseResultRequest, user: dict = Depends(aut
     records = get_records(payload.user_id)
     settings = get_settings(payload.user_id)
     before = level_state(records, settings["level_override"])
+    words_before = word_level_state(records)
+    if payload.words_correct is not None and payload.words_total and payload.words_correct > payload.words_total:
+        raise HTTPException(status_code=400, detail="words_correct cannot be more than words_total")
     attempt = {
         "exercise_id": exercise.id,
         "exercise_type": exercise.type.value,
         "title": exercise.title,
         "level": exercise.level.value if exercise.level else None,
+        "word_level": exercise.word_level,
         "difficulty": exercise.difficulty,
         "duration_seconds": round(payload.duration_seconds, 1),
         "speaking_ratio": (
@@ -182,10 +192,18 @@ async def submit_result(payload: ExerciseResultRequest, user: dict = Depends(aut
         "target_wpm": payload.target_wpm or exercise.target_wpm,
         "self_rating": payload.self_rating.value,
         "disfluencies": payload.disfluencies,
+        "words_correct": payload.words_correct,
+        "words_total": payload.words_total,
     }
     score, breakdown = score_attempt(attempt)
     stored = add_record(payload.user_id, {**attempt, "score": score, "score_breakdown": breakdown})
     after = level_state(records + [stored], settings["level_override"])
+    words_after = word_level_state(records + [stored])
+    level_message = (
+        word_level_change_message(words_before, words_after)
+        if exercise.type == ExerciseType.WORDS
+        else level_change_message(before, after)
+    )
     return {
         "record": stored,
         "score": score,
@@ -195,7 +213,8 @@ async def submit_result(payload: ExerciseResultRequest, user: dict = Depends(aut
         "measured_wpm": stored["measured_wpm"],
         "target_wpm": stored["target_wpm"],
         "level": after,
-        "level_message": level_change_message(before, after),
+        "word_level": words_after,
+        "level_message": level_message,
     }
 
 
@@ -235,6 +254,31 @@ async def submit_screening(payload: ScreeningRequest, user: dict = Depends(auth.
         "level": level_state(records, settings["level_override"]),
         "plan": recommend_weekly_plan(records, settings),
     }
+
+
+# --- Notes from the therapist (student notifications) ----------------------
+
+def _with_names(result: dict) -> dict:
+    for note in result["notes"]:
+        author = get_user(note["by"])
+        note["by_name"] = author["name"] if author else "Your therapist"
+    return result
+
+
+@router.get("/notes/{user_id}")
+async def get_my_notes(user_id: str, user: dict = Depends(auth.current_user)):
+    """Notes the therapist shared with this student; new ones are marked unread."""
+    auth.ensure_can_access(user, user_id)
+    return _with_names(notes_for_student(user_id))
+
+
+@router.post("/notes/{user_id}/read")
+async def read_my_notes(user_id: str, user: dict = Depends(auth.current_user)):
+    auth.ensure_can_access(user, user_id)
+    if user["role"] == "therapist":
+        # Only the student reading them clears their notification.
+        return _with_names(notes_for_student(user_id))
+    return _with_names(mark_notes_read(user_id))
 
 
 # --- Therapy Assistant ---------------------------------------------------

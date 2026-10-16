@@ -13,8 +13,11 @@ The score is a linear model over measurable features of one attempt:
           rate_deviation,        |measured wpm − target wpm| / target wpm (0–1)
           rating,                self-rating: easy +1, okay 0, hard −1
           short_attempt,         1 if the attempt lasted < 15 s
-          pct_ss ]               % syllables stuttered (disfluencies / syllables × 100),
+          pct_ss,                % syllables stuttered (disfluencies / syllables × 100),
                                  only when a disfluency detector supplied a count
+          word_accuracy ]        word rounds: words said well / words shown − 0.75
+                                 (live, pause and short-attempt features are 0
+                                 for word rounds — they are short by design)
 
 Where the weights come from
 ---------------------------
@@ -63,6 +66,7 @@ FEATURES = [
     "rating",
     "short_attempt",
     "pct_ss",
+    "word_accuracy",
 ]
 
 FEATURE_LABELS = {
@@ -75,6 +79,7 @@ FEATURE_LABELS = {
     "rating": "Self-rating (easy +1 / hard −1)",
     "short_attempt": "Attempt shorter than 15 s",
     "pct_ss": "% syllables stuttered (%SS)",
+    "word_accuracy": "Words said well (compared with 3 in 4)",
 }
 
 PRIOR_WEIGHTS = {
@@ -90,7 +95,11 @@ PRIOR_WEIGHTS = {
     # 10 %SS (moderate stuttering) costs 30. Re-estimated from expert ratings
     # like every other weight once attempts with a %SS value are rated.
     "pct_ss": -3.0,
+    # 40 points across the full range: all words well = +10, 3 in 4 = 0,
+    # half = −10, none = −30. With an "okay" rating that gives 82 / 72 / 62 / 42.
+    "word_accuracy": 40.0,
 }
+WORD_ACCURACY_CENTRE = 0.75
 PRIOR_THRESHOLDS = {"strong": 75, "weak": 45}
 
 SHORT_ATTEMPT_SECONDS = 15
@@ -109,7 +118,11 @@ _lock = threading.Lock()
 def extract_features(attempt: dict) -> dict[str, float]:
     duration = float(attempt.get("duration_seconds") or 0)
     minutes = max(duration / 60, 0.25)
-    ratio = attempt.get("speaking_ratio")
+    # A word round is short single words with taps in between: pauses, voicing
+    # and length say nothing about how it went, so they are left out; the share
+    # of words said well (word_accuracy) is used instead.
+    word_round = attempt.get("exercise_type") == "words"
+    ratio = None if word_round else attempt.get("speaking_ratio")
     live = ratio is not None
     wpm, target = attempt.get("measured_wpm"), attempt.get("target_wpm")
     rate_dev = min(1.0, abs(wpm - target) / target) if live and wpm and target else 0.0
@@ -121,9 +134,19 @@ def extract_features(attempt: dict) -> dict[str, float]:
         "quiet_per_min": (attempt.get("quiet_warnings", 0) / minutes) if live else 0.0,
         "rate_deviation": rate_dev,
         "rating": RATING_VALUE.get(attempt.get("self_rating", "ok"), 0.0),
-        "short_attempt": 1.0 if duration < SHORT_ATTEMPT_SECONDS else 0.0,
+        "short_attempt": 1.0 if duration < SHORT_ATTEMPT_SECONDS and not word_round else 0.0,
         "pct_ss": pct_ss(attempt) or 0.0,
+        "word_accuracy": word_accuracy(attempt),
     }
+
+
+def word_accuracy(attempt: dict) -> float:
+    """Words said well, relative to 3 in 4 (so 0 = 75%, +0.25 = all of them,
+    −0.75 = none). 0 when the round sent no counts."""
+    correct, total = attempt.get("words_correct"), attempt.get("words_total")
+    if correct is None or not total:
+        return 0.0
+    return min(1.0, correct / total) - WORD_ACCURACY_CENTRE
 
 
 def pct_ss(attempt: dict) -> float | None:
@@ -283,6 +306,8 @@ def _validate(rated: list[dict], weights: np.ndarray | None, strong: int) -> dic
     prior_pred = np.array([_predict(_prior_vector(), x) for x in X])
     out = {
         "n": n,
+        # Ratings made in a validation session while listening to the recording.
+        "n_heard_audio": sum(1 for r in rated if r["expert"].get("heard_audio")),
         "shown_scores": _metrics(shown, y),
         "prior_model": _metrics(prior_pred, y),
         "calibrated_model_loo": None,

@@ -50,8 +50,9 @@ def test_full_student_and_therapist_flow(client):
     first = save_result(client, student, "amal@x.com", syllables=60, target_wpm=80)
     assert first["breakdown"] and first["measured_wpm"]
     second = save_result(client, student, "amal@x.com")
+    # One strong reading unlocks the next level.
     assert second["level"]["level"] == "intermediate"
-    assert second["level_message"].startswith("Level up")
+    assert any((r["level_message"] or "").startswith("Level up") for r in (first, second))
 
     progress = client.get("/api/v1/therapy/progress/amal@x.com", headers=student).json()
     assert progress["total_sessions"] == 2
@@ -178,3 +179,108 @@ def test_download_and_delete_my_data(client):
     assert evidence["scoring"]["n_clinician"] == 0
     audit = client.get("/api/v1/therapist/audit", headers=therapist).json()
     assert {"attempt.rated", "account.deleted"} <= {e["action"] for e in audit}
+
+
+def test_word_round_saves_and_climbs_the_ladder(client):
+    h = signup(client, "kid@x.com", name="Nethmi")
+    exercises = client.get("/api/v1/therapy/exercises/user/kid@x.com", headers=h).json()
+    by_id = {e["id"]: e for e in exercises["exercises"]}
+    assert not by_id["words-1"]["locked"] and by_id["words-2"]["locked"]
+    assert not by_id["words-sri-lanka"]["locked"]
+    assert len(by_id["words-1"]["words"]) == 10 and by_id["words-1"]["words"][0]["emoji"]
+
+    first = save_result(client, h, "kid@x.com", exercise_id="words-1", duration_seconds=50,
+                        speaking_ratio=None, words_correct=9, words_total=10)
+    assert first["record"]["exercise_type"] == "words" and first["record"]["word_level"] == 1
+    # One good round unlocks the next word level.
+    assert first["word_level"]["level"] == 2 and "Level up" in first["level_message"]
+    assert first["level"]["level"] == "beginner"  # reading untouched
+
+    progress = client.get("/api/v1/therapy/progress/kid@x.com", headers=h).json()
+    assert progress["word_level"]["level"] == 2
+    assert any(t["type"] == "words" for t in progress["by_type"])
+    plan = client.get("/api/v1/therapy/plan/kid@x.com", headers=h).json()
+    assert any(e["id"] == "words-2" and e["source"] == "words" for e in plan["exercises"])
+
+    bad = client.post("/api/v1/therapy/results", headers=h, json={
+        "user_id": "kid@x.com", "exercise_id": "words-1", "words_correct": 11, "words_total": 10})
+    assert bad.status_code == 400
+
+
+def test_student_is_notified_of_shared_therapist_notes(client):
+    therapist = signup(client, "dr@x.com", role="therapist", name="Dr Silva")
+    student = signup(client, "a@x.com", name="Amal")
+    other = signup(client, "b@x.com")
+    url = "/api/v1/therapy/notes/a@x.com"
+    assert client.get(url, headers=student).json() == {"notes": [], "unread": 0}
+
+    client.post("/api/v1/therapist/students/a@x.com/notes", json={"text": "Great progress on soft starts!"},
+                headers=therapist)
+    client.post("/api/v1/therapist/students/a@x.com/notes",
+                json={"text": "Private: check anxiety next session", "shared": False}, headers=therapist)
+    seen = client.get(url, headers=student).json()
+    assert seen["unread"] == 1 and len(seen["notes"]) == 1  # the private note is not shown
+    assert seen["notes"][0]["text"] == "Great progress on soft starts!"
+    assert seen["notes"][0]["by_name"] == "Dr Silva" and seen["notes"][0]["unread"]
+
+    # A therapist opening the notes doesn't clear the student's notification.
+    client.post(url + "/read", headers=therapist)
+    assert client.get(url, headers=student).json()["unread"] == 1
+    read = client.post(url + "/read", headers=student).json()
+    assert read["unread"] == 0 and not read["notes"][0]["unread"]
+
+    client.post("/api/v1/therapist/students/a@x.com/notes", json={"text": "Try level 2 this week"}, headers=therapist)
+    assert client.get(url, headers=student).json()["unread"] == 1
+    assert client.get(url, headers=other).status_code == 403
+
+
+def test_pilot_study_compares_first_and_last_week(client, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from app.therapy import pilot, progress_store
+
+    therapist = signup(client, "dr@x.com", role="therapist")
+    start = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    def rec(day, score):
+        return {"id": f"{day}-{score}", "completed_at": (start + timedelta(days=day)).isoformat(),
+                "exercise_type": "reading", "score": score, "speaking_ratio": 0.6, "long_pauses": 1}
+    data = {
+        "a@x.com": [rec(0, 50), rec(1, 54), rec(12, 70), rec(13, 74)],   # +20
+        "b@x.com": [rec(0, 60), rec(2, 60), rec(11, 66), rec(12, 64)],   # +5
+        "c@x.com": [rec(0, 70), rec(1, 72), rec(10, 68), rec(12, 70)],   # -2
+        "d@x.com": [rec(0, 40), rec(1, 45)],                              # too short
+        "kid@demo.local": [rec(0, 10), rec(1, 10), rec(12, 99), rec(13, 99)],  # synthetic: excluded
+    }
+    monkeypatch.setattr(progress_store, "all_records", lambda: data)
+    monkeypatch.setattr(pilot, "all_records", lambda: data)
+
+    report = client.get("/api/v1/therapist/evidence", headers=therapist).json()["pilot"]
+    s = report["summary"]
+    assert s["participants"] == 3 and s["not_yet_included"] == 1
+    assert s["mean_change"] == round((20 + 5 - 2) / 3, 1)
+    assert s["improved"] == 2 and s["worsened"] == 1
+    assert s["sign_test_p"] == 1.0  # 2 vs 1 is nowhere near significant
+    assert s["ci95"][0] < s["mean_change"] < s["ci95"][1]
+    assert all(not p["student"].endswith("@demo.local") for p in report["participants"])
+    sheet = client.get("/api/v1/therapist/evidence/pilot.csv", headers=therapist)
+    assert sheet.status_code == 200 and "first_week_score" in sheet.text.splitlines()[0]
+
+
+def test_sign_test_exact_values():
+    from app.therapy.pilot import sign_test_p
+    assert sign_test_p(8, 0) == round(2 / 2**8, 3)  # 8 of 8 improved: p ≈ 0.008
+    assert sign_test_p(0, 0) is None
+
+
+def test_second_rater_and_heard_audio_are_kept(client):
+    therapist = signup(client, "dr@x.com", role="therapist")
+    student = signup(client, "a@x.com")
+    rec = save_result(client, student, "a@x.com")["record"]
+    url = f"/api/v1/therapist/students/a@x.com/records/{rec['id']}/rating"
+    client.put(url, json={"rating": 4, "heard_audio": True}, headers=therapist)
+    client.put(url, json={"rating": 3, "rater": "Ms Perera", "heard_audio": True}, headers=therapist)
+    detail = client.get("/api/v1/therapist/students/a@x.com", headers=therapist).json()
+    reviews = detail["records"][0]["expert_reviews"]
+    assert [r["rating"] for r in reviews] == [4, 3]
+    assert reviews[1]["by"] == "Ms Perera (via dr@x.com)" and all(r["heard_audio"] for r in reviews)
+    v = client.get("/api/v1/therapist/evidence", headers=therapist).json()["scoring"]["validation_by_source"]
+    assert v["clinician"] is None or v["clinician"]["n_heard_audio"] == 1

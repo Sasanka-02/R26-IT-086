@@ -24,7 +24,10 @@ GOAL_METRICS = {
 
 
 def _empty() -> dict:
-    return {"assigned": [], "level_override": None, "goals": [], "notes": [], "screening": None}
+    return {
+        "assigned": [], "level_override": None, "goals": [], "notes": [], "screening": None,
+        "notes_read_at": None,  # when the student last read their therapist's notes
+    }
 
 
 def _load() -> dict[str, dict]:
@@ -108,10 +111,40 @@ def remove_goal(student: str, goal_id: str) -> dict:
     return _update(student, mutate)
 
 
-def add_note(student: str, text: str, by: str) -> dict:
+def add_note(student: str, text: str, by: str, shared: bool = True) -> dict:
+    """A clinical note. Shared notes are shown to the student (with a "new"
+    notification until they read it); private ones only to therapists."""
     def mutate(s):
-        s["notes"].insert(0, {"id": uuid.uuid4().hex, "text": text.strip(), "by": by, "at": _now()})
+        s["notes"].insert(
+            0, {"id": uuid.uuid4().hex, "text": text.strip(), "by": by, "at": _now(), "shared": shared}
+        )
     return _update(student, mutate)
+
+
+def notes_for_student(student: str) -> dict:
+    """The notes a student can see, newest first, each marked new or read.
+    Notes written before sharing existed have no "shared" flag and stay private."""
+    settings = get_settings(student)
+    read_at = settings.get("notes_read_at")
+    notes = [
+        {
+            "id": n["id"],
+            "text": n["text"],
+            "by": n["by"],
+            "at": n["at"],
+            "unread": read_at is None or n["at"] > read_at,
+        }
+        for n in settings["notes"]
+        if n.get("shared")
+    ]
+    return {"notes": notes, "unread": sum(1 for n in notes if n["unread"])}
+
+
+def mark_notes_read(student: str) -> dict:
+    def mutate(s):
+        s["notes_read_at"] = _now()
+    _update(student, mutate)
+    return notes_for_student(student)
 
 
 def goal_progress(goals: list[dict], records: list[dict]) -> list[dict]:

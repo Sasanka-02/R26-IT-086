@@ -249,8 +249,8 @@ export default function TherapistStudentPage() {
                       <tbody className="tabular-nums">
                         {detail.records.map((r) => {
                           // Each rater sees and edits their own rating; others' are listed beside it.
-                          const mine = r.expert_reviews.find((x) => x.by === user?.email)?.rating;
-                          const others = r.expert_reviews.filter((x) => x.by !== user?.email);
+                          const mine = (r.expert_reviews ?? []).find((x) => x.by === user?.email)?.rating;
+                          const others = (r.expert_reviews ?? []).filter((x) => x.by !== user?.email);
                           return (
                           <tr key={r.id} className="border-b border-teal-50 last:border-0">
                             <td className="py-2.5 pr-3 text-ink-soft">{formatDate(r.completed_at, true)}</td>
@@ -292,7 +292,11 @@ export default function TherapistStudentPage() {
                               {others.length > 0 && (
                                 <p className="mt-1 text-[11px] text-ink-soft">
                                   {others
-                                    .map((x) => `${x.by.split("@")[0]}: ${x.rating}${x.source === "synthetic" ? " (synthetic)" : ""}`)
+                                    .map((x) => {
+                                      // "Ms Perera (via dr@clinic.lk)" → "Ms Perera"; an email → its name part.
+                                      const who = x.by.includes(" (via ") ? x.by.split(" (via ")[0] : x.by.split("@")[0];
+                                      return `${who}: ${x.rating}${x.source === "synthetic" ? " (synthetic)" : ""}`;
+                                    })
                                     .join(" · ")}
                                 </p>
                               )}

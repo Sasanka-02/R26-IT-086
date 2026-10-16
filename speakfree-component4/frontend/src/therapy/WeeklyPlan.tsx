@@ -8,6 +8,7 @@ const SOURCE_LABELS: Record<string, { label: string; className: string }> = {
   therapist: { label: "Assigned by therapist", className: "bg-gold-400/20 text-gold-600" },
   level: { label: "Your reading level", className: "bg-teal-100 text-teal-800" },
   bandit: { label: "Chosen by adaptive engine", className: "bg-paper text-ink-soft border border-teal-100" },
+  words: { label: "Your word level", className: "bg-gold-400/20 text-gold-600" },
 };
 
 /** The bandit's uncertainty term (α·√(xᵀA⁻¹x), on the score scale) shrinks as an
@@ -24,6 +25,7 @@ const TYPE_LABELS: Record<string, string> = {
   pacing: "Pacing",
   daf: "DAF",
   picture: "Picture",
+  words: "Words",
 };
 
 interface WeeklyPlanProps {

@@ -8,6 +8,7 @@ class ExerciseType(str, Enum):
     DAF = "daf"
     PICTURE = "picture"
     READING = "reading"
+    WORDS = "words"  # child-friendly word ladder (picture cards)
 
 
 class ReadingLevel(str, Enum):
@@ -29,6 +30,14 @@ class SeverityLevel(str, Enum):
     UNKNOWN = "unknown"
 
 
+class WordItem(BaseModel):
+    """One picture card in a word round."""
+    text: str
+    syllables: int
+    emoji: str
+    tip: str | None = None  # e.g. "Start softly" — shown under the word
+
+
 class TherapyExercise(BaseModel):
     id: str
     type: ExerciseType
@@ -39,7 +48,9 @@ class TherapyExercise(BaseModel):
     image_url: str | None = None
     prompts: list[str] = Field(default_factory=list)
     example_sentences: list[str] = Field(default_factory=list)  # model answer for picture tasks
-    level: ReadingLevel | None = None
+    level: ReadingLevel | None = None  # reading ladder only
+    word_level: int | None = None  # word ladder position 1–10 (None = bonus set)
+    words: list[WordItem] | None = None
     difficulty: int = 1
     recommended_for: list[SeverityLevel] = Field(default_factory=list)
 
@@ -135,6 +146,9 @@ class ExerciseResultRequest(BaseModel):
     # repetitions + prolongations + blocks counted in this attempt. With
     # `syllables` it gives %SS, the standard clinical stuttering measure.
     disfluencies: int | None = Field(default=None, ge=0)
+    # Word rounds: cards the child said well ("Got it") out of cards shown.
+    words_correct: int | None = Field(default=None, ge=0)
+    words_total: int | None = Field(default=None, ge=1)
 
 
 class AssistantChatRequest(BaseModel):

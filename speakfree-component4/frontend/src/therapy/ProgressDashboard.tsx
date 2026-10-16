@@ -11,7 +11,7 @@ import {
   Lightbulb,
 } from "lucide-react";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
-import { GoalProgress, LevelState, ProgressSummary } from "../types/therapy";
+import { GoalProgress, LevelState, ProgressSummary, WordLevelState } from "../types/therapy";
 import BadgeShowcase from "../components/BadgeShowcase";
 import { LevelTimeline, ReportCard } from "../components/ReportCard";
 import { Card, KpiTile, MeterBar, ScorePill } from "../components/ui";
@@ -84,6 +84,46 @@ function LevelLadder({ level }: { level: LevelState }) {
   );
 }
 
+/** The children's word ladder: 7 word levels then 3 phrase stages. */
+function WordLadder({ words }: { words: WordLevelState }) {
+  return (
+    <Card title="Word practice" subtitle={words.progress_text}>
+      <ol className="flex flex-wrap gap-1.5" aria-label="Word ladder">
+        {Array.from({ length: words.ladder_size }, (_, i) => {
+          const step = i + 1;
+          const done = step < words.level || (words.mastered && step === words.level);
+          const current = step === words.level && !words.mastered;
+          const label = step <= words.word_levels ? `${step}` : `P${step - words.word_levels}`;
+          return (
+            <li
+              key={step}
+              title={step <= words.word_levels ? `Word level ${step}` : `Phrase stage ${step - words.word_levels}`}
+              className={`flex h-9 min-w-[2.25rem] items-center justify-center rounded-full px-2 text-sm font-semibold ${
+                current
+                  ? "bg-gold-400 text-[#1f2937]"
+                  : done
+                  ? "bg-gold-400/20 text-gold-600"
+                  : "border border-dashed border-snow/15 text-ink-soft"
+              }`}
+            >
+              {done ? "⭐" : label}
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-2 text-xs text-ink-soft">
+        Levels 1–7 are single words (easy sounds → long tricky words); P1–P3 are phrases, sentences and tongue
+        twisters. {words.rounds} round{words.rounds === 1 ? "" : "s"} so far.
+      </p>
+      {words.history.length > 0 && (
+        <div className="mt-4 border-t border-snow/5 pt-4">
+          <LevelTimeline history={words.history} />
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function Goals({ goals }: { goals: GoalProgress[] }) {
   if (goals.length === 0) return null;
   return (
@@ -133,6 +173,8 @@ function Dashboard({ data }: { data: ProgressSummary }) {
       </div>
 
       <ReportCard card={data.report_card} />
+
+      {data.word_level.rounds > 0 && <WordLadder words={data.word_level} />}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <LevelLadder level={data.level} />

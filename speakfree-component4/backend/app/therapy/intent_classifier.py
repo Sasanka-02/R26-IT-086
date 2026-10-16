@@ -54,6 +54,8 @@ SYNONYMS = {
     "thanks": "thanks thank cheers appreciate grateful".split(),
     "private": "privacy private data recorded recording recordings upload uploaded stored audio safe".split(),
     "streak": "streak daily everyday row often".split(),
+    "card": "card cards flashcard flashcards ladder game games".split(),
+    "child": "child children kid kids son daughter toddler".split(),
 }
 _SYNONYM_OF = {w: key for key, words in SYNONYMS.items() for w in words}
 
@@ -139,6 +141,12 @@ TRAINING_DATA: dict[str, list[str]] = {
         "how does reading practice work", "explain the reading levels",
         "what are the reading exercises", "tell me about the reading passages",
         "how do the reading passages work", "what is reading practice",
+    ],
+    "explain_words": [
+        "what is word practice", "how does the word game work", "explain the word ladder",
+        "tell me about the word cards", "how do the flash cards work", "what are the word cards",
+        "help my child practise words", "how do i play the word game", "what is the word ladder",
+        "is there a game for kids", "how does the card game work",
     ],
     "privacy": [
         "is my voice recorded", "where is my data stored", "who can see my results",

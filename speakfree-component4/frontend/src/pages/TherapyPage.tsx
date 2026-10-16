@@ -4,11 +4,12 @@ import { ArrowLeft, Lock, Search, Star, X } from "lucide-react";
 import { useSession } from "../context/SessionContext";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
 import { startTherapySession, endTherapySession, getUserExercises } from "../therapy/therapyApi";
-import { LevelState, TherapyExercise } from "../types/therapy";
+import { LevelState, TherapyExercise, WordLevelState } from "../types/therapy";
 import PacingExercise from "../therapy/PacingExercise";
 import DafExercise from "../therapy/DafExercise";
 import DafCalibration from "../therapy/DafCalibration";
 import PictureDescriptionExercise from "../therapy/PictureDescriptionExercise";
+import WordPracticeExercise from "../therapy/WordPracticeExercise";
 import ProgressDashboard from "../therapy/ProgressDashboard";
 import WeeklyPlan from "../therapy/WeeklyPlan";
 import PrivacyPanel from "../therapy/PrivacyPanel";
@@ -24,6 +25,12 @@ const LEVEL_NAMES: Record<string, string> = {
   intermediate: "Intermediate",
   advanced: "Advanced · Final stage",
 };
+
+/** "Word Level 1–7", then "Phrase Stage 1–3"; the bonus set has no level. */
+function wordBadge(wordLevel: number | null | undefined) {
+  if (!wordLevel) return "Bonus";
+  return wordLevel <= 7 ? `Word Level ${wordLevel}` : `Phrase Stage ${wordLevel - 7}`;
+}
 
 function ExerciseCard({
   exercise,
@@ -53,8 +60,23 @@ function ExerciseCard({
           className="h-32 w-full border-b border-teal-100 bg-paper object-cover"
         />
       )}
+      {exercise.type === "words" && exercise.words && (
+        <div
+          className="flex h-24 items-center justify-center gap-3 border-b border-teal-100 bg-[#FFF4CC] text-4xl"
+          aria-hidden="true"
+        >
+          {exercise.words.slice(0, 4).map((w) => (
+            <span key={w.text}>{w.emoji}</span>
+          ))}
+        </div>
+      )}
       <div className="p-5">
         <div className="flex flex-wrap gap-2">
+          {exercise.type === "words" && (
+            <span className="rounded-full bg-[#FFE6A7] px-2.5 py-0.5 text-xs font-semibold text-[#1f2937]">
+              {wordBadge(exercise.word_level)}
+            </span>
+          )}
           {exercise.level && (
             <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-teal-700">
               {LEVEL_NAMES[exercise.level]}
@@ -79,7 +101,9 @@ function ExerciseCard({
         <h3 className="mt-2 font-display font-semibold text-ink">{exercise.title}</h3>
         <p className="mt-1 text-sm text-ink-soft">
           {exercise.locked
-            ? "Complete the previous reading level to unlock this one."
+            ? exercise.type === "words"
+              ? "Finish the word level before this one to unlock it."
+              : "Complete the previous reading level to unlock this one."
             : exercise.description}
         </p>
       </div>
@@ -96,6 +120,7 @@ export default function TherapyPage() {
   const query = (params.get("q") ?? "").trim().toLowerCase();
   const [exercises, setExercises] = useState<TherapyExercise[]>([]);
   const [level, setLevel] = useState<LevelState | null>(null);
+  const [wordLevel, setWordLevel] = useState<WordLevelState | null>(null);
   const [selected, setSelected] = useState<TherapyExercise | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [calibratedDelay, setCalibratedDelay] = useState<number | null>(null);
@@ -117,6 +142,7 @@ export default function TherapyPage() {
         if (!active) return;
         setExercises(data.exercises);
         setLevel(data.level);
+        setWordLevel(data.word_level);
         setLoadError(false);
       })
       .catch(() => active && setLoadError(true))
@@ -163,6 +189,7 @@ export default function TherapyPage() {
     : exercises;
   const reading = visible.filter((ex) => ex.type === "reading");
   const pictures = visible.filter((ex) => ex.type === "picture");
+  const words = visible.filter((ex) => ex.type === "words");
   const other = visible.filter((ex) => ex.type === "pacing" || ex.type === "daf");
 
   const section = (title: string, hint: string, items: TherapyExercise[]) =>
@@ -177,7 +204,11 @@ export default function TherapyPage() {
             <ExerciseCard
               key={ex.id}
               exercise={ex}
-              current={!!level && ex.level === level.level}
+              current={
+                ex.type === "words"
+                  ? !!wordLevel && ex.word_level === wordLevel.level
+                  : !!level && ex.level === level.level
+              }
               onSelect={() => select(ex)}
             />
           ))}
@@ -205,14 +236,21 @@ export default function TherapyPage() {
                     Choose a practice exercise
                   </h1>
                   <p className="mt-1 text-sm text-ink-soft">
-                    Graded reading, picture description, pacing and delayed auditory
-                    feedback. After each exercise you'll get a score and your plan adapts.
+                    Word cards for children, graded reading, picture description, pacing and
+                    delayed auditory feedback. After each exercise you'll get a score and your plan adapts.
                   </p>
-                  {level && (
-                    <p className="mt-3 inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-medium text-teal-800">
-                      Reading level: {level.label} — {level.progress_text}
-                    </p>
-                  )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {level && (
+                      <p className="inline-flex rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-medium text-teal-800">
+                        Reading level: {level.label} — {level.progress_text}
+                      </p>
+                    )}
+                    {wordLevel && wordLevel.rounds > 0 && (
+                      <p className="inline-flex rounded-full border border-gold-400/50 bg-gold-400/10 px-3 py-1 text-xs font-medium text-gold-600">
+                        Words: {wordLevel.progress_text}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 {query && (
                   <div className="flex flex-wrap items-center gap-3 rounded-xl border border-teal-100 bg-white px-4 py-3 text-sm">
@@ -229,8 +267,13 @@ export default function TherapyPage() {
                   </div>
                 )}
                 {section(
+                  "Word practice (children)",
+                  "Picture cards, one word at a time. One good round unlocks the next word level.",
+                  words
+                )}
+                {section(
                   "Reading practice",
-                  "Three levels. Two strong readings in a row unlock the next level.",
+                  "Three levels. One strong reading unlocks the next level.",
                   reading
                 )}
                 {section(
@@ -248,6 +291,10 @@ export default function TherapyPage() {
 
             {selected && selected.type === "picture" && (
               <PictureDescriptionExercise key={attempt} exercise={selected} />
+            )}
+
+            {selected && selected.type === "words" && (
+              <WordPracticeExercise key={attempt} exercise={selected} />
             )}
 
             {selected && selected.type === "daf" && !calibratedDelay && (

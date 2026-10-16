@@ -70,12 +70,12 @@ function shortDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-/** "Beginner → Intermediate on 3 Oct after 2 strong readings", newest first. */
+/** "Beginner → Intermediate on 3 Oct after 1 strong Beginner reading", newest first. */
 export function LevelTimeline({ history }: { history: LevelEvent[] }) {
   if (history.length === 0) {
     return (
       <p className="text-sm text-ink-soft">
-        No level changes yet. Two strong readings in a row at the current level move you up.
+        No level changes yet. One strong attempt at the current level moves you up.
       </p>
     );
   }

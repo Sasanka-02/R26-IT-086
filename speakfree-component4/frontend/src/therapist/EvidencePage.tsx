@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Download } from "lucide-react";
 import { CohortReport, EvidenceReport, FitMetrics, SourceValidation } from "../types/therapist";
-import { downloadRatingsSheet, getCohortReport, getEvidence } from "./therapistApi";
+import { downloadPilotSheet, downloadRatingsSheet, getCohortReport, getEvidence } from "./therapistApi";
 import { AgreementScatter, HorizontalBars, MultiLineChart } from "./charts";
 import { formatDate, Panel, StatTile } from "./ui";
 import AppShell from "../components/AppShell";
@@ -41,7 +42,7 @@ function SourceBlock({
   return (
     <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile label="Ratings" value={v.n} />
+        <StatTile label="Ratings" value={v.n} hint={`${v.n_heard_audio} rated while listening to the recording`} />
         <StatTile
           label="Mean absolute error"
           value={best.mae}
@@ -173,8 +174,12 @@ function ExpertValidation({ scoring, ratings }: Pick<EvidenceReport, "scoring" |
       <div className="mt-2">
         {clinician.length === 0 ? (
           <p className="rounded-xl bg-paper p-4 text-sm text-ink-soft">
-            None yet. Log in with a real therapist account, open a student, and use the <strong>Your rating</strong>{" "}
-            column in “All work”. Results appear here immediately.
+            None yet. Log in with a real therapist account and run a{" "}
+            <Link to="/therapist/validation" className="font-medium text-teal-600 hover:underline">
+              Validation session
+            </Link>{" "}
+            — a volunteer practises on this device and the SLP listens and rates each attempt. Results appear here
+            immediately.
           </p>
         ) : (
           <SourceBlock v={scoring.validation_by_source.clinician} ratings={clinician} />
@@ -444,6 +449,105 @@ function UsabilityEvaluation({ usability }: Pick<EvidenceReport, "usability">) {
   );
 }
 
+function PilotStudy({ pilot }: { pilot: EvidenceReport["pilot"] }) {
+  const [sheetError, setSheetError] = useState(false);
+  const s = pilot.summary;
+  const pText =
+    s.sign_test_p === null ? "—" : s.sign_test_p < 0.001 ? "< 0.001" : String(s.sign_test_p);
+  return (
+    <Panel
+      title="7 · Pilot study — first week vs last week"
+      subtitle={`Real users only (demo accounts excluded). First week = the ${pilot.rules.week_days} days from a participant's first practice; last week = the ${pilot.rules.week_days} days up to their latest. Included after ${pilot.rules.min_span_days}+ days of practice with ${pilot.rules.min_attempts_per_week}+ attempts in each week.`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-3xl text-sm text-ink-soft">
+          Ask 5–10 people to practise for 1–2 weeks. Results fill in automatically; report the mean change with its
+          95% confidence interval, how many improved (sign test), and the SUS score in §6.
+        </p>
+        <button
+          onClick={() => downloadPilotSheet().catch(() => setSheetError(true))}
+          className="no-print flex items-center gap-1.5 rounded-full border border-teal-200 px-4 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-50"
+        >
+          <Download size={14} />
+          Pilot data (CSV)
+        </button>
+      </div>
+      {sheetError && <p className="mt-2 text-sm text-red-700">Couldn't download the pilot data.</p>}
+
+      {s.participants === 0 ? (
+        <p className="mt-4 rounded-xl bg-paper p-4 text-sm text-ink-soft">
+          No participants with a full first and last week yet
+          {s.not_yet_included > 0 ? ` (${s.not_yet_included} real user${s.not_yet_included === 1 ? " is" : "s are"} still practising)` : ""}.
+        </p>
+      ) : (
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatTile label="Participants" value={s.participants} hint={s.not_yet_included ? `${s.not_yet_included} more still practising` : undefined} />
+          <StatTile
+            label="Average score"
+            value={`${s.mean_first} → ${s.mean_last}`}
+            hint="first week → last week"
+          />
+          <StatTile
+            label="Mean change"
+            value={`${(s.mean_change ?? 0) > 0 ? "+" : ""}${s.mean_change} pts`}
+            hint={s.ci95 ? `95% CI ${s.ci95[0]} to ${s.ci95[1]}` : "CI needs 2+ participants"}
+          />
+          <StatTile
+            label="Improved"
+            value={`${s.improved} of ${s.participants}`}
+            hint={`sign test p = ${pText}`}
+          />
+        </div>
+      )}
+
+      {pilot.participants.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-left text-sm tabular-nums">
+            <thead className="text-xs text-ink-soft">
+              <tr className="border-b border-teal-100">
+                <th className="py-2 pr-3 font-medium">Participant</th>
+                <th className="py-2 pr-3 text-right font-medium">Days</th>
+                <th className="py-2 pr-3 text-right font-medium">First week</th>
+                <th className="py-2 pr-3 text-right font-medium">Last week</th>
+                <th className="py-2 pr-3 text-right font-medium">Change</th>
+                <th className="py-2 text-right font-medium">Long pauses / reading</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pilot.participants.map((p) => (
+                <tr key={p.student} className={`border-b border-teal-50 last:border-0 ${p.included ? "" : "opacity-60"}`}>
+                  <td className="py-2 pr-3 text-ink">
+                    {p.name}
+                    {!p.included && <span className="block text-xs text-ink-soft">Not yet included — {p.reason}</span>}
+                  </td>
+                  <td className="py-2 pr-3 text-right text-ink">{p.span_days}</td>
+                  <td className="py-2 pr-3 text-right text-ink">
+                    {p.first_week_score} <span className="text-xs text-ink-soft">({p.first_week_attempts})</span>
+                  </td>
+                  <td className="py-2 pr-3 text-right text-ink">
+                    {p.last_week_score} <span className="text-xs text-ink-soft">({p.last_week_attempts})</span>
+                  </td>
+                  <td className={`py-2 pr-3 text-right font-semibold ${p.change > 0 ? "text-teal-600" : p.change < 0 ? "text-red-700" : "text-ink"}`}>
+                    {p.change > 0 ? "+" : ""}
+                    {p.change}
+                  </td>
+                  <td className="py-2 text-right text-ink">
+                    {p.first_week_pauses ?? "—"} → {p.last_week_pauses ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs text-ink-soft">
+            Numbers in brackets are attempts in that week. With under 14 days of practice the two weeks overlap;
+            shared attempts count in both, which makes the change estimate conservative.
+          </p>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function PrivateCohortReport() {
   const [epsilon, setEpsilon] = useState(1.0);
   const [report, setReport] = useState<CohortReport | null>(null);
@@ -465,7 +569,7 @@ function PrivateCohortReport() {
 
   return (
     <Panel
-      title="7 · Shareable cohort report (differential privacy)"
+      title="8 · Shareable cohort report (differential privacy)"
       subtitle="Statistics that leave the clinic are released with Laplace noise. Smaller ε = stronger privacy, more noise."
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -576,6 +680,7 @@ export default function EvidencePage() {
             <PlanValidation plan={evidence.plan_validation} />
             <AssistantEvaluation assistant={evidence.assistant} />
             <UsabilityEvaluation usability={evidence.usability} />
+            <PilotStudy pilot={evidence.pilot} />
           </>
         )}
         <PrivateCohortReport />

@@ -4,9 +4,12 @@ graded reading levels (beginner -> intermediate -> advanced/final stage).
 
 Level rules (replayed from the user's own history, so they are fully
 deterministic and per-user):
-  * 2 strong readings in a row at the current level   -> move up a level
+  * 1 strong reading at the current level             -> move up a level
   * 2 difficult readings in a row at the current level -> move back down
-  * 2 strong readings at the advanced level            -> final stage mastered
+  * 1 strong reading at the advanced level             -> final stage mastered
+
+Children also have a word ladder (word_level_state): word levels 1–7 then
+three phrase stages, with the same 1-up / 2-down rule and separate state.
 
 "Strong" and "difficult" use the thresholds calibrated against expert
 ratings (see scoring.py). A therapist's level override restarts the replay
@@ -15,6 +18,7 @@ from the chosen level at the time of the override.
 
 from datetime import datetime
 
+from app.therapy.exercises import WORD_LADDER_IDS, WORD_LADDER_SIZE, WORD_LEVEL_COUNT, word_stage_label
 from app.therapy.schemas import SelfRating
 from app.therapy.scoring import SHORT_ATTEMPT_SECONDS, score_with_breakdown, thresholds
 
@@ -25,7 +29,18 @@ LEVEL_LABELS = {
     "advanced": "Advanced (final stage)",
 }
 
-STREAK_TO_MOVE = 2
+# One strong attempt unlocks the next level; two difficult ones in a row are
+# needed to step back, so a single bad day never moves a student down.
+STRONG_TO_MOVE_UP = 1
+HARD_TO_MOVE_DOWN = 2
+
+
+def _streak_reason(count: int, kind: str, noun: str, scores: list[int]) -> str:
+    """'after 1 strong Beginner reading (score 82)' or
+    'after 2 difficult Beginner readings in a row (scores 30, 35)'."""
+    if count == 1:
+        return f"after 1 {kind} {noun} (score {scores[-1]})"
+    return f"after {count} {kind} {noun}s in a row (scores {', '.join(str(x) for x in scores[-count:])})"
 
 # Personal reading speed: each strong/weak attempt nudges the target by 10%,
 # kept within 70–130% of the passage's base speed.
@@ -55,6 +70,23 @@ def attempt_feedback(attempt: dict) -> list[str]:
     ratio = attempt.get("speaking_ratio")
     long_pauses = attempt.get("long_pauses", 0)
     rating = attempt.get("self_rating", "ok")
+    if attempt.get("exercise_type") == "words":
+        correct, total = attempt.get("words_correct"), attempt.get("words_total")
+        if correct is not None and total:
+            if correct == total:
+                notes.append(f"You said all {total} words well — superstar! ⭐")
+            elif correct >= 0.75 * total:
+                notes.append(f"You said {correct} of {total} words well. Great work!")
+            else:
+                notes.append(
+                    f"You said {correct} of {total} words well. Tricky words get easier each time — "
+                    "try the 🔊 Listen button first and say them slowly."
+                )
+        else:
+            notes.append("Well done for finishing the word round!")
+        if rating == SelfRating.HARD.value:
+            notes.append("That felt hard. We'll keep practising at this level until it feels easier.")
+        return notes
     if ratio is not None:
         if ratio >= 0.6:
             notes.append("You kept your voice going steadily for most of the exercise.")
@@ -121,15 +153,14 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
              "direction": "therapist", "reason": override.get("note") or "Level set by the therapist."}
         )
 
-    def move(record: dict, new_level: int | None, direction: str, kind: str) -> None:
-        scores = ", ".join(str(s) for s in streak_scores)
+    def move(record: dict, new_level: int | None, direction: str, kind: str, count: int) -> None:
         history.append(
             {
                 "at": record["completed_at"],
                 "from": LEVEL_LABELS[LEVELS[level]],
                 "to": LEVEL_LABELS[LEVELS[new_level]] if new_level is not None else "Final stage completed",
                 "direction": direction,
-                "reason": f"after {STREAK_TO_MOVE} {kind} {LEVEL_LABELS[LEVELS[level]]} readings in a row (scores {scores})",
+                "reason": _streak_reason(count, kind, f"{LEVEL_LABELS[LEVELS[level]]} reading", streak_scores),
             }
         )
 
@@ -149,16 +180,16 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
         else:
             strong, weak = 0, 0
 
-        if strong >= STREAK_TO_MOVE:
+        if strong >= STRONG_TO_MOVE_UP:
             if level < len(LEVELS) - 1:
-                move(record, level + 1, "up", "strong")
+                move(record, level + 1, "up", "strong", STRONG_TO_MOVE_UP)
                 level, strong = level + 1, 0
             else:
                 if not mastered:
-                    move(record, None, "mastered", "strong")
-                mastered, strong = True, STREAK_TO_MOVE
-        elif weak >= STREAK_TO_MOVE and level > 0:
-            move(record, level - 1, "down", "difficult")
+                    move(record, None, "mastered", "strong", STRONG_TO_MOVE_UP)
+                mastered, strong = True, STRONG_TO_MOVE_UP
+        elif weak >= HARD_TO_MOVE_DOWN and level > 0:
+            move(record, level - 1, "down", "difficult", HARD_TO_MOVE_DOWN)
             level, weak = level - 1, 0
 
     current = LEVELS[level]
@@ -166,7 +197,7 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
     if mastered:
         progress_text = "You have completed the final reading stage. Keep it up to stay fluent!"
     else:
-        remaining = STREAK_TO_MOVE - strong
+        remaining = STRONG_TO_MOVE_UP - strong
         target = LEVEL_LABELS[next_level] if next_level else "complete the final stage"
         progress_text = (
             f"{remaining} more strong {LEVEL_LABELS[current]} reading"
@@ -180,7 +211,7 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
         "next_level": next_level,
         "next_label": LEVEL_LABELS[next_level] if next_level else None,
         "strong_in_a_row": strong,
-        "needed_to_advance": STREAK_TO_MOVE,
+        "needed_to_advance": STRONG_TO_MOVE_UP,
         "mastered": mastered,
         "progress_text": progress_text,
         "set_by_therapist": bool(
@@ -190,6 +221,103 @@ def level_state(records: list[dict], override: dict | None = None) -> dict:
         "weak_threshold": t["weak"],
         "history": history,
     }
+
+
+def word_level_state(records: list[dict]) -> dict:
+    """The word ladder (children): word levels 1–7, then phrase stages 1–3.
+
+    Same 2-up / 2-down staircase as reading, replayed only from word rounds
+    (records with exercise_type "words" and a word_level), so it never touches
+    the reading level. The Sri Lankan bonus set has no word_level and does not
+    move the ladder."""
+    t = thresholds()
+    level = 1
+    strong = weak = 0
+    mastered = False
+    rounds = 0
+    streak_scores: list[int] = []
+    history: list[dict] = []
+
+    def move(record: dict, new_level: int | None, direction: str, kind: str, count: int) -> None:
+        history.append(
+            {
+                "at": record["completed_at"],
+                "from": word_stage_label(level),
+                "to": word_stage_label(new_level) if new_level else "Word ladder completed",
+                "direction": direction,
+                "reason": _streak_reason(count, kind, "round", streak_scores),
+            }
+        )
+
+    for record in records:
+        if record.get("exercise_type") != "words" or not record.get("word_level"):
+            continue
+        rounds += 1
+        if record["word_level"] != level:
+            continue
+        if _is_strong(record, t):
+            streak_scores = (streak_scores if strong else []) + [record["score"]]
+            strong, weak = strong + 1, 0
+        elif _is_weak(record, t):
+            streak_scores = (streak_scores if weak else []) + [record["score"]]
+            strong, weak = 0, weak + 1
+        else:
+            strong, weak = 0, 0
+
+        if strong >= STRONG_TO_MOVE_UP:
+            if level < WORD_LADDER_SIZE:
+                move(record, level + 1, "up", "good", STRONG_TO_MOVE_UP)
+                level, strong = level + 1, 0
+            else:
+                if not mastered:
+                    move(record, None, "mastered", "good", STRONG_TO_MOVE_UP)
+                mastered, strong = True, STRONG_TO_MOVE_UP
+        elif weak >= HARD_TO_MOVE_DOWN and level > 1:
+            move(record, level - 1, "down", "hard", HARD_TO_MOVE_DOWN)
+            level, weak = level - 1, 0
+
+    in_phrases = level > WORD_LEVEL_COUNT
+    position = f"Phrase stage {level - WORD_LEVEL_COUNT} of 3" if in_phrases else f"Word level {level} of {WORD_LEVEL_COUNT}"
+    if mastered:
+        progress_text = "Every word level and phrase stage completed — brilliant!"
+    else:
+        remaining = STRONG_TO_MOVE_UP - strong
+        if level == WORD_LEVEL_COUNT:
+            target = "the phrase stage"
+        elif level == WORD_LADDER_SIZE:
+            target = "finish the word ladder"
+        elif in_phrases:
+            target = f"phrase stage {level - WORD_LEVEL_COUNT + 1}"
+        else:
+            target = f"level {level + 1}"
+        verb = "" if level == WORD_LADDER_SIZE else "unlock "
+        progress_text = (
+            f"{position} — {remaining} more good round{'s' if remaining != 1 else ''} to {verb}{target}."
+        )
+    return {
+        "level": level,
+        "label": word_stage_label(level),
+        "exercise_id": WORD_LADDER_IDS[level],
+        "in_phrase_stage": in_phrases,
+        "word_levels": WORD_LEVEL_COUNT,
+        "ladder_size": WORD_LADDER_SIZE,
+        "strong_in_a_row": strong,
+        "needed_to_advance": STRONG_TO_MOVE_UP,
+        "mastered": mastered,
+        "rounds": rounds,
+        "progress_text": progress_text,
+        "history": history,
+    }
+
+
+def word_level_change_message(before: dict, after: dict) -> str | None:
+    if after["level"] > before["level"]:
+        return f"Level up! You unlocked {after['label']}. 🌟"
+    if after["level"] < before["level"]:
+        return f"Let's practise {after['label']} again for a bit — you can climb back up."
+    if after["mastered"] and not before["mastered"]:
+        return "Amazing — you finished the whole word ladder! 🏆"
+    return None
 
 
 def level_change_message(before: dict, after: dict) -> str | None:
@@ -230,6 +358,8 @@ BADGES = [
     ("advanced", "Final stage", "Unlocked Advanced reading"),
     ("mastered", "Fluent reader", "Completed the final reading stage"),
     ("explorer", "Explorer", "Tried every type of exercise"),
+    ("first_words", "First words", "Finished your first word round"),
+    ("word_master", "Word master", "Finished all 7 word levels"),
 ]
 
 
@@ -244,6 +374,8 @@ def earned_badges(records: list[dict], level: dict, streak_days: int, best_strea
         "intermediate": level["level_index"] >= 1,
         "advanced": level["level_index"] >= 2,
         "mastered": level["mastered"],
-        "explorer": {"reading", "pacing", "daf", "picture"} <= types,
+        "explorer": {"reading", "pacing", "daf", "picture", "words"} <= types,
+        "first_words": "words" in types,
+        "word_master": word_level_state(records)["level"] > WORD_LEVEL_COUNT,
     }
     return [{"id": i, "title": t, "description": d, "earned": earned[i]} for i, t, d in BADGES]

@@ -15,15 +15,28 @@ interface PracticeHistoryContextValue {
   version: number;
   recordCompletion: (result: ExerciseResultInput) => Promise<ExerciseResultResponse>;
   refresh: () => void;
+  /** Validation sessions: hide the app's score until the expert has rated. */
+  hideScore: boolean;
 }
 
 const PracticeHistoryContext = createContext<PracticeHistoryContextValue | undefined>(
   undefined
 );
 
-export function PracticeHistoryProvider({ children }: { children: ReactNode }) {
+export function PracticeHistoryProvider({
+  children,
+  userId: forUser,
+  hideScore = false,
+  onRecorded,
+}: {
+  children: ReactNode;
+  /** Save results for this student instead of the logged-in user (therapist validation sessions). */
+  userId?: string;
+  hideScore?: boolean;
+  onRecorded?: (saved: ExerciseResultResponse) => void;
+}) {
   const { user } = useAuth();
-  const userId = user?.email.trim().toLowerCase() ?? "";
+  const userId = (forUser ?? user?.email ?? "").trim().toLowerCase();
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [progressError, setProgressError] = useState(false);
   const [version, setVersion] = useState(0);
@@ -46,12 +59,13 @@ export function PracticeHistoryProvider({ children }: { children: ReactNode }) {
   const recordCompletion = async (result: ExerciseResultInput) => {
     const saved = await submitResult(userId, result);
     refresh();
+    onRecorded?.(saved);
     return saved;
   };
 
   return (
     <PracticeHistoryContext.Provider
-      value={{ userId, progress, progressError, version, recordCompletion, refresh }}
+      value={{ userId, progress, progressError, version, recordCompletion, refresh, hideScore }}
     >
       {children}
     </PracticeHistoryContext.Provider>

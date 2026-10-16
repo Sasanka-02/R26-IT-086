@@ -20,6 +20,7 @@ Demo logins (password for all: demo1234)
     therapist: dr.silva@demo.local
     students:  amal@demo.local, nimali@demo.local, kasun@demo.local,
                tharushi@demo.local, ravi@demo.local
+    child (word ladder): nethmi@demo.local
 """
 
 import json
@@ -33,7 +34,7 @@ from app.therapy import progress_store, scoring, therapist_store, user_store
 from app.therapy.adaptive import level_state
 from app.therapy.auth import hash_password
 from app.therapy import plan_review
-from app.therapy.exercises import EXERCISE_BANK, get_exercise
+from app.therapy.exercises import EXERCISE_BANK, WORD_LADDER_IDS, get_exercise
 from app.therapy.user_store import DEMO_SUFFIX
 
 SUFFIX = DEMO_SUFFIX
@@ -133,7 +134,7 @@ def seed() -> None:
         "password_hash": pw,
     }
 
-    non_reading = [ex for ex in EXERCISE_BANK if ex.level is None]
+    non_reading = [ex for ex in EXERCISE_BANK if ex.level is None and ex.type.value != "words"]
     for name, reg_ago, n, skill, slope, last_ago in STUDENTS:
         email = name.split()[0].lower() + SUFFIX
         users[email] = {
@@ -177,6 +178,34 @@ def seed() -> None:
         "notes": [{"id": uuid.uuid4().hex, "text": "Blocks mostly on plosives (p, b, t). Practise soft onsets.",
                    "by": therapist, "at": now.isoformat()}],
     }
+    # A demo child on the word ladder: good rounds at word levels 1 and 2, then a
+    # hard round at level 3 -> "Word level 3 of 7 — 1 more good round".
+    child = "nethmi" + SUFFIX
+    users[child] = {
+        "email": child, "name": "Nethmi Silva", "role": "student",
+        "registered_at": (now - timedelta(days=9)).isoformat(), "last_login": now.isoformat(),
+        "password_hash": pw,
+    }
+    child_records = []
+    for i, (word_level, correct, rating) in enumerate(
+        [(1, 9, "ok"), (2, 10, "easy"), (3, 5, "hard")]
+    ):
+        ex = get_exercise(WORD_LADDER_IDS[word_level])
+        attempt = {
+            "exercise_id": ex.id, "exercise_type": "words", "title": ex.title, "level": None,
+            "word_level": word_level, "difficulty": ex.difficulty,
+            "duration_seconds": float(rng.uniform(60, 150)), "speaking_ratio": None, "long_pauses": 0,
+            "quiet_warnings": 0, "syllables": None, "measured_wpm": None, "target_wpm": None,
+            "self_rating": rating, "words_correct": correct, "words_total": len(ex.words),
+        }
+        score, breakdown = scoring.score_with_breakdown(attempt)
+        child_records.append({
+            "id": uuid.uuid4().hex,
+            "completed_at": (now - timedelta(days=8 - i, hours=float(rng.uniform(0, 4)))).isoformat(),
+            **attempt, "score": score, "score_breakdown": breakdown,
+        })
+    progress[child] = child_records
+
     settings["amal" + SUFFIX] = {
         "assigned": [], "level_override": None,
         "goals": [{"id": uuid.uuid4().hex, "metric": "average_score", "target": 70,
@@ -188,7 +217,7 @@ def seed() -> None:
     _write(progress_store.DATA_FILE, progress)
     _write(therapist_store.STORE_FILE, settings)
     cal = scoring.calibrate()
-    print(f"Seeded {len(STUDENTS)} students + 1 therapist. Password: {PASSWORD}")
+    print(f"Seeded {len(STUDENTS)} students + 1 child (word ladder) + 1 therapist. Password: {PASSWORD}")
     print(
         f"Synthetic ratings: {cal['n_synthetic']} · clinician ratings: {cal['n_clinician']} · "
         f"model fitted on: {cal['data_source']} ({cal['active']}) · thresholds: {cal['thresholds']}"

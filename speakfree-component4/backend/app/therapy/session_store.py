@@ -25,6 +25,8 @@ class LiveSessionState:
     quiet_warnings: int = 0
     syllables: int = 0
     _was_speaking: bool = False
+    _in_long_pause: bool = False  # the current silence has already been counted
+    _quiet_frames: int = 0  # consecutive quiet speaking frames
 
 
 _SESSIONS: dict[str, LiveSessionState] = {}

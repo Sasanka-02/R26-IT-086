@@ -22,7 +22,7 @@ Advanced/final stage), picture description, pacing and delayed auditory feedback
 3. **The score is validated against a therapist.** Therapists rate attempts 1–5.
    The app measures agreement (MAE, correlation), then *learns* the score's
    weights and thresholds from those ratings instead of guessing them.
-4. **The system adapts.** Two strong readings unlock the next level; two difficult
+4. **The system adapts.** One strong reading unlocks the next level; two difficult
    ones step back. A contextual bandit (LinUCB) picks the rest of each student's
    plan from their own results, and the reading speed adapts per student.
 5. **The assistant explains and guides.** A trained intent classifier understands
@@ -42,7 +42,7 @@ Advanced/final stage), picture description, pacing and delayed auditory feedback
 | Output should be clear, not graphs | A report card comes first: one sentence, a traffic light (Improving / Steady / Needs support), "This week", "Next step". Charts are behind a *Details* toggle. *Download report (PDF)* prints a clean report | Student → *My Progress*; Therapist → student page |
 | Output should change with different users | Every result is stored per account. *Compare students* shows two students side by side: level, level timeline, plan, reading speeds, assistant answer | Therapist → *Compare students* |
 | Assistant was missing | Intent classifier (87% cross-validated) + personal briefing + optional LLM | Student → *Assistant* |
-| Adaptive learning was missing | Level engine with a visible **level timeline** ("Beginner → Intermediate on 3 Oct after 2 strong readings"), LinUCB plan with a **Why this plan for you?** box (the bandit's numbers in words), adaptive reading speed, therapist overrides | Student → *My Progress*, *Weekly Plan* |
+| Adaptive learning was missing | Level engine with a visible **level timeline** ("Beginner → Intermediate on 3 Oct after 1 strong Beginner reading"), LinUCB plan with a **Why this plan for you?** box (the bandit's numbers in words), adaptive reading speed, therapist overrides | Student → *My Progress*, *Weekly Plan* |
 | Constants must not be guessed; derive from evidence | Ridge-regression calibration of every weight and threshold from therapist ratings | Therapist → *Model evidence* §2 |
 | Validate output with an expert | Therapist 1–5 ratings → MAE, Pearson r, % within 15, "strong vs expert 4–5" accuracy, Cohen's kappa between two raters. Clinician and synthetic ratings are reported **separately** | Therapist → *Model evidence* §1 |
 | Validate the adaptive learning output | Therapist judges each generated weekly plan (appropriate / partly / not) → % agreement | Therapist → student page; *Model evidence* §4 |
@@ -66,19 +66,39 @@ the validation results are the clinician ones in §1."*
    1–2 hour session. Create them a therapist account with the clinic invite
    code. Do **not** use a `@demo.local` account, or their ratings will be
    counted as synthetic.
-2. **Collect** 30–50 real attempts from 8–10 volunteers, across all exercise
-   types (reading at each level, pacing, DAF, picture description).
-3. **Rate:** the SLP opens each student and uses *Your rating* (1–5) in *All
-   work*. Calibration re-runs on every rating.
-4. **Second rater (optional):** a second therapist account rates the same
-   attempts. Each rater sees only their own buttons; Cohen's kappa appears
-   under *Agreement between two raters*.
+2. **Volunteers** (8–10) each create a student account on the sign-up page
+   (with consent).
+3. **Validation session** (therapist menu → *Validation session*): pick the
+   volunteer, add the second rater's name if there is one, pick an exercise.
+   The volunteer does it on the laptop and saves. The SLP **listens to the
+   recording on the same screen** and rates 1–5. The app's score stays hidden
+   until the rating is submitted, so the rating is blind. Repeat for 30–50
+   attempts across all exercise types. Recordings never leave the laptop;
+   ratings are marked "rated while listening" and calibration re-runs on each.
+4. **Second rater (optional):** type their name in *Rater 2*; both rate each
+   attempt at the same sitting, and Cohen's kappa appears under *Agreement
+   between two raters*.
 5. **Plans:** on 10 student pages the SLP judges *Validate this week's plan*.
 6. **Report** from *Model evidence*: §1 (MAE, Pearson r, % within ±15,
    strong-vs-4–5 accuracy, kappa) and §4 (% plans appropriate).
    *Rating sheet (CSV)* downloads every rating with rater and timestamp.
 7. **Keep proof:** signed letter or email from the SLP, the CSV rating sheet,
    photos of the session.
+
+### 2.3 Pilot study (for the report)
+
+1. **Recruit** 5–10 users (not `@demo.local` accounts) and ask them to practise
+   on most days for 1–2 weeks.
+2. **Results fill in automatically** on *Model evidence* §7: each person's
+   average score in their first week vs their last week, long pauses per
+   reading, the mean change with a 95% confidence interval, how many improved,
+   and an exact sign test (suitable for small groups). People join the
+   analysis after 7+ days of practice with 2+ attempts in each week.
+3. **Usability:** the SUS survey invites them after 3 exercises; §6 shows the
+   mean SUS score and its confidence interval.
+4. **Report** the §7 numbers, the SUS score, and attach *Pilot data (CSV)*.
+   Be honest about the sample size: with 5–10 people this shows feasibility
+   and a direction of change, not clinical efficacy.
 
 ---
 
@@ -148,9 +168,9 @@ rated attempts, the starting values 75 and 45 are used.
 ### 3.3 Level engine (`adaptive.py`)
 
 Replays the student's reading attempts in order:
-* 2 strong in a row at the current level → move up
+* 1 strong attempt at the current level → move up
 * 2 difficult in a row → move back down (never below Beginner)
-* 2 strong at Advanced → final stage mastered
+* 1 strong at Advanced → final stage mastered
 
 A therapist's level override restarts the replay from the chosen level.
 
@@ -344,8 +364,11 @@ replacement.
 
 **Three layers of adaptation:**
 
-1. **Level staircase (2-up / 2-down):** the same method as hearing tests. It
-   keeps practice neither boring nor stressful.
+1. **Level staircase (1-up / 2-down):** one strong attempt unlocks the next
+   level; two difficult ones in a row step back. This is the staircase method used
+   in hearing tests, made quicker to climb so students aren't held back, and
+   slower to drop so one bad day doesn't move anyone down. It keeps practice
+   neither boring nor stressful.
 2. **Speed:** +10% after a strong attempt, −10% after a difficult one.
 3. **Weekly plan (LinUCB):** for each exercise it predicts the score plus an
    uncertainty bonus for rarely tried ones, and picks the highest total.
@@ -411,7 +434,7 @@ This contains only committed files. Commit your changes first.
 
 1. **(0:00) Student `amal@demo.local` → My Progress.** Read the report card
    aloud: traffic light, one sentence, *This week*, *Next step*. Point at the
-   level timeline ("Beginner → Intermediate on … after 2 strong readings").
+   level timeline ("Beginner → Intermediate on … after 1 strong Beginner reading").
    Open *Details* only to show the charts are still there.
 2. **(0:40) Weekly Plan.** Read *Why this plan for you?*: level, recent
    average, trend, comfort. Then one item: "expects about 68, fairly sure,

@@ -1,7 +1,11 @@
-import { useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { CheckCircle2, Headphones, Play, Square } from "lucide-react";
 import { calibrateDaf } from "./therapyApi";
 import { DafTrial } from "../types/therapy";
+import { useDafPlayback } from "./useDafPlayback";
+import RecordingPlayer from "../components/RecordingPlayer";
+import DafMeter from "./DafMeter";
+import { DAF_PASSAGES } from "./dafPassages";
 
 const DELAY_OPTIONS = [50, 100, 150, 200, 300];
 
@@ -18,11 +22,47 @@ export default function DafCalibration({ sessionId, onCalibrated }: DafCalibrati
   const [result, setResult] = useState<number | null>(null);
 
   const currentDelay = DELAY_OPTIONS[trialIndex];
+  // A different passage for each trial, so trials compare delays, not practice.
+  const passage = DAF_PASSAGES[trialIndex % DAF_PASSAGES.length];
+  const passageWords = passage.text.split(/\s+/).length;
+  const listenStartedRef = useRef(0);
+
+  // Plays the student's voice back at this trial's delay while they read.
+  // Records each trial (your own voice, without the delay) so you can listen
+  // back and count the stutters afterwards, instead of while reading.
+  const daf = useDafPlayback({ record: true });
+  const [recordedTrial, setRecordedTrial] = useState<number | null>(null);
+  const listening = daf.active;
+  const micError = daf.error;
+  const { stop: stopPlayback } = daf;
+
+  /** Stops the delayed playback; returns the speech rate measured while
+   *  listening (passage words / reading time), or null if there wasn't one. */
+  const stopListening = useCallback((): number | null => {
+    let measured: number | null = null;
+    if (listenStartedRef.current) {
+      const minutes = (Date.now() - listenStartedRef.current) / 60000;
+      listenStartedRef.current = 0;
+      if (minutes > 0.1) {
+        measured = Math.round(passageWords / minutes);
+        setSpeechRate(measured);
+      }
+    }
+    stopPlayback();
+    return measured;
+  }, [passageWords, stopPlayback]);
+
+  const startListening = () => {
+    listenStartedRef.current = Date.now();
+    setRecordedTrial(trialIndex);
+    daf.start(currentDelay); // called straight from the click, so audio is allowed
+  };
 
   const recordTrial = async () => {
+    const measured = stopListening(); // still listening? use the rate just measured
     const newTrials = [
       ...trials,
-      { delay_ms: currentDelay, stutter_events: stutterEvents, speech_rate_wpm: speechRate },
+      { delay_ms: currentDelay, stutter_events: stutterEvents, speech_rate_wpm: measured ?? speechRate },
     ];
     setTrials(newTrials);
     setStutterEvents(0);
@@ -59,10 +99,74 @@ export default function DafCalibration({ sessionId, onCalibrated }: DafCalibrati
           Trial {trialIndex + 1} of {DELAY_OPTIONS.length}
         </span>
       </div>
-      <p className="text-sm text-ink-soft">
-        Read the passage aloud at a <strong className="text-ink">{currentDelay}ms</strong> delay,
-        then record what happened.
-      </p>
+      <ol className="grid gap-2 text-sm text-ink sm:grid-cols-4">
+        {[
+          "Put on headphones",
+          "Press Start and read the passage aloud",
+          "Press Stop when you finish",
+          "Listen back and count how many times you got stuck",
+        ].map((step, i) => (
+          <li key={step} className="flex items-start gap-2 rounded-lg bg-paper px-3 py-2">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-600 text-xs font-semibold text-white">
+              {i + 1}
+            </span>
+            {step}
+          </li>
+        ))}
+      </ol>
+
+      {!listening ? (
+        <button
+          onClick={startListening}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-600 px-6 py-4 text-base font-semibold text-white shadow-sm hover:bg-teal-700 sm:w-auto"
+        >
+          <Play size={18} />
+          Start trial {trialIndex + 1} — hear your voice {currentDelay}ms late
+        </button>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => stopListening()}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-600 px-6 py-4 text-base font-semibold text-white shadow-sm hover:bg-red-700 sm:w-auto"
+          >
+            <Square size={16} />
+            Stop — I've finished reading
+          </button>
+          <span className="flex items-center gap-2 text-sm font-medium text-teal-700">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" aria-hidden="true" />
+            <Headphones size={15} /> Playing your voice back {currentDelay}ms late — read the passage now
+          </span>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-teal-100 bg-paper p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+          Passage {trialIndex + 1} · {passage.title}
+        </p>
+        <p className="mt-2 text-lg leading-relaxed text-ink">{passage.text}</p>
+      </div>
+
+      <DafMeter
+        active={listening}
+        level={daf.level}
+        heardVoice={daf.heardVoice}
+        calibrating={daf.calibrating}
+        volume={daf.volume}
+        onVolume={daf.setVolume}
+      />
+      {micError && <p className="text-sm text-red-600">{micError}</p>}
+
+      {!listening && daf.recordingUrl && recordedTrial === trialIndex && (
+        <div className="space-y-2">
+          <RecordingPlayer src={daf.recordingUrl} label={`Listen back to trial ${trialIndex + 1} and count`} />
+          <p className="rounded-lg bg-paper px-3 py-2 text-xs text-ink-soft">
+            Count one each time you hear: a <strong className="text-ink">repeated sound or word</strong> (“b-b-bread”,
+            “the the shop”), a <strong className="text-ink">stretched sound</strong> (“sssshop”), or a{" "}
+            <strong className="text-ink">block</strong> — getting stuck silently before a word. Normal pauses for
+            breath don't count.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         <div>
@@ -77,6 +181,7 @@ export default function DafCalibration({ sessionId, onCalibrated }: DafCalibrati
         </div>
         <div>
           <label className="text-sm font-medium text-ink">Speech rate (WPM)</label>
+          <p className="text-xs text-ink-soft">Filled in from how long you took to read the passage — change it if needed.</p>
           <input
             type="number"
             min={0}

@@ -1,4 +1,12 @@
-export type ExerciseType = "pacing" | "daf" | "picture" | "reading";
+export type ExerciseType = "pacing" | "daf" | "picture" | "reading" | "words";
+
+/** One picture card in a word round. */
+export interface WordItem {
+  text: string;
+  syllables: number;
+  emoji: string;
+  tip: string | null;
+}
 export type SeverityLevel = "mild" | "moderate" | "severe" | "unknown";
 
 /** Severity received from the screening components (1–3). */
@@ -22,6 +30,9 @@ export interface TherapyExercise {
   prompts: string[];
   example_sentences: string[];
   level: ReadingLevel | null;
+  /** Word ladder position 1–10 (7 word levels + 3 phrase stages); null for the bonus set. */
+  word_level?: number | null;
+  words?: WordItem[] | null;
   difficulty: number;
   recommended_for: SeverityLevel[];
   locked?: boolean;
@@ -86,8 +97,25 @@ export interface ReportCard {
   reasons: string[];
 }
 
+/** The children's word ladder, separate from the reading level. */
+export interface WordLevelState {
+  level: number;
+  label: string;
+  exercise_id: string;
+  in_phrase_stage: boolean;
+  word_levels: number;
+  ladder_size: number;
+  strong_in_a_row: number;
+  needed_to_advance: number;
+  mastered: boolean;
+  rounds: number;
+  progress_text: string;
+  history: LevelEvent[];
+}
+
 export interface UserExercisesResponse {
   level: LevelState;
+  word_level: WordLevelState;
   exercises: TherapyExercise[];
 }
 
@@ -99,6 +127,9 @@ export interface ExerciseResultInput {
   quiet_warnings?: number;
   syllables?: number | null;
   target_wpm?: number | null;
+  /** Word rounds: cards said well ("Got it") out of cards shown. */
+  words_correct?: number;
+  words_total?: number;
   self_rating: SelfRating;
 }
 
@@ -120,6 +151,7 @@ export interface ExerciseResultResponse {
   verdict: string;
   feedback: string[];
   level: LevelState;
+  word_level: WordLevelState;
   level_message: string | null;
   breakdown: ScorePart[];
   measured_wpm: number | null;
@@ -207,6 +239,7 @@ export interface ProgressSummary {
   goals: GoalProgress[];
   first_vs_latest: FirstVsLatest[];
   report_card: ReportCard;
+  word_level: WordLevelState;
 }
 
 export interface PlanExercise {
@@ -215,7 +248,7 @@ export interface PlanExercise {
   type: ExerciseType;
   difficulty: number;
   reason: string;
-  source: "therapist" | "level" | "bandit";
+  source: "therapist" | "level" | "bandit" | "words";
   times_practised: number;
   predicted_score: number | null;
   uncertainty: number | null;
@@ -228,6 +261,7 @@ export interface PlanExercise {
 export interface WeeklyPlanResponse {
   user_id: string;
   level: LevelState;
+  word_level: WordLevelState;
   exercises: PlanExercise[];
   screening: Screening | null;
   /** The context the plan was built from, in words. */
@@ -264,7 +298,8 @@ export interface AssistantReply {
 export interface SessionSummary {
   session_id: string;
   duration_seconds: number;
-  speaking_ratio: number;
+  /** null when no live measurements were received. */
+  speaking_ratio: number | null;
   pause_count: number;
   quiet_warnings: number;
   syllables: number;
@@ -276,4 +311,19 @@ export interface PrivacyBudget {
   epsilon_threshold: number;
   epsilon_remaining: number;
   inference_only: boolean;
+}
+
+/** A clinical note the therapist shared with the student. */
+export interface TherapistNote {
+  id: string;
+  text: string;
+  by: string;
+  by_name: string;
+  at: string;
+  unread: boolean;
+}
+
+export interface TherapistNotes {
+  notes: TherapistNote[];
+  unread: number;
 }

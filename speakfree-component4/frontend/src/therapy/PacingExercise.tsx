@@ -3,6 +3,7 @@ import { TherapyExercise, SessionSummary } from "../types/therapy";
 import { useLiveFeedback } from "./useLiveFeedback";
 import { endTherapySession } from "./therapyApi";
 import CompletionPanel from "./CompletionPanel";
+import RecordingPlayer from "../components/RecordingPlayer";
 import BreathingWarmup from "./BreathingWarmup";
 
 interface PacingExerciseProps {
@@ -25,11 +26,13 @@ const LEVEL_BADGES: Record<string, string> = {
 /** Used for both pacing and graded reading — both follow a highlighted passage. */
 export default function PacingExercise({ sessionId, exercise }: PacingExerciseProps) {
   // A separate live session per attempt, so its summary covers only this exercise.
-  const [attemptId] = useState(() => `${sessionId}-${exercise.id}-${Date.now()}`);
-  const { isActive, feedback, permissionError, start, stop } = useLiveFeedback(
+  const newAttemptId = () => `${sessionId}-${exercise.id}-${Date.now()}`;
+  const [attemptId, setAttemptId] = useState(newAttemptId);
+  const { isActive, calibrating, feedback, permissionError, recordingUrl, heardNothing, start, stop } = useLiveFeedback(
     attemptId,
     "pacing"
   );
+  const [micSilent, setMicSilent] = useState(false);
   const words = (exercise.passage ?? "").split(/\s+/).filter(Boolean);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [hasStopped, setHasStopped] = useState(false);
@@ -38,8 +41,10 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
   const startedAtRef = useRef(0);
   const timerRef = useRef<number | null>(null);
 
+  // The highlight starts once the room's background noise has been measured.
+  const reading = isActive && !calibrating;
   useEffect(() => {
-    if (!isActive) {
+    if (!reading) {
       if (timerRef.current) window.clearInterval(timerRef.current);
       setHighlightIndex(0);
       return;
@@ -52,7 +57,7 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
-  }, [isActive, exercise.target_wpm, words.length]);
+  }, [reading, exercise.target_wpm, words.length]);
 
   const handleStart = () => {
     startedAtRef.current = Date.now();
@@ -60,22 +65,33 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
   };
 
   const handleStop = async () => {
+    const silent = heardNothing();
     stop();
     setHasStopped(true);
+    setMicSilent(silent);
     const elapsed = (Date.now() - startedAtRef.current) / 1000;
     try {
       const s = await endTherapySession(attemptId);
       setSummary({ ...s, duration_seconds: s.duration_seconds || elapsed });
     } catch {
+      // No live measurements reached the server: save time and rating only,
+      // rather than scoring the attempt as if the student had been silent.
       setSummary({
         session_id: attemptId,
         duration_seconds: elapsed,
-        speaking_ratio: 0,
+        speaking_ratio: null,
         pause_count: 0,
         quiet_warnings: 0,
         syllables: 0,
       });
     }
+  };
+
+  const tryAgain = () => {
+    setAttemptId(newAttemptId());
+    setHasStopped(false);
+    setSummary(null);
+    setMicSilent(false);
   };
 
   return (
@@ -117,7 +133,7 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
           <span
             key={i}
             className={
-              i === highlightIndex && isActive
+              i === highlightIndex && reading
                 ? "rounded bg-gold-400/30 px-1 text-ink"
                 : i < highlightIndex
                 ? "text-ink-soft/50"
@@ -129,7 +145,13 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
         ))}
       </div>
 
-      {feedback && !hasStopped && (
+      {isActive && calibrating && (
+        <div className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-800" role="status">
+          Get ready — stay quiet for a moment while we listen to the room…
+        </div>
+      )}
+
+      {feedback && !hasStopped && !calibrating && (
         <div
           className={`rounded-lg border px-4 py-2 text-sm ${
             FEEDBACK_STYLES[feedback.severity] ?? FEEDBACK_STYLES.info
@@ -171,7 +193,28 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
 
       {hasStopped && !summary && <p className="text-sm text-ink-soft">Working out your result...</p>}
 
-      {summary && (
+      {recordingUrl && hasStopped && (
+        <RecordingPlayer src={recordingUrl} label="Listen to your reading" />
+      )}
+
+      {summary && micSilent && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-ink" role="alert">
+          <p className="font-medium">We didn't hear you reading, so this attempt hasn't been scored.</p>
+          <p className="mt-1 text-ink-soft">
+            A score needs at least 2 seconds of your voice. Read the passage aloud after the “Get ready” message.
+            If you did read, check that the browser is using the right microphone (the mic icon in the address bar)
+            — play the recording above to hear what was picked up.
+          </p>
+          <button
+            onClick={tryAgain}
+            className="mt-3 rounded-full bg-teal-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {summary && !micSilent && (
         <CompletionPanel
           metrics={{
             exercise_id: exercise.id,
@@ -186,8 +229,8 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
       )}
 
       <p className="text-xs text-ink-soft">
-        Privacy: only pacing/volume numbers are sent from your device — your
-        voice recording never leaves the browser during this exercise.
+        Privacy: only pacing/volume numbers are sent from your device. The
+        recording stays in this page for you to listen back — it is never uploaded.
       </p>
     </div>
   );

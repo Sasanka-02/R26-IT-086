@@ -36,6 +36,7 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
   const [goalTarget, setGoalTarget] = useState(GOAL_OPTIONS[0].suggested);
   const [goalError, setGoalError] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [notePrivate, setNotePrivate] = useState(false);
   const [severity, setSeverity] = useState<SeverityLevel>(settings.screening?.severity ?? "moderate");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -86,7 +87,13 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
   const submitNote = (e: FormEvent) => {
     e.preventDefault();
     if (!note.trim()) return;
-    run(() => addNote(email, note), "Note saved.").then(() => setNote(""));
+    run(
+      () => addNote(email, note, !notePrivate),
+      notePrivate ? "Private note saved." : "Note saved — the student will see it on their dashboard."
+    ).then(() => {
+      setNote("");
+      setNotePrivate(false);
+    });
   };
 
   return (
@@ -255,24 +262,41 @@ export default function StudentControls({ email, settings, goals, onChanged }: P
 
       <div className="mt-6">
         <h3 className="text-sm font-semibold text-ink">Clinical notes</h3>
-        <form onSubmit={submitNote} className="mt-2 flex gap-2">
+        <p className="text-xs text-ink-soft">
+          Notes are shown to the student on their dashboard with a notification, unless you mark them private.
+        </p>
+        <form onSubmit={submitNote} className="mt-2 flex flex-wrap gap-2">
           <input
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. Blocks mostly on plosives (p, b, t). Practise soft onsets."
-            className="flex-1 rounded-lg border border-teal-100 px-3 py-1.5 text-sm"
+            className="min-w-[14rem] flex-1 rounded-lg border border-teal-100 px-3 py-1.5 text-sm"
           />
           <button disabled={busy} className="rounded-full bg-teal-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
-            Save note
+            {notePrivate ? "Save private note" : "Save & notify student"}
           </button>
+          <label className="flex w-full items-center gap-2 text-xs text-ink-soft">
+            <input
+              type="checkbox"
+              checked={notePrivate}
+              onChange={(e) => setNotePrivate(e.target.checked)}
+              className="accent-teal-600"
+            />
+            Only for therapists (don't show to the student)
+          </label>
         </form>
         <ul className="mt-3 space-y-2">
           {settings.notes.map((n) => (
             <li key={n.id} className="rounded-lg bg-paper px-3 py-2 text-sm">
               <p className="text-ink">{n.text}</p>
               <p className="text-xs text-ink-soft">
-                {formatDate(n.at, true)} · {n.by}
+                {formatDate(n.at, true)} · {n.by} ·{" "}
+                {n.shared ? (
+                  <span className="text-teal-700">Shared with student</span>
+                ) : (
+                  <span>Private (therapists only)</span>
+                )}
               </p>
             </li>
           ))}

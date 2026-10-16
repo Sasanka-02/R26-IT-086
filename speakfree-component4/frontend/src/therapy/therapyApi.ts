@@ -9,6 +9,7 @@ import {
   ProgressSummary,
   SessionSummary,
   SeverityLevel,
+  TherapistNotes,
   TherapyExercise,
   UserExercisesResponse,
   WeeklyPlanResponse,
@@ -121,4 +122,13 @@ export async function downloadMyData() {
 
 export async function deleteMyAccount() {
   return (await client.delete("/api/v1/auth/me")).data;
+}
+
+/** Notes the therapist shared with this student (new ones are unread). */
+export async function getMyNotes(userId: string): Promise<TherapistNotes> {
+  return (await client.get(`/api/v1/therapy/notes/${encodeURIComponent(userId)}`)).data;
+}
+
+export async function markNotesRead(userId: string): Promise<TherapistNotes> {
+  return (await client.post(`/api/v1/therapy/notes/${encodeURIComponent(userId)}/read`)).data;
 }

@@ -57,6 +57,11 @@ GENERAL_TIPS = {
         "You're doing well — try the next reading level, or use the picture "
         "descriptions to practise speaking in your own words."
     ),
+    "words": (
+        "Tip: press 🔊 Listen first, take a slow breath, then start the word softly — "
+        "stretch the first sound a little (mmm-oon) and keep it gentle. For words that "
+        "start with two sounds together (sp, tr, bl), slide them slowly."
+    ),
 }
 
 EXERCISE_EXPLANATIONS = {
@@ -74,10 +79,18 @@ EXERCISE_EXPLANATIONS = {
         "Picture description is free speech practice: describe what you see in your "
         "own words. Use the guiding questions if you get stuck, and pause between ideas."
     ),
+    "words": (
+        "Word practice is a picture-card game. Each round shows one picture and word at a time: "
+        "press 🔊 Listen to hear it said slowly, then 🎤 Say it, and tap 😊 Got it, 😐 Almost or "
+        "😟 Hard. There are 7 word levels — easy starting sounds, then early sounds, two-syllable "
+        "words, middle sounds, late sounds, clusters and long tricky words — and then a phrase "
+        "stage with short phrases, sentences and tongue twisters. One good round moves you up a "
+        "level; two hard ones in a row take you back one, so it never gets too hard."
+    ),
     "reading": (
         "Reading practice has three levels: Beginner, Intermediate and Advanced (the "
-        "final stage). Two strong readings in a row unlock the next level, and if two "
-        "in a row feel hard, you'll move back a level so practice stays comfortable."
+        "final stage). One strong reading unlocks the next level, and if two in a "
+        "row feel hard, you'll move back a level so practice stays comfortable."
     ),
 }
 
@@ -260,10 +273,13 @@ def _handle(intent: str, name: str, records: list[dict], summary: dict, plan: di
             "pacing": {"exercise_id": "pacing-easy-1", "label": "Start Gentle Pacing"},
             "picture": {"exercise_id": "picture-2", "label": "Start Cooking Together"},
             "reading": {"exercise_id": f"reading-{level['level']}", "label": "Start reading"},
+            "words": {"exercise_id": summary["word_level"]["exercise_id"], "label": "Start word practice"},
         }[kind]
         reply = EXERCISE_EXPLANATIONS[kind]
         if kind == "reading":
             reply += f" You're currently at {level['label']}."
+        if kind == "words":
+            reply += f" {summary['word_level']['progress_text']} {GENERAL_TIPS['words']}"
         return reply, action
     return "", None
 
@@ -277,6 +293,7 @@ FALLBACK = (
 def _llm_context(summary: dict, plan: dict, records: list[dict]) -> dict:
     return {
         "reading_level": summary["level"]["label"],
+        "word_level": summary["word_level"]["progress_text"],
         "level_progress": summary["level"]["progress_text"],
         "exercises_completed": summary["total_sessions"],
         "average_score": summary["average_score"],

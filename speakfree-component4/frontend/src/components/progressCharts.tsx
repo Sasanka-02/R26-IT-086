@@ -38,6 +38,8 @@ export const TYPE_COLORS: Record<ExerciseType, string> = {
   pacing: CATEGORICAL[1],
   daf: CATEGORICAL[2],
   picture: CATEGORICAL[3],
+  // Word practice (added later): gold, a hue distinct from the four above.
+  words: "#C9A227",
 };
 
 function TooltipCard({ title, lines }: { title: string; lines: string[] }) {

@@ -120,3 +120,39 @@ def test_inter_rater_agreement_reported():
     assert v["inter_rater"]["n_pairs"] == 5
     assert v["inter_rater"]["exact_agreement"] == 60
     assert v["strong_match"]["n"] == 5
+
+
+def test_live_feedback_counts_each_silence_and_quiet_stretch_once():
+    from app.therapy.realtime_feedback import process_metric, summarize
+    from app.therapy.schemas import LiveMetric
+    from app.therapy.session_store import LiveSessionState
+
+    state = LiveSessionState(session_id="t")
+    frame = lambda speaking, rms=0.08: LiveMetric(
+        timestamp_ms=0, rms_energy=rms, zero_crossing_rate=0.1, is_speaking=speaking)
+    for f in [frame(True)] * 4 + [frame(False)] * 20 + [frame(True)] * 4 + [frame(False)] * 8 \
+            + [frame(True, 0.005)] * 6:
+        process_metric(state, f)
+    s = summarize(state)
+    assert s["pause_count"] == 2       # two silences of 10 s and 4 s, not 15 + 3
+    assert s["quiet_warnings"] == 1    # one quiet stretch of 3 s
+
+
+def word_attempt(correct, total=10, **kw):
+    return {"exercise_type": "words", "duration_seconds": 8, "self_rating": "ok",
+            "words_correct": correct, "words_total": total, **kw}
+
+
+def test_word_rounds_are_not_punished_for_being_short_or_paused():
+    score, parts = scoring.score_with_breakdown(word_attempt(10, speaking_ratio=0.1, long_pauses=9))
+    features = {p["feature"] for p in parts}
+    assert not features & {"short_attempt", "live", "voicing", "pauses_per_min"}
+    assert score >= scoring.PRIOR_THRESHOLDS["strong"]  # all words said well counts as strong
+
+
+def test_word_score_follows_words_said_well():
+    scores = [scoring.score_with_breakdown(word_attempt(c))[0] for c in (10, 9, 7, 5, 0)]
+    assert scores == sorted(scores, reverse=True)
+    assert scores[-1] < scoring.PRIOR_THRESHOLDS["weak"]  # nothing said well counts as difficult
+    no_counts, _ = scoring.score_with_breakdown({"exercise_type": "words", "duration_seconds": 8, "self_rating": "ok"})
+    assert scoring.PRIOR_THRESHOLDS["weak"] < no_counts < scoring.PRIOR_THRESHOLDS["strong"]

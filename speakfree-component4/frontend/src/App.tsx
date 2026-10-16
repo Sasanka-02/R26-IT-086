@@ -9,6 +9,7 @@ import TherapistPortalPage from "./therapist/TherapistPortalPage";
 import TherapistStudentPage from "./therapist/TherapistStudentPage";
 import EvidencePage from "./therapist/EvidencePage";
 import ComparePage from "./therapist/ComparePage";
+import ValidationSessionPage from "./therapist/ValidationSessionPage";
 
 export default function App() {
   return (
@@ -45,6 +46,14 @@ export default function App() {
         element={
           <ProtectedRoute role="therapist">
             <EvidencePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/therapist/validation"
+        element={
+          <ProtectedRoute role="therapist">
+            <ValidationSessionPage />
           </ProtectedRoute>
         }
       />

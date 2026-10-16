@@ -9,7 +9,7 @@ activity series for the progress charts.
 
 from datetime import datetime, timedelta, timezone
 
-from app.therapy.adaptive import earned_badges, level_state, verdict
+from app.therapy.adaptive import earned_badges, level_state, verdict, word_level_state
 from app.therapy.bandit import recommend_weekly_plan
 from app.therapy.therapist_store import get_settings, goal_progress
 
@@ -18,6 +18,7 @@ TYPE_LABELS = {
     "pacing": "Pacing practice",
     "daf": "Delayed auditory feedback",
     "picture": "Picture description",
+    "words": "Word practice",
 }
 
 
@@ -147,6 +148,9 @@ def _highlights(records: list[dict], level: dict, streak: int) -> list[str]:
     if streak >= 2:
         notes.append(f"You've practised {streak} days in a row — consistency really helps.")
     notes.append(f"Reading level: {level['label']}. {level['progress_text']}")
+    words = word_level_state(records)
+    if words["rounds"]:
+        notes.append(f"Word practice: {words['progress_text']}")
     pauses = [r["long_pauses"] for r in records[-5:] if r.get("speaking_ratio") is not None]
     if pauses and sum(pauses) / len(pauses) >= 1:
         notes.append("Long pauses show up often lately — try a slow breath before each sentence.")
@@ -251,6 +255,7 @@ def build_progress_summary(user_id: str, records: list[dict]) -> dict:
     goals = goal_progress(settings["goals"], records)
     now = datetime.now(timezone.utc)
     report_card = _report_card(records, level, settings, now)
+    word_level = word_level_state(records)
     if not records:
         return {
             "user_id": user_id,
@@ -273,6 +278,7 @@ def build_progress_summary(user_id: str, records: list[dict]) -> dict:
             "goals": goals,
             "first_vs_latest": [],
             "report_card": report_card,
+            "word_level": word_level,
         }
 
     streak = _streak_days(records, now.date())
@@ -328,4 +334,5 @@ def build_progress_summary(user_id: str, records: list[dict]) -> dict:
         "goals": goals,
         "first_vs_latest": _first_vs_latest(records),
         "report_card": report_card,
+        "word_level": word_level,
     }

@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
 import AppShell from "../components/AppShell";
 import BadgeShowcase from "../components/BadgeShowcase";
+import TherapistNotesCard from "../components/TherapistNotesCard";
 import { Card, KpiTile, MeterBar, ScorePill } from "../components/ui";
 import {
   DailyActivityChart,
@@ -64,6 +65,8 @@ export default function DashboardPage() {
             Start practice
           </button>
         </div>
+
+        <TherapistNotesCard />
 
         {progressError && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-ink" role="alert">

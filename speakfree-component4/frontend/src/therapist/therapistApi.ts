@@ -42,12 +42,24 @@ export async function removeGoal(email: string, goalId: string) {
   return (await api.delete(`${student(email)}/goals/${goalId}`)).data;
 }
 
-export async function addNote(email: string, text: string) {
-  return (await api.post(`${student(email)}/notes`, { text })).data;
+export async function addNote(email: string, text: string, shared = true) {
+  return (await api.post(`${student(email)}/notes`, { text, shared })).data;
 }
 
-export async function rateAttempt(email: string, recordId: string, rating: number) {
-  return (await api.put(`${student(email)}/records/${recordId}/rating`, { rating })).data;
+export async function rateAttempt(
+  email: string,
+  recordId: string,
+  rating: number,
+  options: { rater?: string; heardAudio?: boolean; note?: string } = {}
+) {
+  return (
+    await api.put(`${student(email)}/records/${recordId}/rating`, {
+      rating,
+      rater: options.rater || null,
+      heard_audio: options.heardAudio ?? false,
+      note: options.note || null,
+    })
+  ).data;
 }
 
 export async function getEvidence(): Promise<EvidenceReport> {
@@ -66,13 +78,18 @@ export async function compareStudents(a: string, b: string): Promise<CompareResp
   return (await api.get("/api/v1/therapist/compare", { params: { a, b } })).data;
 }
 
-/** Saves every expert rating as a CSV file (the rating sheet for the report). */
-export async function downloadRatingsSheet() {
-  const res = await api.get("/api/v1/therapist/evidence/ratings.csv", { responseType: "blob" });
+async function downloadCsv(path: string, filename: string) {
+  const res = await api.get(path, { responseType: "blob" });
   const url = URL.createObjectURL(res.data);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "expert-ratings.csv";
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
 }
+
+/** Saves every expert rating as a CSV file (the rating sheet for the report). */
+export const downloadRatingsSheet = () => downloadCsv("/api/v1/therapist/evidence/ratings.csv", "expert-ratings.csv");
+
+/** Saves the pilot study (first week vs last week per participant) as CSV. */
+export const downloadPilotSheet = () => downloadCsv("/api/v1/therapist/evidence/pilot.csv", "pilot-study.csv");
