@@ -1,0 +1,2 @@
+model,feature_count,accuracy,balanced_accuracy,precision,recall,f1,roc_auc,inner_cv_f1,inner_cv,outer_cv,speakers,samples
+Tuned Random Forest - 25 selected features,25,0.7289753504108265,0.7212343269570749,0.5813397129186603,0.697524219590958,0.6341542978306964,0.7717886926934733,,3-fold GroupKFold by speaker,5-fold GroupKFold by speaker,15,16552

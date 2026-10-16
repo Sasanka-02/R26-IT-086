@@ -1,0 +1,2 @@
+accuracy,balanced_accuracy,precision,recall,f1,roc_auc,samples,speakers,original_features,validation,feature_selection
+0.7300628322861286,0.7167553621775304,0.5860031104199067,0.6759956942949408,0.627790736421193,0.7478227567768867,16552,15,51,5-fold GroupKFold,inside each training fold

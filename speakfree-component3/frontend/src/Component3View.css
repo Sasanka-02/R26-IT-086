@@ -1,0 +1,413 @@
+/* =========================================================
+   SPEAKFREE - COMPONENT 3 UI
+   Multi-Disorder Severity Classification & Risk Prediction
+   (I.L.S. Tharushan - IT21315114)
+   ========================================================= */
+
+/* --- CTA button shown inside the Component 2 page --------- */
+.component3-cta {
+  margin-top: 18px;
+}
+
+.component3-cta-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #5b6b86;
+  text-align: center;
+}
+
+/* --- page shell ----------------------------------------- */
+.c3-page {
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, #eef4ff 0px, #f6f8fc 260px, #f3f6fb 100%);
+  color: #172033;
+}
+
+.c3-header {
+  background: linear-gradient(135deg, #10203f, #1b3a6b);
+  color: #fff;
+  padding: 22px 20px 26px;
+}
+
+.c3-header-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.c3-back {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.c3-back:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.c3-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  font-weight: 800;
+  color: #8fb4ff;
+}
+
+.c3-title-block h1 {
+  margin: 4px 0 2px;
+  font-size: 26px;
+}
+
+.c3-title-block p {
+  margin: 0;
+  color: #b9c9e6;
+  font-size: 13px;
+}
+
+.c3-owner {
+  font-size: 12px;
+  color: #9fb4d6;
+}
+
+.c3-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- cards ---------------------------------------------- */
+.c3-card {
+  background: #fff;
+  border: 1px solid #e3e9f3;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 10px 26px rgba(23, 47, 92, 0.06);
+}
+
+.c3-card h3 {
+  margin: 4px 0 14px;
+  font-size: 16px;
+}
+
+.c3-label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  font-weight: 800;
+  color: #5b6b86;
+}
+
+.c3-label.green {
+  color: #1c7a48;
+}
+
+.c3-session {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #6b7a95;
+}
+
+/* --- status / error ------------------------------------ */
+.c3-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 650;
+  color: #33507f;
+}
+
+.c3-spinner {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #cfe0ff;
+  border-top-color: #2457d6;
+  border-radius: 50%;
+  animation: c3spin 0.8s linear infinite;
+}
+
+@keyframes c3spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.c3-error {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-color: #f2c9c9;
+  background: #fff5f5;
+}
+
+.c3-error strong {
+  color: #a62c2c;
+}
+
+/* --- notes --------------------------------------------- */
+.c3-note {
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 13px;
+}
+
+.c3-note-warn {
+  background: #fff4d6;
+  border: 1px solid #f0dca0;
+  color: #7a5a00;
+}
+
+.c3-note code {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+/* --- summary ------------------------------------------- */
+.c3-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.c3-summary-head h2 {
+  margin: 6px 0 0;
+  font-size: 22px;
+}
+
+.c3-risk-pill {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.c3-risk-pill.high {
+  background: #ffe1e1;
+  color: #a52c2c;
+}
+
+.c3-risk-pill.moderate {
+  background: #fff0c8;
+  color: #8f6500;
+}
+
+.c3-risk-pill.low {
+  background: #ddf5e7;
+  color: #216c3a;
+}
+
+.c3-risk-pill.unknown {
+  background: #e8edf6;
+  color: #58667c;
+}
+
+/* --- metric grid -------------------------------------- */
+.c3-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.c3-metric {
+  background: #f6f9ff;
+  border: 1px solid #e4ecfa;
+  border-radius: 11px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.c3-metric span {
+  font-size: 12px;
+  color: #5b6b86;
+}
+
+.c3-metric strong {
+  font-size: 20px;
+}
+
+.c3-metric small {
+  font-size: 12px;
+  color: #6b7a95;
+}
+
+.c3-metric.primary {
+  background: linear-gradient(135deg, #2457d6, #3772e7);
+  border-color: transparent;
+  color: #fff;
+}
+
+.c3-metric.primary span,
+.c3-metric.primary small {
+  color: #d7e3ff;
+}
+
+/* --- bars --------------------------------------------- */
+.c3-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.c3-bar-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 64px;
+  align-items: center;
+  gap: 10px;
+}
+
+.c3-bar-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.c3-bar-track {
+  height: 10px;
+  background: #eef2f9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.c3-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #2457d6, #4c8bf5);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.c3-bar-value {
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+  color: #33507f;
+}
+
+.c3-bar-muted .c3-bar-fill {
+  background: #c7d0e0;
+}
+
+.c3-bar-muted .c3-bar-value {
+  color: #98a4bb;
+}
+
+/* --- key/value grid ---------------------------------- */
+.c3-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.c3-kv {
+  background: #f7f9fc;
+  border: 1px solid #e6ebf4;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.c3-kv span {
+  font-size: 11px;
+  color: #5b6b86;
+}
+
+.c3-kv strong {
+  font-size: 14px;
+}
+
+/* --- unified / explain ------------------------------- */
+.c3-unified {
+  border-color: #bfe6cf;
+  background: linear-gradient(180deg, #f2fbf5, #ffffff 120px);
+}
+
+.c3-explain {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #33465f;
+}
+
+.c3-recs {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.c3-inline {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.c3-fine {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #6b7a95;
+  line-height: 1.5;
+}
+
+.c3-disclaimer {
+  margin: 14px 0;
+  font-size: 12px;
+  color: #7a5a00;
+  background: #fff8e6;
+  border: 1px solid #f0e0b0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+
+/* --- buttons ---------------------------------------- */
+.c3-btn {
+  align-self: flex-start;
+  background: linear-gradient(135deg, #2457d6, #3772e7);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.c3-btn.ghost {
+  background: #eef3fd;
+  color: #2457d6;
+}
+
+/* --- footer ---------------------------------------- */
+.c3-footer {
+  text-align: center;
+  padding: 20px;
+  font-size: 12px;
+  color: #6b7a95;
+}
+
+@media (max-width: 620px) {
+  .c3-bar-row {
+    grid-template-columns: 96px 1fr 52px;
+  }
+}
