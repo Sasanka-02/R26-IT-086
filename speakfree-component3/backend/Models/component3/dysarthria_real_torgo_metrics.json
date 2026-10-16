@@ -1,0 +1,90 @@
+{
+  "summary": {
+    "accuracy": 0.7426,
+    "balanced_accuracy": 0.726,
+    "precision": 0.6058,
+    "recall": 0.6749,
+    "f1": 0.6385,
+    "roc_auc": 0.7677,
+    "confusion_matrix": [
+      [
+        8530,
+        2448
+      ],
+      [
+        1812,
+        3762
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "healthy",
+      "dysarthria"
+    ],
+    "validation": "5-fold GroupKFold by speaker_id (speaker-independent)",
+    "n_samples": 16552,
+    "n_speakers": 15,
+    "n_features": 25
+  },
+  "folds": [
+    {
+      "fold": 1,
+      "test_speakers": [
+        "F01",
+        "FC02",
+        "M01"
+      ],
+      "accuracy": 0.8917,
+      "balanced_accuracy": 0.9092,
+      "f1": 0.845,
+      "roc_auc": 0.9711
+    },
+    {
+      "fold": 2,
+      "test_speakers": [
+        "FC01",
+        "M02",
+        "MC01"
+      ],
+      "accuracy": 0.8579,
+      "balanced_accuracy": 0.8973,
+      "f1": 0.7659,
+      "roc_auc": 0.9736
+    },
+    {
+      "fold": 3,
+      "test_speakers": [
+        "F04",
+        "FC03",
+        "M03"
+      ],
+      "accuracy": 0.6896,
+      "balanced_accuracy": 0.6746,
+      "f1": 0.6104,
+      "roc_auc": 0.6984
+    },
+    {
+      "fold": 4,
+      "test_speakers": [
+        "F03",
+        "M05",
+        "MC03"
+      ],
+      "accuracy": 0.6695,
+      "balanced_accuracy": 0.6699,
+      "f1": 0.5194,
+      "roc_auc": 0.8349
+    },
+    {
+      "fold": 5,
+      "test_speakers": [
+        "M04",
+        "MC02",
+        "MC04"
+      ],
+      "accuracy": 0.6198,
+      "balanced_accuracy": 0.7552,
+      "f1": 0.5012,
+      "roc_auc": 0.8786
+    }
+  ]
+}

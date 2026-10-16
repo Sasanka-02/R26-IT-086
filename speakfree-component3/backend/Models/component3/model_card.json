@@ -1,0 +1,39 @@
+{
+  "component": "Component 3 - Multi-Disorder Severity Classification & Risk Prediction",
+  "owner": "I.L.S. Tharushan (IT21315114)",
+  "model_version": "component3-baseline-v1",
+  "built_at": "2026-08-30T18:11:08",
+  "consumes": "Component 2 output (component2_output / component3_ready_output)",
+  "models": {
+    "disorder_classifier": {
+      "path": "disorder_classifier.joblib",
+      "algorithm": "RandomForestClassifier",
+      "data_source": "SYNTHETIC_DEMO",
+      "clinically_validated": false,
+      "built": true
+    },
+    "severity_estimator": {
+      "path": "severity_estimator.joblib",
+      "algorithm": "RandomForestClassifier (4 ordered levels)",
+      "data_source": "SYNTHETIC_DEMO",
+      "clinically_validated": false,
+      "built": true
+    },
+    "stuttering_multilabel": {
+      "path": "stuttering_multilabel.joblib",
+      "algorithm": "MultiOutputClassifier(RandomForestClassifier)",
+      "data_source": "SYNTHETIC_DEMO",
+      "clinically_validated": false,
+      "built": true
+    },
+    "dysarthria_real_torgo": {
+      "path": "dysarthria_real_torgo.joblib",
+      "algorithm": "RandomForestClassifier",
+      "data_source": "TORGO (research dataset)",
+      "validation": "5-fold GroupKFold by speaker (speaker-independent)",
+      "clinically_validated": false,
+      "built": true
+    }
+  },
+  "disclaimer": "DEMO models are trained on synthetic data to demonstrate the pipeline and MUST NOT be reported as clinically validated or as research-valid accuracy. Only the TORGO dysarthria model is trained on real research data."
+}

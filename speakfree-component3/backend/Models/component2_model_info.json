@@ -1,0 +1,43 @@
+{
+    "model_type": "RandomForestClassifier",
+    "feature_count": 25,
+    "features": [
+        "mfcc_12_mean",
+        "min_rms_energy",
+        "std_rms_energy",
+        "rms_range",
+        "max_rms_energy",
+        "mfcc_1_std",
+        "mfcc_5_mean",
+        "mean_rms_energy",
+        "mfcc_6_mean",
+        "max_f0_hz",
+        "mean_f0_hz",
+        "mfcc_7_std",
+        "mfcc_1_mean",
+        "mean_spectral_rolloff",
+        "mean_spectral_centroid",
+        "mean_zero_crossing_rate",
+        "speech_rate_proxy",
+        "mean_spectral_bandwidth",
+        "mfcc_13_std",
+        "duration",
+        "min_f0_hz",
+        "mfcc_8_mean",
+        "mfcc_13_mean",
+        "mfcc_9_mean",
+        "mfcc_8_std"
+    ],
+    "training_samples": 16552,
+    "healthy_samples": 10978,
+    "dysarthria_samples": 5574,
+    "validation_reference": {
+        "accuracy": 0.7464,
+        "balanced_accuracy": 0.7295,
+        "precision": 0.6114,
+        "recall": 0.6778,
+        "f1": 0.6429,
+        "roc_auc": 0.7709
+    },
+    "important_note": "The stored validation results correspond to the previously evaluated 25-feature configuration. Final inference model is trained on all available labelled samples."
+}

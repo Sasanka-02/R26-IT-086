@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+backend/venv/
+.venv/
+.pytest_cache/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Secrets
+.env
+
+# Trained model weights – regenerate with backend/Training/component3/train_all.py
+*.joblib
+
+# Raw audio (TORGO is licence-restricted) and user uploads
+backend/dataset/torgo/audio/
+backend/uploads/
+*.wav
+*.WAV

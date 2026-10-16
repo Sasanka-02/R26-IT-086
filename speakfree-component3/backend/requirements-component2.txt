@@ -1,0 +1,31 @@
+# Component 2 - Alignment & Articulation Analytics (runtime deps)
+# Heavy audio stack: needed to run main.py (the combined Component 2 + 3 server).
+# Component 3 alone does NOT need these - use run_component3_only.py instead.
+#
+# torch is CPU-only here. If install is slow/flaky on a throttled network, install
+# torch first from its own index, then the rest:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-component2.txt
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.5.1
+
+openai-whisper==20250625
+librosa==0.11.0
+soundfile==0.14.0
+
+# Pin numba/llvmlite to the stable pairing for numpy 1.26 / py3.11 / Windows.
+# numba 0.67 + llvmlite 0.49 shipped a wheel whose llvmlite.dll fails to load here.
+numba==0.60.0
+llvmlite==0.43.0
+
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.9
+
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.5.2
+scipy==1.13.1
+joblib==1.4.2

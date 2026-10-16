@@ -1,0 +1,13 @@
+feature_1,feature_2,correlation
+duration,duration_seconds,0.999999999387397
+std_rms_energy,max_rms_energy,0.9705813120039851
+std_rms_energy,rms_range,0.9742130436775978
+max_rms_energy,rms_range,0.9979189613661255
+mean_zero_crossing_rate,mean_spectral_centroid,0.984273148540385
+mean_spectral_centroid,mean_spectral_rolloff,0.9654095407750977
+mean_f0_hz,min_f0_hz,0.9595397220881561
+std_f0_hz,f0_range_hz,0.9607397445674859
+pause_ratio,speech_ratio,0.9999999999388448
+mean_zero_crossing_rate,mfcc_2_mean,0.9556723832818622
+mean_spectral_centroid,mfcc_2_mean,0.9801869452132119
+mean_spectral_rolloff,mfcc_2_mean,0.9516751644258514
