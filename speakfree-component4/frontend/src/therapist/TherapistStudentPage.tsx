@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Lightbulb, Printer } from "lucide-react";
+import { ArrowLeft, Headphones, Lightbulb, Printer } from "lucide-react";
 import { StudentDetail } from "../types/therapist";
 import { getStudentDetail, rateAttempt } from "./therapistApi";
 import StudentControls from "./StudentControls";
@@ -18,6 +18,8 @@ import {
   StatusPill,
 } from "./ui";
 import AppShell from "../components/AppShell";
+import RecordingPlayer from "../components/RecordingPlayer";
+import { fetchRecordingUrl } from "../therapy/therapyApi";
 import { useAuth } from "../context/AuthContext";
 
 const RATING_LABEL = { easy: "Easy", ok: "Okay", hard: "Hard" };
@@ -38,10 +40,34 @@ export default function TherapistStudentPage() {
   const [reload, setReload] = useState(0);
   const [savingRating, setSavingRating] = useState<string | null>(null);
 
+  // Recordings the therapist has opened on this page: record id -> playable URL.
+  const [playing, setPlaying] = useState<Record<string, string>>({});
+  const [loadingAudio, setLoadingAudio] = useState<string | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [reviewOnly, setReviewOnly] = useState(false);
+
+  const listen = async (recordId: string) => {
+    if (playing[recordId]) {
+      setPlaying(({ [recordId]: _closed, ...rest }) => rest);
+      return;
+    }
+    setLoadingAudio(recordId);
+    setAudioError(null);
+    try {
+      const url = await fetchRecordingUrl(email, recordId);
+      setPlaying((prev) => ({ ...prev, [recordId]: url }));
+    } catch {
+      setAudioError("Couldn't load that recording.");
+    } finally {
+      setLoadingAudio(null);
+    }
+  };
+
   const rate = async (recordId: string, rating: number) => {
     setSavingRating(recordId);
     try {
-      await rateAttempt(email, recordId, rating);
+      // Rated while listening when the recording was opened on this page.
+      await rateAttempt(email, recordId, rating, { heardAudio: !!playing[recordId] });
       setReload((n) => n + 1);
     } finally {
       setSavingRating(null);
@@ -67,6 +93,14 @@ export default function TherapistStudentPage() {
   }, [email, reload]);
 
   const summary = detail?.summary;
+  const unratedByMe = (r: StudentDetail["records"][number]) =>
+    !(r.expert_reviews ?? []).some((x) => x.by === user?.email);
+  const toReview = detail ? detail.records.filter((r) => r.has_recording && unratedByMe(r)).length : 0;
+  const shownRecords = detail
+    ? reviewOnly
+      ? detail.records.filter((r) => r.has_recording && unratedByMe(r))
+      : detail.records
+    : [];
 
   return (
     <AppShell>
@@ -264,7 +298,23 @@ export default function TherapistStudentPage() {
                   </div>
                 </Panel>
 
-                <Panel title="All work" subtitle={`${detail.records.length} saved exercises, newest first`}>
+                <Panel
+                  title="All work"
+                  subtitle={`${detail.records.length} saved exercises, newest first · ${toReview} recording${
+                    toReview === 1 ? "" : "s"
+                  } waiting for your rating`}
+                  action={
+                    <button
+                      onClick={() => setReviewOnly((v) => !v)}
+                      className={`no-print rounded-full border px-3 py-1 text-xs font-medium ${
+                        reviewOnly ? "border-teal-600 bg-teal-600 text-white" : "border-teal-200 text-teal-700 hover:bg-teal-50"
+                      }`}
+                    >
+                      {reviewOnly ? "Show all work" : `Recordings to review (${toReview})`}
+                    </button>
+                  }
+                >
+                  {audioError && <p className="mb-2 text-sm text-red-700">{audioError}</p>}
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px] text-left text-sm">
                       <thead className="text-xs text-ink-soft">
@@ -277,18 +327,20 @@ export default function TherapistStudentPage() {
                           <th className="py-2 pr-3 text-right font-medium" title="Measured words per minute / target">wpm</th>
                           <th className="py-2 pr-3 font-medium">Felt</th>
                           <th className="py-2 pr-3 text-right font-medium">Score</th>
+                          <th className="no-print py-2 pr-3 font-medium">Recording</th>
                           <th className="no-print py-2 font-medium" title="Your clinical rating of this attempt (1 = very poor, 5 = very fluent). Used to validate and calibrate the score. A second therapist's ratings are kept separately and give inter-rater agreement (Cohen's kappa).">
                             Your rating
                           </th>
                         </tr>
                       </thead>
                       <tbody className="tabular-nums">
-                        {detail.records.map((r) => {
+                        {shownRecords.map((r) => {
                           // Each rater sees and edits their own rating; others' are listed beside it.
                           const mine = (r.expert_reviews ?? []).find((x) => x.by === user?.email)?.rating;
                           const others = (r.expert_reviews ?? []).filter((x) => x.by !== user?.email);
                           return (
-                          <tr key={r.id} className="border-b border-teal-50 last:border-0">
+                          <Fragment key={r.id}>
+                          <tr className={`border-b border-teal-50 last:border-0 ${playing[r.id] ? "bg-teal-50/40" : ""}`}>
                             <td className="py-2.5 pr-3 text-ink-soft">{formatDate(r.completed_at, true)}</td>
                             <td className="py-2.5 pr-3 text-ink">{r.title}</td>
                             <td className="py-2.5 pr-3 text-right text-ink">{formatDuration(r.duration_seconds)}</td>
@@ -305,6 +357,24 @@ export default function TherapistStudentPage() {
                             <td className="py-2.5 pr-3 text-right">
                               <span className="font-semibold text-ink">{r.score}</span>{" "}
                               <span className="text-xs text-ink-soft">{r.verdict}</span>
+                            </td>
+                            <td className="no-print py-2.5 pr-3">
+                              {r.has_recording ? (
+                                <button
+                                  onClick={() => listen(r.id)}
+                                  disabled={loadingAudio === r.id}
+                                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                                    playing[r.id]
+                                      ? "bg-teal-600 text-white"
+                                      : "border border-teal-200 text-teal-700 hover:bg-teal-50"
+                                  }`}
+                                >
+                                  <Headphones size={12} />
+                                  {loadingAudio === r.id ? "Loading…" : playing[r.id] ? "Close" : "Listen"}
+                                </button>
+                              ) : (
+                                <span className="text-xs text-ink-soft">—</span>
+                              )}
                             </td>
                             <td className="no-print py-2.5">
                               <div className="flex gap-1" role="radiogroup" aria-label="Expert rating">
@@ -338,6 +408,17 @@ export default function TherapistStudentPage() {
                               )}
                             </td>
                           </tr>
+                          {playing[r.id] && (
+                            <tr className="no-print border-b border-teal-50 bg-teal-50/40">
+                              <td colSpan={10} className="px-2 pb-3">
+                                <RecordingPlayer
+                                  src={playing[r.id]}
+                                  label={`${r.title} · ${formatDate(r.completed_at, true)} — listen, then give your rating (1–5) above`}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                          </Fragment>
                           );
                         })}
                       </tbody>

@@ -13,10 +13,12 @@ the demo. Read sections 1–3 first; they cover what the panel asked for.
 Students who stutter practise at home: graded reading (Beginner → Intermediate →
 Advanced/final stage), picture description, pacing and delayed auditory feedback.
 
-1. **The browser measures, the server never hears.** While the student reads,
+1. **The browser measures; the therapist listens.** While the student reads,
    the browser computes a few numbers twice a second (loudness, whether they are
-   speaking, syllable peaks). Only those numbers are sent; audio never leaves
-   the device.
+   speaking, syllable peaks), which drive the live feedback. After an attempt is
+   saved, its recording is shared only with the student's therapist, who listens
+   and rates it; students can switch this off on the Privacy tab, and deleting
+   the account deletes the recordings.
 2. **Each attempt gets an explainable score.** A linear model turns the numbers
    into a 0–100 practice-quality score and shows each factor's points.
 3. **The score is validated against a therapist.** Therapists rate attempts 1–5.
@@ -73,8 +75,10 @@ the validation results are the clinician ones in §1."*
    The volunteer does it on the laptop and saves. The SLP **listens to the
    recording on the same screen** and rates 1–5. The app's score stays hidden
    until the rating is submitted, so the rating is blind. Repeat for 30–50
-   attempts across all exercise types. Recordings never leave the laptop;
+   attempts across all exercise types. Recordings are saved with each attempt;
    ratings are marked "rated while listening" and calibration re-runs on each.
+   Therapists can also rate students' home recordings later on each student's
+   page (*All work* → *Listen*).
 4. **Second rater (optional):** type their name in *Rater 2*; both rate each
    attempt at the same sitting, and Cohen's kappa appears under *Agreement
    between two raters*.

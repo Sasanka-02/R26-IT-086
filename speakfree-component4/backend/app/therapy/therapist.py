@@ -102,6 +102,11 @@ def student_alerts(profile: dict, records: list[dict], now: datetime, unread_mes
     if unread_messages:
         out.append(alert("message", "info", f"New message from {first}",
                          f"{unread_messages} unread message{'s' if unread_messages != 1 else ''}."))
+    to_review = sum(1 for r in records if r.get("recording") and not r.get("expert"))
+    if to_review:
+        out.append(alert("recordings", "info",
+                         f"{first} sent {to_review} recording{'s' if to_review != 1 else ''} to review",
+                         "Listen on the student's page and give your rating (1–5)."))
     if not records:
         registered = profile.get("registered_at")
         days = (now - _parse(registered)).days if registered else 0
@@ -247,6 +252,7 @@ def student_detail(email: str) -> dict | None:
                 "exercise_id": r["exercise_id"],
                 "expert": r.get("expert"),
                 "expert_reviews": reviews_of(r),
+                "has_recording": bool(r.get("recording")),
                 "measured_wpm": r.get("measured_wpm"),
                 "target_wpm": r.get("target_wpm"),
                 "score_breakdown": r.get("score_breakdown", []),

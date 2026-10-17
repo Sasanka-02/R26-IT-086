@@ -133,6 +133,7 @@ export default function DafExercise({ exercise, initialDelayMs = 150 }: DafExerc
         <CompletionPanel
           key={practisedSeconds}
           metrics={{ exercise_id: exercise.id, duration_seconds: practisedSeconds }}
+          recordingUrl={recordingUrl}
         />
       )}
 

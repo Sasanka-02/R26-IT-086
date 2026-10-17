@@ -11,6 +11,8 @@ export interface AppUser {
   /** Students only. Missing for accounts made before ages were collected. */
   age?: number | null;
   age_group?: AgeGroup;
+  /** Students: practice recordings go to the therapist unless this is false. */
+  share_recordings?: boolean;
 }
 
 interface Session {

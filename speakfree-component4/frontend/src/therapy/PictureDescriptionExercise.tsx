@@ -139,6 +139,7 @@ export default function PictureDescriptionExercise({
             <CompletionPanel
               key={recorder.audioUrl}
               metrics={{ exercise_id: exercise.id, duration_seconds: recorder.recordingTime }}
+              recordingUrl={recorder.audioUrl}
             />
           ) : (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-ink" role="alert">
@@ -153,8 +154,8 @@ export default function PictureDescriptionExercise({
       )}
 
       <p className="text-xs text-ink-soft">
-        Privacy: this recording stays in your browser for review only — it
-        isn't uploaded or stored anywhere.
+        Privacy: after you save, this recording is shared with your therapist so they can listen and give
+        feedback. You can switch this off on the Privacy tab.
       </p>
     </div>
   );

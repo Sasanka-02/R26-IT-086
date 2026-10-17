@@ -1,8 +1,8 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 
-from app.therapy import audit, auth
+from app.therapy import audit, auth, recordings
 from app.therapy.adaptive import (
     LEVELS,
     attempt_feedback,
@@ -21,7 +21,7 @@ from app.therapy.dashboard import build_progress_summary
 from app.therapy.exercises import EXERCISE_BANK, START_LEVEL, get_exercise, recommend_exercises, syllables_per_word
 from app.therapy.federated_stub import get_federated_architecture
 from app.therapy.privacy import budget_ledger
-from app.therapy.progress_store import add_record, get_records, normalize_user_id
+from app.therapy.progress_store import add_record, get_records, normalize_user_id, update_record
 from app.therapy.realtime_feedback import process_metric, summarize
 from app.therapy.schemas import (
     AssistantChatRequest,
@@ -264,6 +264,40 @@ async def submit_screening(payload: ScreeningRequest, user: dict = Depends(auth.
         "level": level_state(records, settings["level_override"], age_group_of(payload.user_id)),
         "plan": recommend_weekly_plan(records, settings, age_group=age_group_of(payload.user_id)),
     }
+
+
+# --- Recordings shared with the therapist ------------------------------------
+
+@router.put("/recordings/{user_id}/{record_id}")
+async def upload_recording(user_id: str, record_id: str, request: Request, user: dict = Depends(auth.current_user)):
+    """The browser uploads a saved attempt's audio (raw body, Content-Type
+    audio/webm etc.) so the therapist can listen to it and rate it."""
+    auth.ensure_can_access(user, user_id)
+    owner = get_user(user_id) or {}
+    if owner.get("share_recordings") is False and user["role"] == "student":
+        raise HTTPException(status_code=409, detail="Recording sharing is switched off on your Privacy tab.")
+    if not any(r["id"] == record_id for r in get_records(user_id)):
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    try:
+        meta = recordings.save(user_id, record_id, await request.body(), request.headers.get("content-type"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    update_record(user_id, record_id, {"recording": meta})
+    audit.log(user["email"], "recording.uploaded", normalize_user_id(user_id), record_id=record_id, bytes=meta["bytes"])
+    return meta
+
+
+@router.get("/recordings/{user_id}/{record_id}")
+async def get_recording(user_id: str, record_id: str, user: dict = Depends(auth.current_user)):
+    """The audio of one attempt — for the student themself or a therapist."""
+    auth.ensure_can_access(user, user_id)
+    found = recordings.load(user_id, record_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="No recording for this attempt")
+    data, kind = found
+    if user["role"] == "therapist":
+        audit.log(user["email"], "recording.played", normalize_user_id(user_id), record_id=record_id)
+    return Response(data, media_type=kind, headers={"Cache-Control": "private, no-store"})
 
 
 # --- Homework (therapist-assigned home practice) ----------------------------

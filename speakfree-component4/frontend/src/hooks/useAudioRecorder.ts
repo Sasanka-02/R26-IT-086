@@ -72,7 +72,8 @@ export async function ensureRunning(context: AudioContext): Promise<void> {
 /**
  * Records an already-open microphone stream so the student can listen back.
  * Returns a function that stops recording; `onReady` receives a playable URL.
- * The recording stays in the browser — it is never uploaded.
+ * After the attempt is saved, the recording is shared with the therapist
+ * (unless the student switched sharing off on the Privacy tab).
  */
 export function recordStream(stream: MediaStream, onReady: (url: string) => void): () => void {
   if (typeof MediaRecorder === "undefined") return () => {};

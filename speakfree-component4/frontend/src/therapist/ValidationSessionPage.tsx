@@ -55,7 +55,7 @@ function RatingRow({ who, value, onChange }: { who: string; value: number | null
 /**
  * Expert validation session: a volunteer does an exercise on this device, the
  * speech-language pathologist listens to the recording here and rates it 1–5
- * before seeing the app's score. Recordings never leave the device; only the
+ * before seeing the app's score. Recordings are saved with the attempt; the
  * measurements, the score and the rating are saved.
  */
 export default function ValidationSessionPage() {
@@ -126,7 +126,7 @@ export default function ValidationSessionPage() {
             <p className="mt-1 max-w-3xl text-sm text-ink-soft">
               A volunteer does an exercise on this device. You listen to the recording here and rate it 1–5 —
               the app's score stays hidden until you have rated, so your judgement is independent. Recordings
-              never leave this device.
+              are saved with each attempt, so you can listen again later on the student's page.
             </p>
           </div>
           <div className="rounded-2xl border border-teal-100 bg-white px-5 py-3 text-center">

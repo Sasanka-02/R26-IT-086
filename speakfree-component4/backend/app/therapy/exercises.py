@@ -418,6 +418,120 @@ AGE_EXERCISES: list[TherapyExercise] = [
         passage="A little boat sails on the sea. The wind is soft. A fish jumps up. Splash! The boat goes home.",
         recommended_for=_ALL,
     ),
+    TherapyExercise(
+        id="child-pacing-2", type=ExerciseType.PACING, difficulty=1, age_groups=_KIDS,
+        title="Slow Snail Pacing — The Sleepy Cat",
+        description="Read like a slow snail 🐌 — one word at a time, nice and soft.",
+        target_wpm=65,
+        passage="My cat is sleepy. She sits on the mat. She licks her paw. Then she naps in the sun. Shh!",
+        recommended_for=_ALL,
+    ),
+    TherapyExercise(
+        id="child-pacing-3", type=ExerciseType.PACING, difficulty=1, age_groups=_KIDS,
+        title="Slow Snail Pacing — The Tuk-Tuk Ride",
+        description="A slow snail ride 🐌🛺 — follow the yellow word and keep your voice gentle.",
+        target_wpm=75,
+        passage=(
+            "We ride in a red tuk-tuk. It goes beep, beep! We see a big elephant. "
+            "We wave to the man. Then we go home for rice."
+        ),
+        recommended_for=_ALL,
+    ),
+    # --- Picture description by age ---
+    TherapyExercise(
+        id="picture-teen-canteen", type=ExerciseType.PICTURE, difficulty=2, age_groups=_TEENS,
+        title="Picture Description — The School Canteen",
+        description=(
+            "Describe what is happening in the school canteen at interval. Talk about the people, "
+            "what they are doing and what you think happens next."
+        ),
+        image_url="/stimuli/images/picture-teen-canteen.svg",
+        prompts=[
+            "What are the students in the queue waiting for?",
+            "What is each student at the table doing?",
+            "What happened to the boy near the front, and what should he do now?",
+            "What is the notice board about? Would you take part?",
+        ],
+        example_sentences=[
+            "Two students are waiting in the queue to buy fish buns and tea.",
+            "One girl at the table is laughing, another is reading a book, and a boy is drinking water.",
+            "A boy has spilled his drink on the floor, so he should tell the canteen aunty and clean it up.",
+            "The notice says the sports meet is on Friday at eight in the morning.",
+            "It is half past ten, so it must be the interval.",
+        ],
+        recommended_for=_ALL,
+    ),
+    TherapyExercise(
+        id="picture-teen-cricket", type=ExerciseType.PICTURE, difficulty=2, age_groups=_TEENS,
+        title="Picture Description — The Inter-House Cricket Match",
+        description=(
+            "Describe the cricket match like a sports commentator. Explain who is doing what "
+            "and how the game is going."
+        ),
+        image_url="/stimuli/images/picture-teen-cricket.svg",
+        prompts=[
+            "What is the batsman doing right now?",
+            "Who else can you see on the field, and what are their jobs?",
+            "What does the scoreboard tell you? Is Blue House winning?",
+            "How are the students under the tree feeling? How do you know?",
+        ],
+        example_sentences=[
+            "The batsman is swinging his bat at the red ball.",
+            "The bowler has just bowled, the wicketkeeper is waiting behind the stumps, and the umpire is watching.",
+            "Blue House has scored 124 runs for 3 wickets after 18 overs, and they need 150 to win.",
+            "The students are cheering and holding a banner that says Go Blue House.",
+            "If they hit a few more fours, they can win the match.",
+        ],
+        recommended_for=_ALL,
+    ),
+    TherapyExercise(
+        id="picture-adult-market", type=ExerciseType.PICTURE, difficulty=3, age_groups=_ADULTS,
+        title="Picture Description (Advanced) — A Busy Market Street",
+        description=(
+            "A detailed, busy scene. Describe it in an organised way — from left to right, or from the "
+            "street to the shops — then explain what problems people might be facing and why."
+        ),
+        image_url="/stimuli/images/picture-adult-market.svg",
+        prompts=[
+            "Describe the scene in order, as if you were explaining it to someone on the phone.",
+            "What is the traffic policeman doing, and why is it needed here?",
+            "Why do you think the man on the right is running?",
+            "If you needed medicine and a new phone charger, where would you go and how would you get there?",
+            "What could be done to make this street safer or less crowded?",
+        ],
+        example_sentences=[
+            "This is a crowded market street in the morning, with shops on both sides and heavy traffic in the middle.",
+            "The traffic policeman is blowing his whistle and directing the vehicles, because the crossing is very busy.",
+            "The man is probably running to catch the 138 bus to Kottawa before it leaves.",
+            "I would go to the pharmacy first, then walk across the zebra crossing to Mobile World.",
+            "A separate lane for buses and fewer vendors on the road would make it safer for pedestrians.",
+        ],
+        recommended_for=_ALL,
+    ),
+    TherapyExercise(
+        id="picture-adult-station", type=ExerciseType.PICTURE, difficulty=3, age_groups=_ADULTS,
+        title="Picture Description (Advanced) — Railway Station at Rush Hour",
+        description=(
+            "A complex scene with information to read and situations to explain. Describe what is "
+            "happening, use the details to make sensible guesses, and say what you would do."
+        ),
+        image_url="/stimuli/images/picture-adult-station.svg",
+        prompts=[
+            "What time is it, and what does the departure board tell travellers?",
+            "Why do you think the man near the front is checking his watch?",
+            "Describe three different people on the platform and what they are doing.",
+            "If you were travelling to Badulla, what would you do now, and why?",
+            "How could the station make the delay less stressful for passengers?",
+        ],
+        example_sentences=[
+            "It is a quarter to six in the evening, and the board shows the Badulla train is delayed by twenty minutes.",
+            "He is probably worried because his train is late and he has somewhere important to be.",
+            "A mother is holding her child's hand, an elderly man is resting on a bench, and a vendor is selling peanuts.",
+            "I would buy my ticket now, find a seat, and call home to say I will be late.",
+            "They could make clear announcements and show the new departure time on the board.",
+        ],
+        recommended_for=_ALL,
+    ),
     # --- Teen ladder ---
     TherapyExercise(
         id="teen-school", type=ExerciseType.READING, level=ReadingLevel.BEGINNER, difficulty=1, age_groups=_TEENS,
@@ -550,7 +664,7 @@ _AGE_TAGS = {
     "reading-beginner": _ADULTS, "reading-intermediate": _ADULTS, "reading-advanced": _ADULTS,
     "pacing-easy-1": ["teen", "adult"], "pacing-standard-1": ["teen", "adult"],
     "daf-1": ["teen", "adult"],
-    "picture-1": ["child", "teen"], "picture-2": ["child", "teen", "adult"], "picture-3": ["teen", "adult"],
+    "picture-1": _KIDS, "picture-2": _KIDS, "picture-3": ["teen", "adult"],
 }
 for _ex in EXERCISE_BANK:
     if _ex.id in _AGE_TAGS:

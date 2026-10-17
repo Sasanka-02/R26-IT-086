@@ -49,7 +49,7 @@ export interface StudentRow {
 export interface StudentAlert {
   email: string;
   name: string;
-  kind: "message" | "not_started" | "inactive" | "score_drop" | "hard" | "homework_overdue";
+  kind: "message" | "recordings" | "not_started" | "inactive" | "score_drop" | "hard" | "homework_overdue";
   severity: "high" | "medium" | "info";
   /** Plain sentence, e.g. "Kasun hasn't practised for 10 days". */
   text: string;
@@ -87,6 +87,8 @@ export interface StudentRecord {
   exercise_id: string;
   expert: ExpertReview | null;
   expert_reviews: ExpertReview[];
+  /** The student shared an audio recording of this attempt. */
+  has_recording?: boolean;
   measured_wpm: number | null;
   target_wpm: number | null;
   score_breakdown: ScorePart[];

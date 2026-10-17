@@ -108,6 +108,7 @@ export default function RolePlayExercise({ exercise }: { exercise: TherapyExerci
             <CompletionPanel
               key={recorder.audioUrl}
               metrics={{ exercise_id: exercise.id, duration_seconds: recorder.recordingTime }}
+              recordingUrl={recorder.audioUrl}
             />
           ) : (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-ink" role="alert">
@@ -123,7 +124,7 @@ export default function RolePlayExercise({ exercise }: { exercise: TherapyExerci
 
       <p className="text-xs text-ink-soft">
         Tip: take a calm breath before each answer, start softly, and pause between ideas — just like a real
-        conversation. The recording stays on this device.
+        conversation. After you save, your therapist can listen to the recording.
       </p>
     </div>
   );

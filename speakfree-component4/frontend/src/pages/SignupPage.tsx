@@ -120,7 +120,7 @@ export default function SignupPage() {
               />
               <span>
                 I agree that SpeakFree stores my practice results (scores, timings, pauses, how each exercise felt)
-                so that I and my therapist can track progress. My voice is never recorded or uploaded. I can download
+                so that I and my therapist can track progress. My practice recordings are shared with my therapist so they can give feedback (I can switch this off). I can download
                 or delete my data at any time from the Privacy page (Personal Data Protection Act No. 9 of 2022).
                 If I am under 18, a parent or guardian has agreed to this.
               </span>

@@ -225,12 +225,13 @@ export default function PacingExercise({ sessionId, exercise }: PacingExercisePr
             syllables: summary.syllables,
             target_wpm: exercise.target_wpm,
           }}
+          recordingUrl={recordingUrl}
         />
       )}
 
       <p className="text-xs text-ink-soft">
-        Privacy: only pacing/volume numbers are sent from your device. The
-        recording stays in this page for you to listen back — it is never uploaded.
+        Privacy: after you save, your recording is shared with your therapist so they can listen
+        and give feedback. You can switch this off on the Privacy tab.
       </p>
     </div>
   );

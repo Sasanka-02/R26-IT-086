@@ -339,7 +339,8 @@ def _handle_plain(intent: str, name: str, records: list[dict], summary: dict, pl
         )
     if intent == "privacy":
         return (
-            "Your voice recordings never leave your browser. Only small numbers (how long you spoke, "
+            "Your practice recordings are shared only with your therapist, so they can listen and give "
+            "feedback — you can switch this off on the Privacy tab. Small numbers (how long you spoke, "
             "long pauses, speed) plus your rating are saved, under your account. Your therapist can see "
             "your results; other students cannot.",
             None,

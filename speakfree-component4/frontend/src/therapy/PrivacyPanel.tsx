@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download, ShieldCheck, Trash2 } from "lucide-react";
-import { deleteMyAccount, downloadMyData, getPrivacyBudget, getFederatedArchitecture } from "./therapyApi";
+import {
+  deleteMyAccount,
+  downloadMyData,
+  getFederatedArchitecture,
+  getPrivacyBudget,
+  setRecordingSharing,
+} from "./therapyApi";
 import { useAuth } from "../context/AuthContext";
 import { PrivacyBudget } from "../types/therapy";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
@@ -12,7 +18,16 @@ export default function PrivacyPanel() {
   const [architecture, setArchitecture] = useState<Record<string, unknown> | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
-  const { logout } = useAuth();
+  const { logout, user, updateUser } = useAuth();
+  const sharing = user?.share_recordings !== false;
+
+  const toggleSharing = async () => {
+    try {
+      updateUser(await setRecordingSharing(!sharing));
+    } catch {
+      setDataError("Couldn't change the recording setting. Try again.");
+    }
+  };
   const navigate = useNavigate();
 
   const removeAccount = async () => {
@@ -65,10 +80,32 @@ export default function PrivacyPanel() {
         <p className="font-medium text-ink">What is saved for {userId}</p>
         <ul className="mt-1 list-disc space-y-1 pl-5">
           <li>Saved: exercise name, date, practice time, score, number of long pauses, and your “how did it feel” rating.</li>
-          <li>Never saved or uploaded: your voice recordings.</li>
-          <li>Your results are stored only under your own account. Your therapist can see them; other students cannot.</li>
+          <li>
+            Your practice recordings: shared with your therapist so they can listen and give feedback
+            {user?.share_recordings === false ? " — currently switched off." : "."}
+          </li>
+          <li>Your results and recordings are stored only under your own account. Your therapist can see and hear them; other students cannot.</li>
           <li>Any statistics shared outside the clinic include differential-privacy noise, so no single attempt can be identified.</li>
         </ul>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-100 p-4 text-sm">
+        <div className="max-w-xl">
+          <p className="font-medium text-ink">Share my recordings with my therapist</p>
+          <p className="mt-0.5 text-xs text-ink-soft">
+            When on, each saved exercise's recording goes to your therapist so they can listen, rate it and help you.
+            When off, recordings stay on your device and only your scores are saved.
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={sharing}
+          onClick={toggleSharing}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition ${sharing ? "bg-teal-600" : "bg-snow/20"}`}
+        >
+          <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${sharing ? "left-6" : "left-1"}`} />
+          <span className="sr-only">{sharing ? "On" : "Off"}</span>
+        </button>
       </div>
 
       <div className="rounded-xl border border-teal-100 p-4 text-sm">
@@ -117,8 +154,8 @@ export default function PrivacyPanel() {
             Federated learning — future work (design only, not running)
           </p>
           <p className="mt-1">
-            {String(architecture.protocol)} via {String(architecture.framework)} — raw
-            audio never leaves the device.
+            {String(architecture.protocol)} via {String(architecture.framework)} — a design in
+            which model training would happen on each device.
           </p>
         </div>
       )}

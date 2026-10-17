@@ -178,3 +178,26 @@ export async function bookAppointment(id: string): Promise<Appointment> {
 export async function cancelAppointment(id: string): Promise<Appointment> {
   return (await client.post(`/api/v1/appointments/${id}/cancel`)).data;
 }
+
+// --- Recordings shared with the therapist ---
+/** Uploads a saved attempt's audio (taken from a local blob URL). */
+export async function uploadRecording(userId: string, recordId: string, recordingUrl: string) {
+  const blob = await (await fetch(recordingUrl)).blob();
+  return (
+    await client.put(`/api/v1/therapy/recordings/${encodeURIComponent(userId)}/${recordId}`, blob, {
+      headers: { "Content-Type": blob.type || "audio/webm" },
+    })
+  ).data;
+}
+
+/** Fetches an attempt's audio and returns a playable local URL. */
+export async function fetchRecordingUrl(userId: string, recordId: string): Promise<string> {
+  const res = await client.get(`/api/v1/therapy/recordings/${encodeURIComponent(userId)}/${recordId}`, {
+    responseType: "blob",
+  });
+  return URL.createObjectURL(res.data);
+}
+
+export async function setRecordingSharing(share: boolean) {
+  return (await client.put("/api/v1/auth/me/recording-sharing", { share })).data;
+}

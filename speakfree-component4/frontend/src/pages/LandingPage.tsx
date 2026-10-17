@@ -83,7 +83,7 @@ export default function LandingPage() {
               Transparent privacy budget
             </h3>
             <p className="mt-1 text-sm text-ink-soft">
-              Your voice never leaves your device. Statistics shared outside
+              Recordings go only to your own therapist. Statistics shared outside
               the clinic carry differential-privacy noise, and the budget
               spent is always visible.
             </p>

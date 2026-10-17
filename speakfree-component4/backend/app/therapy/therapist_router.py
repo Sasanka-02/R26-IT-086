@@ -148,6 +148,18 @@ async def set_my_age(payload: AgeRequest, user: dict = Depends(auth.current_user
     return public(account)
 
 
+class SharingRequest(BaseModel):
+    share: bool
+
+
+@router.put("/auth/me/recording-sharing")
+async def set_recording_sharing(payload: SharingRequest, user: dict = Depends(auth.current_user)):
+    """Students choose whether their practice recordings go to their therapist."""
+    account = update_user(user["email"], {"share_recordings": payload.share})
+    audit.log(user["email"], "recordings.sharing", user["email"], share=payload.share)
+    return public(account)
+
+
 @router.get("/auth/me")
 async def me(user: dict = Depends(auth.current_user)):
     account = get_user(user["email"])

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
 import { usePracticeHistory } from "../context/PracticeHistoryContext";
 import { ExerciseResultInput, ExerciseResultResponse, SelfRating } from "../types/therapy";
+import { useAuth } from "../context/AuthContext";
+import { uploadRecording } from "./therapyApi";
 
 const RATINGS: { value: SelfRating; label: string; hint: string }[] = [
   { value: "easy", label: "Easy", hint: "Felt smooth and comfortable" },
@@ -20,10 +22,14 @@ interface CompletionPanelProps {
   /** Metrics for this attempt, minus the self-rating the user picks here. */
   metrics: Omit<ExerciseResultInput, "self_rating">;
   onSaved?: (result: ExerciseResultResponse) => void;
+  /** Local URL of this attempt's recording; uploaded for the therapist after saving. */
+  recordingUrl?: string | null;
 }
 
-export default function CompletionPanel({ metrics, onSaved }: CompletionPanelProps) {
-  const { recordCompletion, hideScore } = usePracticeHistory();
+export default function CompletionPanel({ metrics, onSaved, recordingUrl }: CompletionPanelProps) {
+  const { recordCompletion, hideScore, userId } = usePracticeHistory();
+  const { user } = useAuth();
+  const [shared, setShared] = useState<"idle" | "sending" | "done" | "off" | "failed">("idle");
   const [rating, setRating] = useState<SelfRating | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,12 +43,32 @@ export default function CompletionPanel({ metrics, onSaved }: CompletionPanelPro
       const saved = await recordCompletion({ ...metrics, self_rating: rating });
       setResult(saved);
       onSaved?.(saved);
+      if (recordingUrl) {
+        if (user?.role === "student" && user.share_recordings === false) {
+          setShared("off");
+        } else {
+          setShared("sending");
+          uploadRecording(userId, saved.record.id, recordingUrl)
+            .then(() => setShared("done"))
+            .catch(() => setShared("failed"));
+        }
+      }
     } catch {
       setError("We couldn't save this result. Check that the therapy service is running.");
     } finally {
       setSaving(false);
     }
   };
+
+  const sharedNote =
+    shared === "idle" ? null : (
+      <p className={`text-xs ${shared === "failed" ? "text-red-700" : "text-ink-soft"}`} role="status">
+        {shared === "sending" && "Sending your recording to your therapist…"}
+        {shared === "done" && "🎧 Recording shared with your therapist — they can listen and give you feedback."}
+        {shared === "off" && "Your recording was not shared (sharing is off on your Privacy tab)."}
+        {shared === "failed" && "The recording couldn't be sent to your therapist. Your result is saved."}
+      </p>
+    );
 
   if (result && hideScore) {
     return (
@@ -101,7 +127,7 @@ export default function CompletionPanel({ metrics, onSaved }: CompletionPanelPro
             {result.measured_wpm && result.target_wpm && (
               <p className="mt-2 text-xs text-ink-soft">
                 Measured speed ≈ {result.measured_wpm} words/min (target {result.target_wpm}), estimated
-                from syllable peaks in your voice — audio never leaves your browser.
+                from syllable peaks in your voice (measured in your browser).
               </p>
             )}
             <p className="mt-2 text-xs text-ink-soft">
@@ -117,6 +143,8 @@ export default function CompletionPanel({ metrics, onSaved }: CompletionPanelPro
             <p className="font-medium">{result.level_message}</p>
           </div>
         )}
+
+        {sharedNote}
 
         <div className="flex items-start gap-2 rounded-xl bg-paper p-4 text-sm text-ink-soft">
           <TrendingUp size={18} className="mt-0.5 shrink-0 text-teal-600" />

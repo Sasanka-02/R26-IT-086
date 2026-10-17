@@ -247,7 +247,7 @@ export default function WordPracticeExercise({ exercise }: { exercise: TherapyEx
 
       <p className="text-xs text-ink-soft">
         Grown-ups: tap 😊 when the word came out smoothly, 😐 if it was nearly there, 😟 if it was hard. Recordings stay
-        on this device and are never uploaded.
+        on this device; only the score is saved.
       </p>
     </div>
   );

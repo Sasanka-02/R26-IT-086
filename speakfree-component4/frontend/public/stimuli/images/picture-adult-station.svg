@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="t d">
+  <title id="t">Railway Station at Rush Hour</title>
+  <desc id="d">A busy station platform at a quarter to six in the evening: the departure board shows the Badulla train delayed by 20 minutes and the Matara train on time, a blue train is arriving, office workers wait with bags, a man checks his watch impatiently, a mother holds her child's hand, a vendor sells peanuts from a basket, an elderly man sits on a bench, a young woman helps someone lift a heavy suitcase, and people queue at the ticket counter.</desc>
+
+  <rect width="800" height="600" fill="#e8eaf6"/>
+  <!-- roof -->
+  <polygon points="0,0 800,0 800,70 0,70" fill="#546e7a"/>
+  <g fill="#78909c"><rect x="60" y="70" width="14" height="300"/><rect x="390" y="70" width="14" height="300"/><rect x="720" y="70" width="14" height="300"/></g>
+
+  <!-- clock: 5.45 -->
+  <circle cx="160" cy="120" r="32" fill="#ffffff" stroke="#263238" stroke-width="5"/>
+  <line x1="160" y1="120" x2="152" y2="102" stroke="#212121" stroke-width="5" stroke-linecap="round"/>
+  <line x1="160" y1="120" x2="134" y2="120" stroke="#212121" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- departure board -->
+  <rect x="420" y="80" width="360" height="110" rx="6" fill="#212121"/>
+  <text x="600" y="105" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#90a4ae">DEPARTURES</text>
+  <text x="436" y="138" font-family="Arial, sans-serif" font-size="16" fill="#ffeb3b">17:50 BADULLA</text>
+  <text x="764" y="138" text-anchor="end" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#ff5252">DELAYED 20 MIN</text>
+  <text x="436" y="172" font-family="Arial, sans-serif" font-size="16" fill="#ffeb3b">18:05 MATARA</text>
+  <text x="764" y="172" text-anchor="end" font-family="Arial, sans-serif" font-size="15" font-weight="700" fill="#69f0ae">ON TIME</text>
+
+  <!-- tracks + arriving train -->
+  <rect y="250" width="800" height="70" fill="#9e9e9e"/>
+  <rect y="280" width="800" height="6" fill="#5d4037"/><rect y="300" width="800" height="6" fill="#5d4037"/>
+  <rect x="440" y="200" width="360" height="110" rx="16" fill="#1565c0"/>
+  <g fill="#bbdefb"><rect x="470" y="218" width="60" height="38" rx="4"/><rect x="550" y="218" width="60" height="38" rx="4"/><rect x="630" y="218" width="60" height="38" rx="4"/><rect x="710" y="218" width="70" height="38" rx="4"/></g>
+  <rect x="440" y="270" width="360" height="10" fill="#ffca28"/>
+  <circle cx="456" cy="292" r="8" fill="#fff59d"/>
+
+  <!-- platform -->
+  <rect y="320" width="800" height="280" fill="#cfd8dc"/>
+  <rect y="320" width="800" height="10" fill="#fdd835"/>
+
+  <!-- ticket booth on the platform, with a queue -->
+  <rect x="268" y="330" width="116" height="140" fill="#bcaaa4"/>
+  <rect x="268" y="318" width="116" height="24" fill="#5d4037"/>
+  <text x="326" y="336" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">TICKETS</text>
+  <rect x="282" y="352" width="88" height="50" fill="#b3e5fc"/>
+  <circle cx="326" cy="380" r="11" fill="#8d5a3b"/>
+  <g>
+    <circle cx="405" cy="378" r="13" fill="#8d5a3b"/><rect x="393" y="391" width="24" height="46" rx="6" fill="#ef6c00"/>
+    <rect x="395" y="435" width="9" height="36" fill="#37474f"/><rect x="406" y="435" width="9" height="36" fill="#37474f"/>
+    <circle cx="440" cy="382" r="13" fill="#c68e5f"/><rect x="428" y="395" width="24" height="44" rx="6" fill="#00897b"/>
+    <rect x="430" y="437" width="9" height="36" fill="#c68e5f"/><rect x="441" y="437" width="9" height="36" fill="#c68e5f"/>
+    <circle cx="475" cy="386" r="13" fill="#a86b45"/><rect x="463" y="399" width="24" height="42" rx="6" fill="#5e35b1"/>
+    <rect x="465" y="439" width="9" height="36" fill="#455a64"/><rect x="476" y="439" width="9" height="36" fill="#455a64"/>
+  </g>
+
+
+  <!-- office workers waiting -->
+  <g>
+    <circle cx="100" cy="330" r="16" fill="#8d5a3b"/><rect x="84" y="346" width="32" height="56" rx="8" fill="#37474f"/>
+    <rect x="86" y="400" width="12" height="40" fill="#263238"/><rect x="102" y="400" width="12" height="40" fill="#263238"/>
+    <rect x="114" y="370" width="22" height="18" rx="3" fill="#6d4c41"/>
+    <circle cx="160" cy="330" r="16" fill="#c68e5f"/>
+    <path d="M144 328 q16 -28 32 0 q0 28 -4 34 l-24 0 q-4 -6 -4 -34z" fill="#2b1b12"/><circle cx="160" cy="330" r="14" fill="#c68e5f"/>
+    <rect x="144" y="346" width="32" height="56" rx="8" fill="#ad1457"/>
+    <rect x="146" y="400" width="12" height="40" fill="#c68e5f"/><rect x="162" y="400" width="12" height="40" fill="#c68e5f"/>
+  </g>
+  <!-- man checking his watch impatiently -->
+  <circle cx="230" cy="335" r="16" fill="#a86b45"/><rect x="214" y="351" width="32" height="54" rx="8" fill="#ffffff" stroke="#b0bec5"/>
+  <rect x="212" y="356" width="9" height="30" rx="4" fill="#a86b45" transform="rotate(70 216 371)"/>
+  <rect x="236" y="364" width="10" height="7" rx="2" fill="#fbc02d"/>
+  <rect x="216" y="403" width="12" height="38" fill="#455a64"/><rect x="232" y="403" width="12" height="38" fill="#455a64"/>
+  <path d="M252 322 l10 -8 M254 332 l12 -2" stroke="#e53935" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- elderly man on a bench -->
+  <g transform="translate(-130 70)">
+  <rect x="300" y="480" width="150" height="14" rx="4" fill="#8d6e63"/>
+  <rect x="310" y="494" width="10" height="30" fill="#6d4c41"/><rect x="430" y="494" width="10" height="30" fill="#6d4c41"/>
+  <circle cx="345" cy="440" r="15" fill="#c68e5f"/><path d="M332 432 q13 -14 26 0" fill="#eeeeee"/>
+  <rect x="330" y="455" width="30" height="30" rx="8" fill="#8d6e63"/>
+  <line x1="372" y1="440" x2="380" y2="520" stroke="#5d4037" stroke-width="4"/>
+  </g>
+
+  <!-- mother holding child's hand -->
+  <circle cx="540" cy="470" r="16" fill="#8d5a3b"/>
+  <path d="M524 468 q16 -30 32 0 q2 30 -2 40 l-28 0 q-4 -10 -2 -40z" fill="#1b1b1b"/><circle cx="540" cy="470" r="14" fill="#8d5a3b"/>
+  <rect x="522" y="486" width="36" height="70" rx="9" fill="#fb8c00"/>
+  <circle cx="590" cy="505" r="11" fill="#8d5a3b"/><rect x="579" y="516" width="22" height="34" rx="6" fill="#4fc3f7"/>
+  <path d="M556 512 q14 8 26 10" stroke="#8d5a3b" stroke-width="6" fill="none" stroke-linecap="round"/>
+
+  <!-- peanut vendor with a basket -->
+  <circle cx="660" cy="470" r="15" fill="#a86b45"/>
+  <rect x="644" y="485" width="32" height="56" rx="8" fill="#558b2f"/>
+  <ellipse cx="700" cy="500" rx="28" ry="12" fill="#a1887f"/>
+  <g fill="#d7a35f"><circle cx="690" cy="494" r="5"/><circle cx="700" cy="491" r="5"/><circle cx="710" cy="494" r="5"/></g>
+  <path d="M676 494 q12 -10 24 6" stroke="#a86b45" stroke-width="6" fill="none"/>
+
+  <!-- young woman helping lift a heavy suitcase -->
+  <rect x="40" y="520" width="56" height="44" rx="6" fill="#455a64"/>
+  <rect x="58" y="512" width="20" height="8" rx="3" fill="#263238"/>
+  <circle cx="60" cy="470" r="14" fill="#c68e5f"/><rect x="46" y="484" width="28" height="36" rx="7" fill="#e53935"/>
+  <circle cx="120" cy="472" r="14" fill="#8d5a3b"/><path d="M106 470 q14 -26 28 0 q2 20 -2 30 l-24 0 q-4 -10 -2 -30z" fill="#2b1b12"/><circle cx="120" cy="472" r="12" fill="#8d5a3b"/>
+  <rect x="106" y="486" width="28" height="40" rx="7" fill="#26a69a"/>
+  <path d="M106 500 q-10 8 -14 18" stroke="#8d5a3b" stroke-width="6" fill="none" stroke-linecap="round"/>
+</svg>

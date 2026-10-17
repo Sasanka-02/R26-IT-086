@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, BookX, CalendarX, MessageCircle, TrendingDown, UserX } from "lucide-react";
+import { AlertTriangle, BookX, CalendarX, Headphones, MessageCircle, TrendingDown, UserX } from "lucide-react";
 import { StudentAlert } from "../types/therapist";
 
 const ICONS: Record<StudentAlert["kind"], typeof AlertTriangle> = {
   message: MessageCircle,
+  recordings: Headphones,
   not_started: UserX,
   inactive: CalendarX,
   score_drop: TrendingDown,

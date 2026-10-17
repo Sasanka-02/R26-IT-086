@@ -9,6 +9,7 @@ import app.therapy.messages as messages
 import app.therapy.auth as auth
 import app.therapy.cohort_report as cohort_report
 import app.therapy.plan_review as plan_review
+import app.therapy.recordings as recordings
 import app.therapy.privacy as privacy
 import app.therapy.progress_store as progress_store
 import app.therapy.scoring as scoring
@@ -32,6 +33,7 @@ def isolated_data(tmp_path, monkeypatch):
     monkeypatch.setattr(plan_review, "REVIEWS_FILE", tmp_path / "plan_reviews.json")
     monkeypatch.setattr(audit, "AUDIT_FILE", tmp_path / "audit_log.jsonl")
     monkeypatch.setattr(messages, "MESSAGES_FILE", tmp_path / "messages.json")
+    monkeypatch.setattr(recordings, "RECORDINGS_DIR", tmp_path / "recordings")
     monkeypatch.setattr(appointments, "APPOINTMENTS_FILE", tmp_path / "appointments.json")
     monkeypatch.setattr(auth, "_failed_logins", {})
     monkeypatch.setattr(cohort_report, "_cache", {})
