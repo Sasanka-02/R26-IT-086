@@ -43,10 +43,10 @@ export default function DashboardHome() {
             <div className="relative">
               <div className="text-xs font-bold uppercase tracking-wider text-lav-600">Active patient</div>
               <div className="mt-1 text-2xl font-extrabold">{activePatient.full_name}</div>
-              <div className="mt-1 text-sm muted">ID {activePatient.id} · Age {activePatient.age} · DOB {activePatient.date_of_birth}</div>
+              <div className="mt-1 text-sm muted">ID {activePatient.id} · Age {activePatient.age ?? "not set"}{activePatient.date_of_birth ? ` · DOB ${activePatient.date_of_birth}` : ""}</div>
               {bracket && (
                 <div className="mt-4 rounded-xl border border-lav-200 bg-lav-50 p-4">
-                  <div className="text-sm font-bold text-navy">Bracket {bracket.id} · {bracket.label}</div>
+                  <div className="text-sm font-bold text-navy">Age bracket {bracket.id} · {bracket.label}</div>
                   <div className="mt-1 text-sm text-ink-soft">{bracket.focus}</div>
                 </div>
               )}
@@ -65,7 +65,7 @@ export default function DashboardHome() {
           ) : (
             <div className="relative">
               <div className="text-xl font-bold">Add your first patient</div>
-              <p className="mt-2 muted">Use “Add patient” in the top bar. The age bracket and tasks are set automatically from the date of birth.</p>
+              <p className="mt-2 muted">Use “Add patient” in the top bar. The age bracket and tasks are set automatically from the age.</p>
             </div>
           )}
         </section>
@@ -96,8 +96,9 @@ export default function DashboardHome() {
           <div className="flex-1">
             <div className="text-xs font-semibold uppercase tracking-widest text-white/70">Your therapy plan · {plan.focus.patient_name}</div>
             <div className="mt-1 text-xl font-extrabold">Today: {plan.today.map((e) => e.title.split(" - ")[0]).join(" · ")}</div>
+            <div className="mt-1 text-sm font-semibold text-white/90">{plan.level.dashboard_text}</div>
             <div className="mt-1 flex flex-wrap gap-4 text-sm text-white/80">
-              <span>{plan.level.label} level</span>
+              <span>{plan.level.label} · {plan.level.ages} tasks</span>
               <span className="inline-flex items-center gap-1"><Flame size={14} /> {plan.progress.streak_days}-day streak</span>
               <span>{plan.progress.total_sessions} exercises done</span>
             </div>

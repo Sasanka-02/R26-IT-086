@@ -13,9 +13,11 @@ export interface AgeBracket {
 export interface Patient {
   id: string;
   full_name: string;
-  date_of_birth: string;
-  age: number;
-  age_bracket: AgeBracket | null;
+  date_of_birth: string | null;
+  age: number | null; // null -> the app asks "How old are you?" once
+  age_bracket: AgeBracket | null; // clinical age bracket 1–8
+  age_bracket_override?: number | null; // practice bracket pinned by a therapist
+  guardian_consent?: boolean;
   is_self: boolean;
 }
 
@@ -61,6 +63,7 @@ export interface ScenarioTask {
   prompt: string;
   visual?: Visual | null;
   image_url?: string | null;
+  video_url?: string | null; // short scenario video (watch, then answer)
   max_seconds: number;
 }
 export interface QuestionItem {
@@ -77,7 +80,8 @@ export interface QuestionsTask {
 export interface TaskSet {
   patient_id: string;
   age: number;
-  age_bracket: AgeBracket;
+  age_bracket: AgeBracket; // screening task bracket (1–7; adults use 7)
+  therapy_bracket?: AgeBracket; // clinical age bracket (1–8)
   tasks: { reading: ReadingTask; picture: PictureTask; scenario: ScenarioTask; questions: QuestionsTask };
 }
 
@@ -325,8 +329,9 @@ export interface AdminTask {
   title: string;
   instructions: string;
   content_text: string;
-  image_path: string | null;
+  image_path: string | null; // picture, or a short video for scenario tasks
   image_url: string | null;
+  video_url?: string | null;
   keywords: string[];
   visual_json: Visual | null;
   max_seconds: number;
@@ -340,8 +345,9 @@ export interface AdminTask {
 export interface AdminPatientRow {
   id: string;
   full_name: string;
-  age: number;
+  age: number | null;
   age_bracket: AgeBracket | null;
+  age_bracket_override?: number | null;
   registered_at: string;
   owner_name: string;
   owner_email: string;
@@ -378,7 +384,7 @@ export interface AdminSessionRow {
 
 export interface AdminPatientProfile {
   patient: AdminPatientRow;
-  date_of_birth: string;
+  date_of_birth: string | null;
   is_self: boolean;
   sessions: AdminSessionRow[];
 }

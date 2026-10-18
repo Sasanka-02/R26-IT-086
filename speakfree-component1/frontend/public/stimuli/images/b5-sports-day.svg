@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="t">
+  <title id="t">School sports day: a running race where one runner stops to help a fallen runner while others reach the finish line and the crowd cheers</title>
+  <defs>
+    <g id="head"><circle r="11" fill="#8D5524"/></g>
+  </defs>
+  <rect width="640" height="400" fill="#D6F0FF"/>
+  <!-- bunting -->
+  <path d="M0 30 Q320 70 640 30" fill="none" stroke="#555" stroke-width="2"/>
+  <g><polygon points="40,36 60,38 48,58" fill="#E63946"/><polygon points="110,44 130,46 118,66" fill="#FFB703"/><polygon points="180,50 200,51 189,72" fill="#2A9D8F"/><polygon points="250,53 270,54 259,75" fill="#4361EE"/><polygon points="320,54 340,54 330,76" fill="#E63946"/><polygon points="390,53 410,52 399,75" fill="#FFB703"/><polygon points="460,50 480,49 469,71" fill="#2A9D8F"/><polygon points="530,44 550,42 539,64" fill="#4361EE"/><polygon points="600,36 620,34 610,56" fill="#E63946"/></g>
+  <!-- crowd stand -->
+  <rect y="100" width="640" height="70" fill="#E9C46A"/>
+  <g>
+    <use href="#head" x="30" y="125"/><use href="#head" x="70" y="122"/><use href="#head" x="110" y="128"/><use href="#head" x="150" y="122"/><use href="#head" x="190" y="126"/><use href="#head" x="230" y="122"/><use href="#head" x="270" y="128"/><use href="#head" x="310" y="122"/><use href="#head" x="350" y="126"/><use href="#head" x="390" y="122"/><use href="#head" x="430" y="128"/><use href="#head" x="470" y="122"/><use href="#head" x="510" y="126"/><use href="#head" x="550" y="122"/><use href="#head" x="590" y="128"/>
+  </g>
+  <g stroke="#8D5524" stroke-width="5" stroke-linecap="round"><line x1="70" y1="132" x2="60" y2="108"/><line x1="230" y1="132" x2="240" y2="108"/><line x1="390" y1="132" x2="380" y2="108"/><line x1="550" y1="132" x2="560" y2="108"/></g>
+  <rect y="150" width="640" height="20" fill="#C9A227"/>
+  <!-- track -->
+  <rect y="170" width="640" height="230" fill="#E76F51"/>
+  <g stroke="#fff" stroke-width="3"><line x1="0" y1="226" x2="640" y2="226"/><line x1="0" y1="282" x2="640" y2="282"/><line x1="0" y1="338" x2="640" y2="338"/></g>
+  <!-- finish line -->
+  <rect x="560" y="170" width="14" height="230" fill="#fff"/>
+  <line x1="560" y1="180" x2="560" y2="230" stroke="#333" stroke-width="3"/><line x1="610" y1="180" x2="610" y2="230" stroke="#333" stroke-width="3"/>
+  <!-- winner breaking the tape -->
+  <g><circle cx="560" cy="186" r="11" fill="#A0522D"/><rect x="550" y="197" width="20" height="22" rx="4" fill="#4361EE"/>
+    <line x1="552" y1="200" x2="538" y2="184" stroke="#A0522D" stroke-width="5" stroke-linecap="round"/><line x1="568" y1="200" x2="582" y2="184" stroke="#A0522D" stroke-width="5" stroke-linecap="round"/></g>
+  <path d="M560 205 q24 4 50 -6" fill="none" stroke="#E63946" stroke-width="3"/>
+  <!-- second runner -->
+  <g><circle cx="420" cy="242" r="11" fill="#8D5524"/><rect x="410" y="253" width="20" height="22" rx="4" fill="#FFB703"/>
+    <line x1="414" y1="275" x2="402" y2="292" stroke="#8D5524" stroke-width="5" stroke-linecap="round"/><line x1="426" y1="275" x2="440" y2="288" stroke="#8D5524" stroke-width="5" stroke-linecap="round"/></g>
+  <!-- fallen runner and helper -->
+  <g><circle cx="230" cy="316" r="11" fill="#C68642"/><rect x="236" y="306" width="36" height="18" rx="5" fill="#2A9D8F"/>
+    <line x1="272" y1="318" x2="300" y2="324" stroke="#C68642" stroke-width="5" stroke-linecap="round"/><line x1="272" y1="312" x2="296" y2="304" stroke="#C68642" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="300" cy="324" r="5" fill="#E63946" opacity="0.7"/></g>
+  <g><circle cx="200" cy="270" r="11" fill="#8D5524"/><rect x="190" y="281" width="20" height="26" rx="4" fill="#E63946"/>
+    <line x1="208" y1="290" x2="226" y2="306" stroke="#8D5524" stroke-width="5" stroke-linecap="round"/>
+    <line x1="194" y1="307" x2="190" y2="334" stroke="#8D5524" stroke-width="5" stroke-linecap="round"/><line x1="206" y1="307" x2="214" y2="332" stroke="#8D5524" stroke-width="5" stroke-linecap="round"/></g>
+  <text x="246" y="300" font-family="sans-serif" font-size="13" fill="#fff">?</text>
+</svg>

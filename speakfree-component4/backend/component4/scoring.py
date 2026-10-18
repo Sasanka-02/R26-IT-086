@@ -17,6 +17,9 @@ Practice-quality score for one therapy attempt (0-100), fully explainable.
 The prior weights come from the original Component 4 viva guide (calibrated against therapist
 ratings there). `goal_gap` is new for the integrated platform: reaching 75 % of an exercise's
 goal is neutral, every 10 % above / below adds / removes 4 points.
+
+Fairness for spontaneous speech: picture and conversation tasks have no fixed text, so there is
+no "right" speed to compare against - their rate_deviation is always 0 (never a penalty).
 """
 from __future__ import annotations
 
@@ -49,6 +52,7 @@ WEIGHTS = {
 THRESHOLDS = {"strong": 75, "weak": 45}
 SHORT_ATTEMPT_SECONDS = 15
 RATING_VALUE = {"easy": 1.0, "ok": 0.0, "hard": -1.0}
+FREE_SPEECH_TYPES = ("picture", "conversation")  # no target text -> no speed target
 
 
 def goal_completion(attempt: dict) -> float | None:
@@ -66,6 +70,7 @@ def extract_features(attempt: dict) -> dict[str, float]:
     ratio = attempt.get("speaking_ratio")
     live = ratio is not None
     wpm, target = attempt.get("measured_wpm"), attempt.get("target_wpm")
+    fixed_text = attempt.get("exercise_type") not in FREE_SPEECH_TYPES
     goal = goal_completion(attempt)
     return {
         "intercept": 1.0,
@@ -73,7 +78,7 @@ def extract_features(attempt: dict) -> dict[str, float]:
         "voicing": float(ratio) if live else 0.0,
         "pauses_per_min": (attempt.get("long_pauses", 0) / minutes) if live else 0.0,
         "quiet_per_min": (attempt.get("quiet_warnings", 0) / minutes) if live else 0.0,
-        "rate_deviation": min(1.0, abs(wpm - target) / target) if live and wpm and target else 0.0,
+        "rate_deviation": min(1.0, abs(wpm - target) / target) if live and fixed_text and wpm and target else 0.0,
         "rating": RATING_VALUE.get(attempt.get("self_rating", "ok"), 0.0),
         "short_attempt": 1.0 if duration < SHORT_ATTEMPT_SECONDS else 0.0,
         "goal_gap": (goal - 0.75) if goal is not None else 0.0,

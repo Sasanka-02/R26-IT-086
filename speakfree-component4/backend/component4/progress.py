@@ -10,6 +10,7 @@ TYPE_LABELS = {
     "pacing": "Pacing practice",
     "daf": "Delayed auditory feedback",
     "picture": "Picture description",
+    "conversation": "Conversation practice",
     "clear_speech": "Clear speech",
     "loudness": "Loud & clear voice",
     "sustained_vowel": "Breath support",

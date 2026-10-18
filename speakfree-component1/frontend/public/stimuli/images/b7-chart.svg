@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="t">
+  <title id="t">Bar and line chart: iced drinks sold per month (bars) and average temperature (line), January to June; sales peak in April</title>
+  <rect width="640" height="400" fill="#FFFFFF"/>
+  <text x="320" y="30" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="700" fill="#1B2559">Café sales: iced drinks vs temperature (Jan–Jun)</text>
+  <!-- axes: plot x 70..560, y 60..330 -->
+  <g stroke="#E6E8F2" stroke-width="1">
+    <line x1="70" y1="276" x2="560" y2="276"/><line x1="70" y1="222" x2="560" y2="222"/><line x1="70" y1="168" x2="560" y2="168"/><line x1="70" y1="114" x2="560" y2="114"/><line x1="70" y1="60" x2="560" y2="60"/>
+  </g>
+  <line x1="70" y1="330" x2="560" y2="330" stroke="#4A5578" stroke-width="2"/>
+  <line x1="70" y1="60" x2="70" y2="330" stroke="#4A5578" stroke-width="2"/>
+  <line x1="560" y1="60" x2="560" y2="330" stroke="#4A5578" stroke-width="2"/>
+  <g font-family="sans-serif" font-size="12" fill="#4A5578" text-anchor="end">
+    <text x="62" y="334">0</text><text x="62" y="280">80</text><text x="62" y="226">160</text><text x="62" y="172">240</text><text x="62" y="118">320</text><text x="62" y="64">400</text>
+  </g>
+  <g font-family="sans-serif" font-size="12" fill="#D97706">
+    <text x="566" y="334">24°C</text><text x="566" y="271">26°C</text><text x="566" y="199">28°C</text><text x="566" y="132">30°C</text><text x="566" y="64">32°C</text>
+  </g>
+  <text transform="translate(22 195) rotate(-90)" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#4A5578">Iced drinks sold</text>
+  <!-- bars: value v -> height v*270/400 ; Jan120 Feb150 Mar230 Apr310 May260 Jun180 -->
+  <g fill="#7C6CF0">
+    <rect x="92" y="249" width="44" height="81"/>
+    <rect x="173" y="229" width="44" height="101"/>
+    <rect x="254" y="175" width="44" height="155"/>
+    <rect x="335" y="121" width="44" height="209"/>
+    <rect x="416" y="154" width="44" height="176"/>
+    <rect x="497" y="208" width="44" height="122"/>
+  </g>
+  <g font-family="sans-serif" font-size="11" fill="#1B2559" text-anchor="middle">
+    <text x="114" y="243">120</text><text x="195" y="223">150</text><text x="276" y="169">230</text><text x="357" y="115">310</text><text x="438" y="148">260</text><text x="519" y="202">180</text>
+  </g>
+  <!-- temperature line: t -> y = 330 - (t-24)*33.75 ; 27,28,30,32,31,29 -->
+  <polyline points="114,229 195,195 276,128 357,60 438,94 519,161" fill="none" stroke="#F59E0B" stroke-width="3"/>
+  <g fill="#F59E0B"><circle cx="114" cy="229" r="5"/><circle cx="195" cy="195" r="5"/><circle cx="276" cy="128" r="5"/><circle cx="357" cy="60" r="5"/><circle cx="438" cy="94" r="5"/><circle cx="519" cy="161" r="5"/></g>
+  <g font-family="sans-serif" font-size="13" fill="#1B2559" text-anchor="middle">
+    <text x="114" y="350">Jan</text><text x="195" y="350">Feb</text><text x="276" y="350">Mar</text><text x="357" y="350">Apr</text><text x="438" y="350">May</text><text x="519" y="350">Jun</text>
+  </g>
+  <!-- legend -->
+  <rect x="170" y="370" width="14" height="14" fill="#7C6CF0"/><text x="190" y="382" font-family="sans-serif" font-size="12" fill="#1B2559">Iced drinks sold</text>
+  <line x1="330" y1="377" x2="352" y2="377" stroke="#F59E0B" stroke-width="3"/><circle cx="341" cy="377" r="4" fill="#F59E0B"/>
+  <text x="360" y="382" font-family="sans-serif" font-size="12" fill="#1B2559">Average temperature</text>
+</svg>

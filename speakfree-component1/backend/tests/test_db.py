@@ -43,7 +43,8 @@ def dob_for_age(age: int) -> str:
 
 def register(client, role="patient", age=11, password="password123", email=None):
     email = email or f"{role}-{uuid.uuid4().hex[:8]}@example.com"
-    body = {"role": role, "full_name": f"Test {role.title()}", "email": email, "password": password, "consent": True}
+    body = {"role": role, "full_name": f"Test {role.title()}", "email": email, "password": password, "consent": True,
+            "guardian_consent": True}
     if role == "patient":
         body["date_of_birth"] = dob_for_age(age)
     elif role == "guardian":
@@ -113,7 +114,7 @@ def test_register_server_side_validation(client):
         {**base, "role": "patient", "password": "short", "date_of_birth": dob_for_age(10)},   # password < 8
         {**base, "role": "patient", "password": "password123"},                               # no DOB
         {**base, "role": "patient", "password": "password123", "date_of_birth": dob_for_age(5)},   # too young
-        {**base, "role": "patient", "password": "password123", "date_of_birth": dob_for_age(21)},  # too old
+        {**base, "role": "patient", "password": "password123", "date_of_birth": dob_for_age(101)},  # too old
         {**base, "role": "guardian", "password": "password123", "child_full_name": "Kid"},    # no child DOB
     ]
     for body in cases:
@@ -190,12 +191,13 @@ def test_rotation_prefers_unattempted_tasks(client):
     acc = register(client, age=11)
     pid = acc["user"]["patients"][0]["id"]
     with SessionLocal() as db:
-        for task_id in ("b3-pic-1", "b3-pic-2", "b3-q-1", "b3-q-2", "b3-scn-1"):
+        for task_id in ("b3-pic-1", "b3-q-1", "b3-q-2", "b3-scn-1"):
             db.add(TaskAttempt(patient_id=pid, task_id=task_id))
         db.commit()
     tasks = client.get(f"/api/v1/tasks?patient_id={pid}", headers=acc["headers"]).json()["tasks"]
-    assert tasks["picture"]["id"] == "b3-pic-3"
-    assert tasks["scenario"]["id"] in ("b3-scn-2", "b3-scn-3")
+    # two active pictures / scenarios per bracket (custom_tasks.py); the third starter task is switched off
+    assert tasks["picture"]["id"] == "b3-pic-2"
+    assert tasks["scenario"]["id"] == "b3-scn-2"
     assert [q["id"] for q in tasks["questions"]["items"]] == ["b3-q-3", "b3-q-4", "b3-q-5"]
     # stable across repeated requests until a new attempt is made
     again = client.get(f"/api/v1/tasks?patient_id={pid}", headers=acc["headers"]).json()["tasks"]

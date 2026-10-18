@@ -1,8 +1,17 @@
 """
-Adaptive difficulty ladder (Beginner -> Intermediate -> Advanced) for the patient's focus.
+Adaptive ladders, replayed from the patient's own attempts.
 
-★ COMPONENT 4 NOVELTY (adaptive learning) - the ladder is replayed from the patient's own
-attempts, so it is deterministic, per-patient and needs no extra storage:
+★ COMPONENT 4 NOVELTY (adaptive learning) - two ladders share one 2-up / 2-down rule:
+
+1. AGE-BRACKET LADDER (bracket_state) - the main practice level, "Level 1-8":
+  * start = the learner's age bracket; a Severe screening starts one bracket lower (min 1)
+  * 2 strong attempts in a row on the current bracket's tasks -> up one (max: age bracket + 1)
+  * 2 difficult attempts in a row                               -> down one (min 1)
+  * 2 strong attempts at the top of the range                   -> "mastered" -> re-screen
+  * a therapist override pins the bracket (it always wins)
+
+2. SKILL LADDER (level_state) - Beginner -> Intermediate -> Advanced inside the motor-speech
+   (clear_speech) and speech-sounds (sound_drill) families. It is replayed the same way:
 
   * the starting rung comes from Component 3's severity level
       (Severe / Moderate -> Beginner, Mild -> Intermediate, Normal -> Advanced)
@@ -11,16 +20,18 @@ attempts, so it is deterministic, per-patient and needs no extra storage:
   * 2 strong attempts on Advanced                    -> family mastered -> re-screen suggested
   * the target speed of every passage adapts +/-10 % per strong / difficult attempt
 
-Only attempts of the focus's ladder family (reading, clear_speech or sound_drill) made after
-the current therapy profile was created are replayed - a new screening restarts the ladder at
-its severity-based rung.
+Only attempts made after the current therapy profile was created are replayed - a new
+screening restarts both ladders at their starting rungs. Nothing extra is stored.
 """
 from __future__ import annotations
 
 from datetime import datetime
 
+from .brackets import BRACKETS, MAX_BRACKET, MIN_BRACKET, ages_text, clamp_bracket, max_bracket_for, start_bracket
 from .exercises import LEVELS
-from .scoring import THRESHOLDS
+from .scoring import FREE_SPEECH_TYPES, THRESHOLDS
+
+DEFAULT_AGE_BRACKET = MAX_BRACKET  # age unknown (old callers): no age cap, adult content
 
 LEVEL_LABELS = {"beginner": "Beginner", "intermediate": "Intermediate", "advanced": "Advanced"}
 STREAK_TO_MOVE = 2
@@ -107,8 +118,115 @@ def level_state(records: list[dict], ladder_type: str, start_level: str = "begin
     }
 
 
+def _bracket_label(b: int) -> str:
+    return f"Level {b}"
+
+
+def bracket_state(records: list[dict], age_bracket: int, start: int, since: str | None = None,
+                  override: int | None = None) -> dict:
+    """The age-bracket ladder (Level 1-8) replayed from the bracket-task attempts."""
+    lo, hi = MIN_BRACKET, max_bracket_for(age_bracket)
+    bracket = min(max(start, lo), hi)
+    since_dt = _parse(since) if since else None
+    strong = weak = 0
+    mastered = False
+    scores: list[int] = []
+    reason = (f"Starting level for {ages_text(age_bracket)}." if bracket == age_bracket else
+              "Starting one level below your age group so practice begins comfortably.")
+    history: list[dict] = [{"at": since, "from": None, "to": _bracket_label(bracket), "direction": "start", "reason": reason}]
+    if override:
+        override = clamp_bracket(override)
+
+    for r in records:
+        if r.get("bracket") is None:
+            continue
+        if since_dt and _parse(r["completed_at"]) < since_dt:
+            continue
+        if r["bracket"] != (override or bracket):
+            continue
+        if is_strong(r):
+            scores = (scores if strong else []) + [r["score"]]
+            strong, weak = strong + 1, 0
+        elif is_weak(r):
+            scores = (scores if weak else []) + [r["score"]]
+            strong, weak = 0, weak + 1
+        else:
+            strong = weak = 0
+        if override:  # therapist override: the level is pinned, streaks are only reported
+            continue
+        if strong >= STREAK_TO_MOVE:
+            if bracket < hi:
+                history.append({"at": r["completed_at"], "from": _bracket_label(bracket), "to": _bracket_label(bracket + 1),
+                                "direction": "up",
+                                "reason": f"{STREAK_TO_MOVE} strong attempts in a row (scores {', '.join(map(str, scores))})"})
+                bracket, strong = bracket + 1, 0
+            else:
+                if not mastered:
+                    history.append({"at": r["completed_at"], "from": _bracket_label(bracket), "to": "Mastered",
+                                    "direction": "mastered", "reason": "Top level for your age completed"})
+                mastered, strong = True, STREAK_TO_MOVE
+        elif weak >= STREAK_TO_MOVE and bracket > lo:
+            history.append({"at": r["completed_at"], "from": _bracket_label(bracket), "to": _bracket_label(bracket - 1),
+                            "direction": "down",
+                            "reason": f"{STREAK_TO_MOVE} difficult attempts in a row (scores {', '.join(map(str, scores))})"})
+            bracket, weak = bracket - 1, 0
+
+    if override:
+        history.append({"at": None, "from": None, "to": _bracket_label(override),
+                        "direction": "therapist", "reason": "Level chosen by your therapist"})
+        bracket, mastered = override, False
+        strong = min(strong, STREAK_TO_MOVE)
+
+    nxt = bracket + 1 if bracket < hi and not override else None
+    remaining = max(0, STREAK_TO_MOVE - strong)
+    now_text = f"You're practising at Level {bracket} ({ages_text(bracket)} tasks)."
+    if override:
+        progress_text = "Your therapist chose this level for you."
+    elif mastered:
+        progress_text = "You've completed the top level for your age - great work! A new screening will show your progress."
+    elif nxt:
+        progress_text = (f"{remaining} more strong attempt{'s' if remaining != 1 else ''} "
+                         f"(score {THRESHOLDS['strong']}+) to unlock Level {nxt}.")
+    else:
+        progress_text = (f"This is the top level for your age. {remaining} more strong attempt{'s' if remaining != 1 else ''} "
+                         f"(score {THRESHOLDS['strong']}+) to complete it.")
+    return {
+        "bracket": bracket,
+        "level_index": bracket - 1,
+        "label": _bracket_label(bracket),
+        "ages": ages_text(bracket),
+        "bracket_label": BRACKETS[bracket]["label"],
+        "age_bracket": age_bracket,
+        "start_bracket": min(max(start, lo), hi),
+        "min_bracket": lo,
+        "max_bracket": hi,
+        "next_bracket": nxt,
+        "override": bool(override),
+        "strong_in_a_row": strong,
+        "weak_in_a_row": weak,
+        "needed_to_advance": STREAK_TO_MOVE,
+        "mastered": mastered,
+        "progress_text": progress_text,
+        "dashboard_text": f"{now_text} {progress_text}",
+        "target_wpm": BRACKETS[bracket]["target_wpm"],
+        "strong_threshold": THRESHOLDS["strong"],
+        "weak_threshold": THRESHOLDS["weak"],
+        "history": history,
+    }
+
+
+def learner_bracket(profile: dict, records: list[dict], learner: dict | None = None) -> dict:
+    """Bracket ladder for one learner: age bracket + screening severity -> start, then replay."""
+    learner = learner or {}
+    age_bracket = int(learner.get("age_bracket") or DEFAULT_AGE_BRACKET)
+    start = start_bracket(age_bracket, profile.get("severity_level"))
+    return bracket_state(records, age_bracket, start, profile.get("created_at"), learner.get("bracket_override"))
+
+
 def level_change_message(before: dict, after: dict) -> str | None:
     if after["level_index"] > before["level_index"]:
+        if after.get("bracket"):
+            return f"Level up! You've unlocked {after['label']} ({after['ages']} tasks)."
         return f"Level up! You've unlocked {after['label']}."
     if after["level_index"] < before["level_index"]:
         return f"We've moved you back to {after['label']} for now so practice feels comfortable. You can work your way back up."
@@ -147,7 +265,7 @@ def attempt_feedback(attempt: dict) -> list[str]:
         if attempt.get("quiet_warnings", 0) >= 2:
             notes.append("Your voice was quite soft at times - try a little more volume.")
         wpm, target = attempt.get("measured_wpm"), attempt.get("target_wpm")
-        if wpm and target:
+        if wpm and target and attempt.get("exercise_type") not in FREE_SPEECH_TYPES:
             if abs(wpm - target) <= 0.15 * target:
                 notes.append(f"Your speed was about {wpm} words/min - right on the {target} target.")
             elif wpm > target:

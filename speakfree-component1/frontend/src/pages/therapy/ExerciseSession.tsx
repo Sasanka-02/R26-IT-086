@@ -2,26 +2,74 @@
  * ExerciseSession – runs one therapy exercise (Component 4) and saves the result.
  *
  *   reading / pacing / clear_speech / loudness   highlighted passage at the adaptive target speed
+ *                                               (Level 7: tone hints – questioning / excited / quoting)
  *   picture                                     describe the picture, guiding questions
+ *   conversation                                spontaneous answer to a situation + prompt questions
+ *                                               (same recording flow as picture – no fixed text)
  *   sustained_vowel                             hold "ahh" – longest steady voicing
  *   sound_drill                                 target-sound words / phrases / sentences + self-check
  *   daf                                         delayed auditory feedback (Web Audio delay node)
  *
  * Only numbers leave the browser (voicing ratio, pauses, syllable count, rating) – never audio.
  * The backend scores the attempt, moves the level ladder and re-ranks the plan.
+ * Ages 6–11 (playful theme): big buttons, a "🔊 Listen" model (speechSynthesis), stars and confetti.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CheckCircle2, Frown, Headphones, Loader2, Meh, Mic, PartyPopper, Smile, Square, Wind } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Frown, Headphones, Loader2, Meh, MessagesSquare, Mic, PartyPopper, Smile, Square, Star, Wind } from "lucide-react";
 import { api } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import ListenButton from "../../components/ListenButton";
 import { COLORS, ErrorBox, ScoreRing, Spinner } from "../../components/ui";
-import type { AttemptPayload, AttemptResult, Exercise, TherapyPlan } from "../../types/integration";
-import { TYPE_LABEL } from "./TherapyPlan";
+import type { AttemptPayload, AttemptResult, Exercise, TherapyPlan, ToneHint } from "../../types/integration";
+import { themeFor } from "../../utils/age";
+import { TYPE_EMOJI, TYPE_LABEL } from "./TherapyPlan";
 import { useLiveCoach } from "./useLiveCoach";
 
 type Phase = "ready" | "running" | "rate" | "saving" | "done";
-const LIVE_TYPES = ["reading", "pacing", "clear_speech", "loudness", "picture", "sustained_vowel", "sound_drill"];
+const LIVE_TYPES = ["reading", "pacing", "clear_speech", "loudness", "picture", "conversation", "sustained_vowel", "sound_drill"];
+const TONE_STYLE: Record<ToneHint["tone"], { mark: string; chip: string; icon: string }> = {
+  questioning: { mark: "decoration-brand", chip: "bg-brand-soft text-navy", icon: "❓" },
+  excited: { mark: "decoration-sun", chip: "bg-sun-soft text-warn", icon: "❗" },
+  quoting: { mark: "decoration-lav-500", chip: "bg-lav-100 text-lav-600", icon: "❝" },
+};
+
+/** Word index -> the tone hint it belongs to (phrases are matched in the passage text). */
+function toneByWord(passage: string, hints: ToneHint[] | undefined): (ToneHint | null)[] {
+  const words = passage.split(/\s+/).filter(Boolean);
+  const out: (ToneHint | null)[] = words.map(() => null);
+  if (!hints?.length) return out;
+  const starts: number[] = [];
+  let pos = 0;
+  for (const w of words) {
+    pos = passage.indexOf(w, pos);
+    starts.push(pos);
+    pos += w.length;
+  }
+  for (const h of hints) {
+    const at = passage.indexOf(h.phrase);
+    if (at < 0) continue;
+    words.forEach((w, i) => { if (starts[i] + w.length > at && starts[i] < at + h.phrase.length) out[i] = h; });
+  }
+  return out;
+}
+
+function Celebration({ score }: { score: number }) {
+  const stars = score >= 80 ? 3 : score >= 60 ? 2 : 1;
+  const pieces = ["🎉", "⭐", "🎈", "✨", "🌟", "🎊"];
+  return (
+    <div className="relative">
+      <div className="pointer-events-none absolute inset-x-0 -top-6 h-0" aria-hidden>
+        {Array.from({ length: 18 }).map((_, i) => (
+          <span key={i} className="confetti-piece absolute text-xl" style={{ left: `${(i * 37) % 100}%`, animationDelay: `${(i % 6) * 0.12}s` }}>{pieces[i % pieces.length]}</span>
+        ))}
+      </div>
+      <div className="flex justify-center gap-2" aria-label={`${stars} of 3 stars`}>
+        {[1, 2, 3].map((n) => <Star key={n} size={44} className={n <= stars ? "fill-sun text-sun" : "text-line"} />)}
+      </div>
+    </div>
+  );
+}
 const FEEDBACK_STYLE: Record<string, string> = {
   success: "border-ok/30 bg-ok-soft", warning: "border-warn/40 bg-warn-soft", info: "border-lav-200 bg-lav-50",
 };
@@ -98,7 +146,10 @@ export default function ExerciseSession() {
     () => plan?.today.find((e) => e.id === exerciseId) ?? plan?.library.find((e) => e.id === exerciseId), [plan, exerciseId]);
   const coach = useLiveCoach(ex?.type ?? "pacing");
   const words = useMemo(() => (ex?.passage ?? "").split(/\s+/).filter(Boolean), [ex]);
+  const tones = useMemo(() => toneByWord(ex?.passage ?? "", ex?.tone_hints), [ex]);
   const live = !!ex && LIVE_TYPES.includes(ex.type);
+  const theme = themeFor(plan?.learner.theme);
+  const playful = plan?.learner.theme === "playful";
 
   // timer + highlight
   useEffect(() => {
@@ -166,8 +217,10 @@ export default function ExerciseSession() {
       <section className="card p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <span className="chip bg-lav-100 text-lav-600">{TYPE_LABEL[ex.type]}{ex.level ? ` · ${ex.level}` : ""}</span>
-            <h1 className="mt-2 text-2xl font-extrabold">{ex.title}</h1>
+            <span className="chip bg-lav-100 text-lav-600">
+              {playful && ex.task_type ? `${TYPE_EMOJI[ex.task_type]} ` : ""}{TYPE_LABEL[ex.type]}{ex.level ? ` · ${ex.level}` : ""}{ex.bracket ? ` · Level ${ex.bracket} (${ex.bracket_label})` : ""}
+            </span>
+            <h1 className={`mt-2 font-extrabold ${playful ? "text-3xl" : "text-2xl"}`}>{ex.title}</h1>
             <p className="mt-1 text-ink-soft">{ex.description}</p>
             {ex.target_wpm && (
               <p className="mt-1 text-xs muted">Highlight speed {ex.target_wpm} words/min{ex.base_wpm && ex.base_wpm !== ex.target_wpm ? ` (adapted from ${ex.base_wpm} for you)` : ""}</p>
@@ -179,16 +232,56 @@ export default function ExerciseSession() {
         <div className="mt-5 space-y-4">
           {/* content by type */}
           {words.length > 0 && (
-            <div className="rounded-2xl border border-line bg-[#FBFBFE] p-5 text-xl leading-relaxed">
-              {words.map((w, i) => (
-                <span key={i} className={phase === "running" && i === wordIndex ? "rounded bg-sun-soft px-1 font-semibold text-ink" : phase === "running" && i < wordIndex ? "text-ink-muted" : "text-ink"}>{w} </span>
-              ))}
-            </div>
+            <>
+              {theme.listen && <ListenButton text={ex.passage ?? ""} wpm={ex.target_wpm} big={playful} />}
+              <div className={`rounded-2xl border border-line bg-[#FBFBFE] p-5 leading-relaxed ${playful ? "text-2xl tracking-wide" : "text-xl"}`}>
+                {words.map((w, i) => {
+                  const tone = tones[i];
+                  const startsHint = tone && (i === 0 || tones[i - 1] !== tone);
+                  const base = phase === "running" && i === wordIndex ? "rounded bg-sun-soft px-1 font-semibold text-ink" : phase === "running" && i < wordIndex ? "text-ink-muted" : "text-ink";
+                  return (
+                    <span key={i} className={`${base} ${tone ? `underline decoration-2 underline-offset-4 ${TONE_STYLE[tone.tone].mark}` : ""}`}>
+                      {startsHint && <sup className={`chip mr-1 px-1.5 py-0 align-super text-[10px] no-underline ${TONE_STYLE[tone.tone].chip}`}>{TONE_STYLE[tone.tone].icon} {tone.tone}</sup>}
+                      {w}{" "}
+                    </span>
+                  );
+                })}
+              </div>
+              {!!ex.tone_hints?.length && (
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {ex.tone_hints.map((h) => (
+                    <li key={h.phrase} className={`rounded-xl p-3 text-sm ${TONE_STYLE[h.tone].chip}`}>
+                      <b>{TONE_STYLE[h.tone].icon} “{h.phrase}”</b><span className="block text-xs opacity-90">{h.hint}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
           {ex.type === "picture" && (
             <div className="grid gap-4 md:grid-cols-[1.3fr_1fr]">
-              {ex.image_url && <img src={ex.image_url} alt={ex.title} className="w-full rounded-2xl border border-line object-cover" />}
-              <ul className="space-y-2">{(ex.prompts ?? []).map((p) => <li key={p} className="rounded-xl bg-lav-50 p-3 text-sm">{p}</li>)}</ul>
+              {ex.image_url && <img src={ex.image_url} alt={ex.title} className="w-full rounded-2xl border border-line bg-white object-cover" />}
+              <div className="space-y-2">
+                {theme.listen && <ListenButton text={(ex.prompts ?? []).join(" ")} big={playful} />}
+                <ul className="space-y-2">{(ex.prompts ?? []).map((p) => <li key={p} className={`rounded-xl bg-lav-50 p-3 ${playful ? "text-base" : "text-sm"}`}>{p}</li>)}</ul>
+              </div>
+            </div>
+          )}
+          {ex.type === "conversation" && (
+            <div className="space-y-3">
+              <div className={`flex gap-3 rounded-2xl border border-lav-200 bg-lav-50 p-5 ${playful ? "text-xl" : "text-lg"}`}>
+                <MessagesSquare className="mt-1 shrink-0 text-lav-500" size={22} />
+                <p className="text-ink">{ex.situation}</p>
+              </div>
+              {theme.listen && <ListenButton text={[ex.situation, ...(ex.prompts ?? [])].join(" ")} big={playful} />}
+              <ol className="grid gap-2 sm:grid-cols-2">
+                {(ex.prompts ?? []).map((p, i) => (
+                  <li key={p} className={`flex gap-2 rounded-xl bg-white p-3 ring-1 ring-line ${playful ? "text-base" : "text-sm"}`}>
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-navy text-xs font-bold text-white">{i + 1}</span>{p}
+                  </li>
+                ))}
+              </ol>
+              <p className="text-xs muted">Press Start, then answer the questions out loud in your own words. There are no wrong answers – take your time.</p>
             </div>
           )}
           {ex.type === "sustained_vowel" && (
@@ -229,17 +322,17 @@ export default function ExerciseSession() {
         {/* controls */}
         <div className="mt-6">
           {phase === "ready" && (
-            <button className="btn-primary px-6 py-3 text-base" onClick={() => void begin()}><Mic size={18} /> Start</button>
+            <button className={`btn-primary ${theme.button}`} onClick={() => void begin()}><Mic size={playful ? 22 : 18} /> {playful ? "Start! 🎤" : "Start"}</button>
           )}
           {phase === "running" && (
-            <button className="inline-flex items-center gap-2 rounded-xl bg-bad px-6 py-3 font-semibold text-white hover:brightness-110" onClick={finish}><Square size={16} /> I'm done</button>
+            <button className={`inline-flex items-center gap-2 rounded-xl bg-bad font-semibold text-white hover:brightness-110 ${theme.button}`} onClick={finish}><Square size={16} /> I'm done</button>
           )}
           {(phase === "rate" || phase === "saving") && (
             <div>
               <p className="mb-3 font-semibold">How did that feel?</p>
               <div className="flex flex-wrap gap-3">
                 {([["easy", "Easy", <Smile key="e" />], ["ok", "Okay", <Meh key="o" />], ["hard", "Hard", <Frown key="h" />]] as const).map(([k, l, icon]) => (
-                  <button key={k} className="btn-outline px-5 py-3" disabled={phase === "saving"} onClick={() => void save(k)}>{icon} {l}</button>
+                  <button key={k} className={`btn-outline ${playful ? "rounded-2xl px-7 py-4 text-lg" : "px-5 py-3"}`} disabled={phase === "saving"} onClick={() => void save(k)}>{icon} {l}</button>
                 ))}
                 {phase === "saving" && <Loader2 className="animate-spin self-center text-brand" />}
               </div>
@@ -251,6 +344,7 @@ export default function ExerciseSession() {
 
       {phase === "done" && result && (
         <section className="card animate-step p-6">
+          {theme.celebrate && <div className="mb-5"><Celebration score={result.score} /></div>}
           <div className="flex flex-col gap-6 md:flex-row md:items-center">
             <ScoreRing value={result.score} size={140} sub={result.verdict} />
             <div className="flex-1">

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="t">
+  <title id="t">A pot boiling over on a gas stove while a boy looks on in surprise</title>
+  <rect width="640" height="400" fill="#FFF3E0"/>
+  <rect y="0" width="640" height="40" fill="#FFE0B2"/>
+  <!-- window -->
+  <rect x="440" y="60" width="150" height="110" fill="#BDE6FF" stroke="#8D6E63" stroke-width="6"/>
+  <line x1="515" y1="60" x2="515" y2="170" stroke="#8D6E63" stroke-width="4"/>
+  <!-- counter + stove -->
+  <rect x="0" y="270" width="640" height="130" fill="#A1887F"/>
+  <rect x="0" y="262" width="640" height="12" fill="#6D4C41"/>
+  <rect x="120" y="240" width="220" height="26" rx="4" fill="#424242"/>
+  <g fill="#1E88E5"><path d="M175 240 q8 -18 16 0z"/><path d="M190 240 q8 -24 16 0z"/><path d="M205 240 q8 -18 16 0z"/></g>
+  <g fill="#FFB300"><path d="M185 240 q5 -10 10 0z"/><path d="M200 240 q5 -12 10 0z"/></g>
+  <circle cx="290" cy="253" r="7" fill="#9E9E9E"/>
+  <!-- pot -->
+  <rect x="150" y="160" width="100" height="80" rx="8" fill="#90A4AE" stroke="#546E7A" stroke-width="4"/>
+  <rect x="130" y="172" width="22" height="8" rx="3" fill="#546E7A"/><rect x="248" y="172" width="22" height="8" rx="3" fill="#546E7A"/>
+  <!-- lid lifted, rattling -->
+  <g transform="rotate(-14 200 140)"><ellipse cx="200" cy="146" rx="56" ry="9" fill="#B0BEC5" stroke="#546E7A" stroke-width="3"/><rect x="192" y="130" width="16" height="10" rx="3" fill="#37474F"/></g>
+  <path d="M168 128 l-10 -8 M232 120 l10 -10" stroke="#37474F" stroke-width="3"/>
+  <!-- foam spilling -->
+  <path d="M150 165 q-8 30 -2 58 q6 8 10 -4 q2 -26 4 -50z" fill="#FFFFFF" stroke="#CFD8DC" stroke-width="2"/>
+  <path d="M250 165 q10 26 4 56 q-6 8 -10 -4 q-2 -24 -2 -48z" fill="#FFFFFF" stroke="#CFD8DC" stroke-width="2"/>
+  <g fill="#FFFFFF" stroke="#CFD8DC"><circle cx="165" cy="158" r="9"/><circle cx="182" cy="152" r="10"/><circle cx="222" cy="150" r="10"/><circle cx="240" cy="158" r="8"/></g>
+  <!-- steam -->
+  <g fill="none" stroke="#B0BEC5" stroke-width="5" stroke-linecap="round">
+    <path d="M180 112 q-14 -18 0 -36 q14 -18 0 -36"/><path d="M210 106 q14 -18 0 -36 q-14 -18 0 -36"/><path d="M238 114 q-12 -16 0 -32"/>
+  </g>
+  <!-- boy -->
+  <g>
+    <circle cx="450" cy="205" r="26" fill="#B5733A"/>
+    <path d="M424 198 q26 -34 52 0 q-4 -28 -26 -28 q-22 0 -26 28z" fill="#1B1B1B"/>
+    <circle cx="442" cy="203" r="4" fill="#fff"/><circle cx="442" cy="203" r="2" fill="#111"/>
+    <circle cx="458" cy="203" r="4" fill="#fff"/><circle cx="458" cy="203" r="2" fill="#111"/>
+    <ellipse cx="450" cy="218" rx="5" ry="6" fill="#5D1F1F"/>
+    <rect x="424" y="232" width="52" height="70" rx="10" fill="#43AA8B"/>
+    <line x1="426" y1="246" x2="396" y2="214" stroke="#B5733A" stroke-width="9" stroke-linecap="round"/>
+    <line x1="474" y1="246" x2="496" y2="276" stroke="#B5733A" stroke-width="9" stroke-linecap="round"/>
+  </g>
+  <text x="380" y="140" font-family="sans-serif" font-size="30" font-weight="700" fill="#E53935">!</text>
+</svg>

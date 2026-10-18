@@ -51,6 +51,7 @@ class Settings:
     # ---- Static files (task images, served at /static) ----
     static_dir: str = os.getenv("STATIC_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"))
     max_image_mb: int = int(os.getenv("MAX_IMAGE_MB", "5"))
+    max_video_mb: int = int(os.getenv("MAX_VIDEO_MB", "25"))  # short scenario videos (.mp4 / .webm)
 
     # ---- CORS (React dev server) ----
     cors_origins: list[str] = field(
@@ -79,6 +80,8 @@ class Settings:
 
     # ---- Pre-processing / features ----
     enable_noise_reduction: bool = _bool("ENABLE_NOISE_REDUCTION", True)
+    # Voice activity detection: silero (neural, noise-robust) | energy (adaptive threshold). Falls back to energy.
+    vad_backend: str = os.getenv("VAD_BACKEND", "silero").strip().lower()
     enable_hubert: bool = _bool("ENABLE_HUBERT", False)
     hubert_model: str = os.getenv("HUBERT_MODEL", "facebook/hubert-base-ls960")
 

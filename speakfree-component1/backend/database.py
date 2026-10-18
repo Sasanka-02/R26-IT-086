@@ -98,14 +98,30 @@ class User(Base):
 
 
 class Patient(Base):
-    """A person being screened. Patients own themselves; guardians/clinicians own others."""
+    """
+    A person being screened / practising. Patients own themselves; guardians/clinicians own others.
+
+    Age: from date_of_birth when known, otherwise the `age` entered at sign-up (or on the one-time
+    "How old are you?" screen). age_bracket (1–8, age_brackets.py) is saved with it; a therapist
+    can pin the practice bracket (age_bracket_override) and assign exercises (C4 therapy plan).
+    """
 
     __tablename__ = "patients"
+    __table_args__ = (
+        CheckConstraint("age IS NULL OR age BETWEEN 6 AND 100", name="age_range"),
+        CheckConstraint("age_bracket IS NULL OR age_bracket BETWEEN 1 AND 8", name="age_bracket_range"),
+        CheckConstraint("age_bracket_override IS NULL OR age_bracket_override BETWEEN 1 AND 8", name="age_bracket_override_range"),
+    )
 
     id: Mapped[str] = mapped_column(String(16), primary_key=True, default=new_patient_id)
     owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     full_name: Mapped[str] = mapped_column(String(120))
-    date_of_birth: Mapped[date] = mapped_column(Date)
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    age_bracket: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    age_bracket_override: Mapped[int | None] = mapped_column(Integer, nullable=True)   # set by a therapist
+    assigned_exercises: Mapped[list | None] = mapped_column(JSON, nullable=True)       # set by a therapist
+    guardian_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # under 18
     is_self: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

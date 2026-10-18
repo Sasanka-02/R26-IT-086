@@ -57,7 +57,7 @@ export default function PipelineSession() {
       <Link to="/admin/pipeline" className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink"><ArrowLeft size={14} /> Pipeline</Link>
       <section className="card flex flex-col gap-4 p-5 md:flex-row md:items-center">
         <div className="flex-1">
-          <h1 className="text-2xl font-extrabold">{data.patient.full_name} <span className="text-base font-medium muted">· {data.patient.age} y · {data.patient.id}</span></h1>
+          <h1 className="text-2xl font-extrabold">{data.patient.full_name} <span className="text-base font-medium muted">· {data.patient.age ?? "–"} y · {data.patient.id}</span></h1>
           <p className="text-sm text-ink-soft">Session {data.session_id.slice(0, 8)}… · processed {new Date(data.created_at).toLocaleString()} ·{" "}
             C2 {data.stage_timings.component2_ms ?? "–"} ms · C3 {data.stage_timings.component3_ms ?? "–"} ms · C4 {data.stage_timings.component4_ms ?? "–"} ms</p>
           {data.error && <p className="mt-1 text-sm text-bad">{data.error}</p>}

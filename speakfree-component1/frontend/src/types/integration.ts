@@ -183,7 +183,7 @@ export interface PipelineDetail {
   status: string;
   error: string | null;
   created_at: string;
-  patient: { id: string; full_name: string; age: number };
+  patient: { id: string; full_name: string; age: number | null };
   stage_timings: Record<string, number>;
   c1_summary: SessionSummary;
   c2: C2Report | null;
@@ -192,13 +192,22 @@ export interface PipelineDetail {
 }
 
 export type ExerciseType =
-  | "reading" | "pacing" | "daf" | "picture" | "clear_speech" | "loudness" | "sustained_vowel" | "sound_drill";
+  | "reading" | "pacing" | "daf" | "picture" | "conversation" | "clear_speech" | "loudness" | "sustained_vowel" | "sound_drill";
+export type BracketTaskType = "reading" | "picture" | "conversation";
+export type Tone = "playful" | "simple" | "friendly" | "respectful";
+
+export interface ToneHint { phrase: string; tone: "questioning" | "excited" | "quoting"; hint: string }
 
 export interface Exercise {
   id: string;
   type: ExerciseType;
   title: string;
   description: string;
+  bracket?: number; // 1–8 for the 24 age-bracket tasks
+  task_type?: BracketTaskType;
+  bracket_label?: string;
+  situation?: string; // conversation tasks
+  tone_hints?: ToneHint[]; // bracket 7 reading: tonal modulation
   level?: "beginner" | "intermediate" | "advanced";
   difficulty: number;
   focus: Focus[];
@@ -213,9 +222,44 @@ export interface Exercise {
   times_practised: number;
   last_score: number | null;
   locked?: boolean;
-  source?: "level" | "bandit";
+  source?: "therapist" | "bracket" | "level" | "bandit";
   reason?: string;
   rank?: number;
+}
+
+/** The age-bracket ladder (Level 1–8) – the main practice level. */
+export interface BracketState {
+  bracket: number;
+  level_index: number;
+  label: string; // "Level 3"
+  ages: string; // "ages 10–11"
+  bracket_label: string;
+  age_bracket: number;
+  start_bracket: number;
+  min_bracket: number;
+  max_bracket: number;
+  next_bracket: number | null;
+  override: boolean;
+  strong_in_a_row: number;
+  weak_in_a_row: number;
+  needed_to_advance: number;
+  mastered: boolean;
+  progress_text: string;
+  dashboard_text: string; // "You're practising at Level 3 (ages 10–11 tasks). 1 more strong attempt to unlock Level 4."
+  target_wpm: number;
+  strong_threshold: number;
+  weak_threshold: number;
+  history: { at: string | null; from: string | null; to: string; direction: string; reason: string }[];
+}
+
+export interface Learner {
+  age: number | null;
+  age_bracket: number;
+  age_label: string;
+  theme: "playful" | "modern" | "professional";
+  tone: Tone;
+  practice_bracket: number;
+  override: boolean;
 }
 
 export interface LevelState {
@@ -279,9 +323,11 @@ export interface ProgressSummary {
 
 export interface TherapyPlan {
   has_profile: true;
+  learner: Learner;
   focus: { key: Focus; patient_name: string; tagline: string; techniques: string[]; ladder_type: ExerciseType };
   dose: { sessions_per_week: number; minutes_per_session: number; exercises_per_session: number };
-  level: LevelState;
+  level: BracketState;
+  skill_level: LevelState | null; // Beginner → Advanced inside clear speech / sound practice
   today: Exercise[];
   week: { date: string; day: string; is_today: boolean; active: boolean; minutes: number; completed: number;
           exercises: { id: string; title: string; type: ExerciseType }[] }[];
@@ -301,6 +347,9 @@ export interface BanditArm {
   level: string | null;
   difficulty: number;
   focus: Focus[];
+  arm: string;
+  bracket: number | null;
+  task_type: BracketTaskType | null;
   times_practised: number;
   expected_reward: number;
   exploration_bonus: number;
@@ -313,7 +362,8 @@ export interface BanditArm {
 }
 
 export interface AdminTherapy {
-  patient: { id: string; full_name: string; age: number };
+  patient: { id: string; full_name: string; age: number | null; age_bracket: { id: number; label: string } | null;
+             age_bracket_override: number | null; assigned_exercises: string[] };
   profile: TherapyProfile | null;
   profile_history: { session_id: string; focus: Focus; severity_level: number; created_at: string }[];
   plan: (TherapyPlan & { engine: { context: { vector: number[]; labels: string[] }; arms: BanditArm[];
@@ -343,7 +393,8 @@ export interface AttemptResult {
   verdict: string;
   feedback: string[];
   breakdown: AttemptRecord["score_breakdown"];
-  level: LevelState;
+  level: BracketState;
+  skill_level: LevelState | null;
   level_message: string | null;
   plan: TherapyPlan;
 }
@@ -356,6 +407,7 @@ export interface Briefing {
   next_step: { exercise_id: string; title: string; reason: string };
   suggestions: string[];
   llm_enabled: boolean;
+  tone: Tone;
 }
 
 export interface ChatReply {
@@ -365,6 +417,7 @@ export interface ChatReply {
   intent: string | null;
   confidence: number;
   source: "classifier" | "llm" | "fallback";
+  tone: Tone;
 }
 
 export interface ModelsInfo {
@@ -387,6 +440,7 @@ export interface ModelsInfo {
     bandit: { alpha: number; category_beta: number; difficulty_penalty: number; context_dim: number };
     dose_by_severity: Record<string, { sessions_per_week: number; minutes_per_session: number; exercises_per_session: number }>;
     start_level_by_severity: Record<string, string>;
+    age_brackets: Record<string, { min_age: number; max_age: number; label: string; target_wpm: number; theme: string; tone: string }>;
     foci: Record<Focus, { admin_name: string; patient_name: string; ladder_type: string; c3_disorder: Disorder }>;
     intent_classifier: { examples: number; intents: number; accuracy: number; confidence_threshold: number };
   };

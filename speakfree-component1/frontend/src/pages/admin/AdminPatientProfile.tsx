@@ -66,8 +66,8 @@ export default function AdminPatientProfile() {
           <Link to={`/admin/patients/${p.id}/therapy`} className="btn-outline"><HeartPulse size={16} /> Therapy monitor (C4)</Link>
         </div>
         <dl className="mt-6 grid gap-4 border-t border-line pt-5 sm:grid-cols-2 lg:grid-cols-5">
-          <Info label="Age · bracket">{p.age} years{p.age_bracket ? ` · ${p.age_bracket.id} (${p.age_bracket.label})` : ""}</Info>
-          <Info label="Date of birth">{new Date(`${data.date_of_birth}T00:00:00`).toLocaleDateString()}</Info>
+          <Info label="Age · bracket">{p.age ?? "–"} years{p.age_bracket ? ` · ${p.age_bracket.id} (${p.age_bracket.label})` : ""}{p.age_bracket_override ? ` · practice level ${p.age_bracket_override} (therapist)` : ""}</Info>
+          <Info label="Date of birth">{data.date_of_birth ? new Date(`${data.date_of_birth}T00:00:00`).toLocaleDateString() : "– (age entered)"}</Info>
           <Info label="Registered">{new Date(p.registered_at).toLocaleDateString()}</Info>
           <Info label="Account">{p.owner_name}<span className="block truncate text-xs font-normal muted">{p.owner_email}</span></Info>
           <Info label="Sessions">{p.total_sessions}{p.latest_overall_score !== null && <span className="block text-xs font-normal muted">latest score {p.latest_overall_score.toFixed(0)}/100</span>}</Info>

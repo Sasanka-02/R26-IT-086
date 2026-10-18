@@ -111,15 +111,17 @@ FOCI: dict[str, dict] = {
     },
 }
 
-# Weekly dose by Component 3 severity level (more severe -> more frequent, shorter sessions).
+# Weekly dose by Component 3 severity level (more severe -> more frequent sessions).
+# exercises_per_session = the 3 age-bracket tasks (reading, picture, conversation) + extra practice.
 DOSE_BY_SEVERITY = {
-    4: {"sessions_per_week": 6, "minutes_per_session": 10, "exercises_per_session": 2},
-    3: {"sessions_per_week": 5, "minutes_per_session": 12, "exercises_per_session": 3},
-    2: {"sessions_per_week": 4, "minutes_per_session": 15, "exercises_per_session": 3},
-    1: {"sessions_per_week": 3, "minutes_per_session": 10, "exercises_per_session": 2},
+    4: {"sessions_per_week": 6, "minutes_per_session": 12, "exercises_per_session": 4},
+    3: {"sessions_per_week": 5, "minutes_per_session": 15, "exercises_per_session": 5},
+    2: {"sessions_per_week": 4, "minutes_per_session": 18, "exercises_per_session": 5},
+    1: {"sessions_per_week": 3, "minutes_per_session": 12, "exercises_per_session": 4},
 }
 
-# Starting rung of the ladder by severity (levels: beginner, intermediate, advanced).
+# Starting rung of the skill ladder by severity (levels: beginner, intermediate, advanced).
+# The age-bracket ladder has its own start rule (brackets.start_bracket).
 START_LEVEL_BY_SEVERITY = {4: "beginner", 3: "beginner", 2: "intermediate", 1: "advanced"}
 
 

@@ -43,6 +43,7 @@ export default function C3SeverityPanel({ c3 }: { c3: C3Report }) {
         </Card>
 
         <div className="grid gap-5 md:grid-cols-2">
+          {/* ★ NOVELTY (Component 3): severity classification via the trained model cascade (stage 1 + stage 2 + fusion) */}
           <Card title="Stage 2 · disorder classifier P(class)" icon={<Brain size={18} className="text-navy" />}>
             <HBars max={1} format={pct} data={DISORDER_ORDER.map((d) => ({
               key: d, label: DISORDER_LABEL[d], value: c3.disorder_breakdown[d] ?? 0, color: DISORDER_COLOR[d], highlight: d === c3.primary_disorder,

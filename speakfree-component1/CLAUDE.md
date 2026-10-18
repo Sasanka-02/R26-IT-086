@@ -46,7 +46,7 @@ Rules for training work:
 - The /api/v1/analyze JSON (schemas.py AnalyzeResponse) is a contract for Components 2 and 3:
   add fields, never rename/remove them. Bump schema_version on changes. New model outputs go
   in new fields (e.g. `dysfluency_events`, `model_predictions`).
-- Age brackets 6–20 (age_brackets.py and frontend/src/utils/age.ts must stay in sync).
+- Age brackets 1–8 for ages 6–100: one source of truth in speakfree-component4/backend/component4/brackets.py (age_bracket_for), re-exported by age_brackets.py; frontend/src/utils/age.ts must stay in sync. Screening tasks cover brackets 1–7 (adults use 7).
 - UI theme: light, from the SpeakFree mock-up (tokens in frontend/tailwind.config.js): canvas #F5F6FB,
   white cards, navy #1E3A8A (sidebar/brand), royal blue #1D4ED8 (buttons), lavender/violet #7C6CF0,
   amber #F59E0B ("Free" + notification dot).

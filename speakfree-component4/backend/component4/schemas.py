@@ -4,6 +4,21 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 SelfRating = Literal["easy", "ok", "hard"]
+TaskType = Literal["reading", "picture", "conversation"]  # the three age-bracket task types
+
+
+class BracketExercise(BaseModel):
+    """One of the 24 age-bracket exercises (bracket_tasks.py)."""
+    id: str
+    bracket: int = Field(ge=1, le=8)
+    task_type: TaskType
+    title: str
+    description: str
+    passage: str | None = None          # reading
+    target_wpm: int | None = None       # reading: rises with the bracket (70 -> 150)
+    image_url: str | None = None        # picture
+    situation: str | None = None        # conversation
+    prompts: list[str] = []             # picture + conversation guiding questions
 
 
 class LiveMetric(BaseModel):

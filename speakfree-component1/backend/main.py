@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from integration.pipeline import run_session_pipeline
 from integration.routes import router as integration_router
 from account_routes import router as account_router
-from age_brackets import MAX_AGE, MIN_AGE, age_from_dob, bracket_for_age, bracket_info
+from age_brackets import ADULT_AGE, age_bracket_for, age_from_dob, bracket_for_age, bracket_info, patient_age, screening_bracket
 from audio_preprocessing import AudioDecodeError, decode_audio, preprocess, waveform_peaks
 from auth import (
     authenticate,
@@ -62,6 +62,7 @@ from database import (
     utcnow,
 )
 from schemas import (
+    AgeUpdate,
     AdminPatientProfile,
     AdminPatientRow,
     AdminRecording,
@@ -81,7 +82,7 @@ from schemas import (
 )
 from streaming import chunk_metrics, hub
 from session_summary import summarise_session
-from task_service import TaskLibraryEmpty, image_url, pick_tasks, task_set_payload
+from task_service import TaskLibraryEmpty, image_url, pick_tasks, task_set_payload, video_url
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("speakfree.c1")
@@ -128,7 +129,7 @@ app.include_router(account_router)
 
 # ============================================================================= helpers
 def patient_out(p: Patient) -> PatientOut:
-    age = age_from_dob(p.date_of_birth)
+    age = patient_age(p)
     b = bracket_for_age(age)
     return PatientOut(
         id=p.id,
@@ -136,6 +137,8 @@ def patient_out(p: Patient) -> PatientOut:
         date_of_birth=p.date_of_birth,
         age=age,
         age_bracket=bracket_info(b) if b else None,
+        age_bracket_override=p.age_bracket_override,
+        guardian_consent=p.guardian_consent_at is not None,
         is_self=p.is_self,
     )
 
@@ -147,14 +150,30 @@ def user_out(u: User) -> UserOut:
     )
 
 
-def require_supported_age(dob, who: str = "Patient") -> int:
-    age = age_from_dob(dob)
-    if not (MIN_AGE <= age <= MAX_AGE):
-        raise HTTPException(
-            status_code=422,
-            detail=f"{who} must be between {MIN_AGE} and {MAX_AGE} years old (calculated age: {age}).",
-        )
+def require_supported_age(age: int | None, dob=None, who: str = "Patient") -> int:
+    """Age from the date of birth (if given) or as entered; 6–100 (age_brackets.age_bracket_for)."""
+    if dob is not None:
+        age = age_from_dob(dob)
+    if age is None:
+        raise HTTPException(status_code=422, detail=f"{who}'s age is required")
+    try:
+        age_bracket_for(age)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return age
+
+
+def require_guardian_consent(age: int, consent: bool) -> None:
+    if age < ADULT_AGE and not consent:
+        raise HTTPException(status_code=422, detail="A parent or guardian must agree to this account for anyone under 18")
+
+
+def set_patient_age(p: Patient, age: int, guardian_consent: bool) -> None:
+    """Save the age + its clinical bracket (1–8) and, for under-18s, when a guardian agreed."""
+    p.age = age
+    p.age_bracket = age_bracket_for(age)
+    if age < ADULT_AGE and guardian_consent and p.guardian_consent_at is None:
+        p.guardian_consent_at = utcnow()
 
 
 def ensure_admin(db: Session) -> User:
@@ -207,6 +226,13 @@ def health():
 async def warmup():
     """Pre-load Whisper (and compile the Component 3 acoustic features) so the first real analysis is fast."""
     await run_in_threadpool(get_asr)
+    if settings.vad_backend == "silero":
+        from audio_preprocessing import load_silero
+
+        try:
+            await run_in_threadpool(load_silero)
+        except ImportError:
+            log.warning("VAD_BACKEND=silero but silero-vad is not installed - the energy VAD is used")
     if settings.enable_acoustic_biomarkers:
         from integration.hooks import warmup as integration_warmup
 
@@ -221,15 +247,17 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
 
-    # server-side validation (password length / email format / consent are enforced by RegisterRequest)
+    # server-side validation (password length / email format / consent are enforced by RegisterRequest).
+    # Therapists (clinicians) are not asked their age.
+    age = None
     if body.role == "patient":
-        if body.date_of_birth is None:
-            raise HTTPException(status_code=422, detail="Date of birth is required for patients")
-        require_supported_age(body.date_of_birth)
+        age = require_supported_age(body.age, body.date_of_birth)
     elif body.role == "guardian":
-        if not body.child_full_name or len(body.child_full_name.strip()) < 2 or body.child_date_of_birth is None:
-            raise HTTPException(status_code=422, detail="Child's name and date of birth are required")
-        require_supported_age(body.child_date_of_birth, "Child")
+        if not body.child_full_name or len(body.child_full_name.strip()) < 2:
+            raise HTTPException(status_code=422, detail="Child's name is required")
+        age = require_supported_age(body.child_age, body.child_date_of_birth, "Child")
+    if age is not None:
+        require_guardian_consent(age, body.guardian_consent)
 
     user = User(
         email=email,
@@ -242,9 +270,12 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
     db.flush()
 
     if body.role == "patient":
-        db.add(Patient(owner_user_id=user.id, full_name=user.full_name, date_of_birth=body.date_of_birth, is_self=True))
+        p = Patient(owner_user_id=user.id, full_name=user.full_name, date_of_birth=body.date_of_birth, is_self=True)
     elif body.role == "guardian":
-        db.add(Patient(owner_user_id=user.id, full_name=body.child_full_name.strip(), date_of_birth=body.child_date_of_birth))
+        p = Patient(owner_user_id=user.id, full_name=body.child_full_name.strip(), date_of_birth=body.child_date_of_birth)
+    if age is not None:
+        set_patient_age(p, age, body.guardian_consent)
+        db.add(p)
 
     db.commit()
     db.refresh(user)
@@ -263,6 +294,25 @@ def me(user: User = Depends(get_current_user)):
     return user_out(user)
 
 
+@app.put("/api/v1/auth/me/age", response_model=UserOut, tags=["auth"])
+def set_my_age(body: AgeUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """One-time "How old are you?" for accounts created before the age was collected."""
+    if body.patient_id:
+        patient = get_owned_patient(db, user, body.patient_id)
+    else:
+        patient = next((p for p in user.patients if p.is_self), None) or (user.patients[0] if user.patients else None)
+        if patient is None:
+            raise HTTPException(status_code=404, detail="This account has no patient record")
+    if patient.date_of_birth is not None:
+        raise HTTPException(status_code=409, detail="The age is calculated from the date of birth already on file")
+    age = require_supported_age(body.age)
+    require_guardian_consent(age, body.guardian_consent)
+    set_patient_age(patient, age, body.guardian_consent)
+    db.commit()
+    db.refresh(user)
+    return user_out(user)
+
+
 # ============================================================================= patients
 @app.get("/api/v1/patients", response_model=list[PatientOut], tags=["patients"])
 def list_patients(user: User = Depends(get_current_user)):
@@ -273,8 +323,9 @@ def list_patients(user: User = Depends(get_current_user)):
 def create_patient(body: PatientCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if user.role in ("patient", "admin"):
         raise HTTPException(status_code=403, detail=f"{user.role.title()} accounts cannot add patients")
-    require_supported_age(body.date_of_birth)
+    age = require_supported_age(body.age, body.date_of_birth)
     p = Patient(owner_user_id=user.id, full_name=body.full_name.strip(), date_of_birth=body.date_of_birth)
+    set_patient_age(p, age, guardian_consent=False)  # a clinician adds patients under their own consent process
     db.add(p)
     db.commit()
     db.refresh(p)
@@ -290,14 +341,16 @@ def tasks_for_patient(
     db: Session = Depends(get_db),
 ):
     """
-    Age (from DOB, today) -> bracket -> one active task per type (three questions), preferring
-    tasks this patient has attempted least. See task_service.py.
+    Age (from DOB, or as entered) -> bracket -> one active task per type (three questions), preferring
+    tasks this patient has attempted least. See task_service.py. Adults (bracket 8) are screened
+    with the bracket-7 task set.
     """
     patient = get_owned_patient(db, user, patient_id)
-    age = age_from_dob(patient.date_of_birth)
-    bracket = bracket_for_age(age)
-    if bracket is None:
-        raise HTTPException(status_code=422, detail=f"Age {age} is outside the supported 6–20 range")
+    age = patient_age(patient)
+    age_bracket = bracket_for_age(age)
+    if age_bracket is None:
+        raise HTTPException(status_code=422, detail="Please tell us your age first (ages 6 and above)")
+    bracket = screening_bracket(age_bracket)
     try:
         picked = pick_tasks(db, patient.id, bracket)
     except TaskLibraryEmpty as exc:
@@ -307,7 +360,8 @@ def tasks_for_patient(
     return {
         "patient_id": patient.id,
         "age": age,
-        "age_bracket": bracket_info(bracket),
+        "age_bracket": bracket_info(bracket),           # screening task bracket (1–7)
+        "therapy_bracket": bracket_info(age_bracket),   # clinical age bracket (1–8)
         "tasks": task_set_payload(picked, str(request.base_url)),
     }
 
@@ -326,6 +380,7 @@ def run_pipeline(path: str, task_type: str, reference_text: str | None, keywords
         raw,
         enable_noise_reduction=settings.enable_noise_reduction,
         significant_pause_sec=settings.significant_pause_sec,
+        vad_backend=settings.vad_backend,
     )
     if not pre.speech_intervals or pre.clean_audio.size < 0.3 * pre.sample_rate:
         raise HTTPException(status_code=422, detail="No speech detected. Please record again in a quieter place, closer to the microphone.")
@@ -385,6 +440,8 @@ def run_pipeline(path: str, task_type: str, reference_text: str | None, keywords
             "trim_offset_sec": pre.trim_offset_sec,
             "original_duration_sec": pre.original_duration_sec,
             "noise_reduction_applied": pre.noise_reduction_applied,
+            "vad_backend": pre.vad_backend,
+            "noise_floor_db": pre.noise_floor_db,
             "vad_speech_intervals": [[s, e] for s, e in pre.speech_intervals],
             "significant_pause_threshold_sec": settings.significant_pause_sec,
             "raw_audio_retained": False,
@@ -407,7 +464,7 @@ async def analyze(
     audio: UploadFile = File(..., description="Single audio blob (.webm or .wav)"),
     session_id: str = Form(...),
     patient_id: str = Form(...),
-    age_bracket: int = Form(..., ge=1, le=7),
+    age_bracket: int = Form(..., ge=1, le=8),
     task_type: str = Form("reading"),
     task_id: str = Form(...),
     user: User = Depends(get_current_user),
@@ -417,7 +474,9 @@ async def analyze(
         raise HTTPException(status_code=422, detail=f"task_type must be one of {TASK_TYPES}")
 
     patient = get_owned_patient(db, user, patient_id)
-    actual_bracket = bracket_for_age(age_from_dob(patient.date_of_birth))
+    actual = bracket_for_age(patient_age(patient))
+    actual_bracket = screening_bracket(actual) if actual else None
+    age_bracket = screening_bracket(age_bracket)
     if actual_bracket != age_bracket:
         log.warning("age_bracket %s sent but patient is in bracket %s – using patient's bracket", age_bracket, actual_bracket)
         age_bracket = actual_bracket or age_bracket
@@ -617,23 +676,35 @@ IMAGE_TYPES = {  # extension -> (accepted content types, magic-byte check)
     ".jpeg": ({"image/jpeg"}, lambda b: b.startswith(b"\xff\xd8\xff")),
     ".webp": ({"image/webp"}, lambda b: len(b) > 12 and b[:4] == b"RIFF" and b[8:12] == b"WEBP"),
 }
+VIDEO_TYPES = {  # short scenario videos: H.264 MP4 or WebM play in every modern browser
+    ".mp4": ({"video/mp4"}, lambda b: len(b) > 12 and b[4:8] == b"ftyp"),
+    ".webm": ({"video/webm"}, lambda b: b.startswith(b"\x1a\x45\xdf\xa3")),
+}
 TYPE_PREFIX = {"reading": "read", "picture": "pic", "scenario": "scn", "questions": "q"}
 
 
-async def _read_task_image(image: UploadFile) -> tuple[bytes, str]:
-    """Validate an uploaded task image (jpg/png/webp, ≤ MAX_IMAGE_MB, real image bytes)."""
+async def _read_task_image(image: UploadFile, task_type: str) -> tuple[bytes, str]:
+    """
+    Validate an uploaded task picture (jpg/png/webp, ≤ MAX_IMAGE_MB) or – for scenario tasks only –
+    a short video (mp4/webm, ≤ MAX_VIDEO_MB). The bytes must really be that format (magic bytes).
+    """
     ext = os.path.splitext(image.filename or "")[1].lower()
-    if ext not in IMAGE_TYPES:
-        raise HTTPException(status_code=422, detail="Image must be a .jpg, .png or .webp file")
-    content_types, looks_valid = IMAGE_TYPES[ext]
+    video = ext in VIDEO_TYPES
+    if video and task_type != "scenario":
+        raise HTTPException(status_code=422, detail="Videos can only be used for scenario tasks")
+    if not video and ext not in IMAGE_TYPES:
+        allowed = ".jpg, .png, .webp, .mp4 or .webm" if task_type == "scenario" else ".jpg, .png or .webp"
+        raise HTTPException(status_code=422, detail=f"Media must be a {allowed} file")
+    kind, max_mb = ("Video", settings.max_video_mb) if video else ("Image", settings.max_image_mb)
+    content_types, looks_valid = (VIDEO_TYPES if video else IMAGE_TYPES)[ext]
     if image.content_type and image.content_type not in content_types:
-        raise HTTPException(status_code=422, detail=f"Image content type '{image.content_type}' does not match {ext}")
-    limit = settings.max_image_mb * 1024 * 1024
+        raise HTTPException(status_code=422, detail=f"{kind} content type '{image.content_type}' does not match {ext}")
+    limit = max_mb * 1024 * 1024
     data = await image.read(limit + 1)
     if len(data) > limit:
-        raise HTTPException(status_code=413, detail=f"Image larger than {settings.max_image_mb} MB")
+        raise HTTPException(status_code=413, detail=f"{kind} larger than {max_mb} MB")
     if not looks_valid(data):
-        raise HTTPException(status_code=422, detail=f"File is not a valid {ext.lstrip('.').upper()} image")
+        raise HTTPException(status_code=422, detail=f"File is not a valid {ext.lstrip('.').upper()} {kind.lower()}")
     return data, (".jpg" if ext == ".jpeg" else ext)
 
 
@@ -679,7 +750,8 @@ def _admin_task_out(task: AssessmentTask, base_url: str, attempts: int) -> Admin
     return AdminTaskOut(
         id=task.id, age_bracket=task.age_bracket, task_type=task.task_type, title=task.title,
         instructions=task.instructions, content_text=task.content_text, image_path=task.image_path,
-        image_url=image_url(task, base_url), keywords=list(task.keywords or []), visual_json=task.visual_json,
+        image_url=image_url(task, base_url), video_url=video_url(task, base_url),
+        keywords=list(task.keywords or []), visual_json=task.visual_json,
         max_seconds=task.max_seconds, is_active=task.is_active, created_by_user_id=task.created_by_user_id,
         created_at=task.created_at, attempt_count=attempts,
     )
@@ -742,7 +814,7 @@ async def admin_create_task(
     db: Session = Depends(get_db),
 ):
     _validate_task_fields(age_bracket, task_type, max_seconds)
-    image_data = await _read_task_image(image) if image is not None and image.filename else None
+    image_data = await _read_task_image(image, task_type) if image is not None and image.filename else None
     task = AssessmentTask(
         id=_next_task_id(db, age_bracket, task_type), age_bracket=age_bracket, task_type=task_type,
         title=title.strip(), instructions=instructions.strip(), content_text=content_text.strip(),
@@ -777,7 +849,7 @@ async def admin_update_task(
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     _validate_task_fields(None, None, max_seconds)
-    image_data = await _read_task_image(image) if image is not None and image.filename else None
+    image_data = await _read_task_image(image, task.task_type) if image is not None and image.filename else None
 
     if title is not None:
         task.title = title.strip()
@@ -803,12 +875,13 @@ async def admin_update_task(
 
 # ============================================================================= admin: patient directory & history
 def _admin_patient_row(p: Patient, sessions: list[ScreeningSession]) -> AdminPatientRow:
-    age = age_from_dob(p.date_of_birth)
+    age = patient_age(p)
     b = bracket_for_age(age)
     latest = max(sessions, key=lambda s: as_utc(s.created_at)) if sessions else None
     indicator = json.loads(latest.summary_json)["screening_indicator"] if latest else None
     return AdminPatientRow(
-        id=p.id, full_name=p.full_name, age=age, age_bracket=bracket_info(b) if b else None, registered_at=p.created_at,
+        id=p.id, full_name=p.full_name, age=age, age_bracket=bracket_info(b) if b else None,
+        age_bracket_override=p.age_bracket_override, registered_at=p.created_at,
         owner_name=p.owner.full_name, owner_email=p.owner.email, owner_role=p.owner.role,
         total_sessions=len(sessions), last_session_at=latest.created_at if latest else None,
         latest_severity_hint=indicator["severity_hint"] if indicator else None,

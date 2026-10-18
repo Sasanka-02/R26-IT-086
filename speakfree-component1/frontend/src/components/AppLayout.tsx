@@ -28,10 +28,11 @@ import {
   X,
 } from "lucide-react";
 import { api } from "../api/client";
+import AgeGate from "./AgeGate";
 import { useAuth } from "../context/AuthContext";
 import { AssessmentProvider, useAssessment } from "../context/AssessmentContext";
 import type { Role } from "../types";
-import { calculateAge, MAX_AGE, MIN_AGE } from "../utils/age";
+import { calculateAge, MAX_AGE, MIN_AGE, TOO_YOUNG_MESSAGE } from "../utils/age";
 import SiteFooter from "./SiteFooter";
 import { ErrorBox, Logo } from "./ui";
 
@@ -118,7 +119,7 @@ function AddPatientModal({ onClose }: { onClose: () => void }) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (age === null || age < MIN_AGE || age > MAX_AGE) return setError(`Patient must be ${MIN_AGE}–${MAX_AGE} years old.`);
+    if (age === null || age < MIN_AGE || age > MAX_AGE) return setError(age !== null && age < MIN_AGE ? TOO_YOUNG_MESSAGE : `Patient must be ${MIN_AGE}–${MAX_AGE} years old.`);
     setBusy(true);
     try {
       const p = await api.createPatient(name.trim(), dob);
@@ -235,7 +236,9 @@ function AvatarMenu() {
 
 // =========================================================================== shell
 function Shell() {
-  const { user } = useAuth();
+  const { user, activePatient } = useAuth();
+  // accounts created before age was collected answer "How old are you?" once (therapists are never asked)
+  const needsAge = !!activePatient && activePatient.age === null && (user?.role === "patient" || user?.role === "guardian");
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const { pathname } = useLocation();
@@ -266,7 +269,7 @@ function Shell() {
       <Sidebar open={open} collapsed={collapsed} onClose={() => setOpen(false)} />
       <div className={`pt-[76px] transition-[padding] ${collapsed ? "" : "lg:pl-64"}`}>
         <main className="mx-auto max-w-[1180px] px-4 py-7 sm:px-8">
-          <Outlet />
+          {needsAge ? <AgeGate patient={activePatient!} /> : <Outlet />}
         </main>
         <div className="mx-auto max-w-[1180px] px-4 sm:px-8"><SiteFooter variant="compact" /></div>
       </div>

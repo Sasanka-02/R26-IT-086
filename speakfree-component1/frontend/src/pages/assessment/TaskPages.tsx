@@ -3,14 +3,32 @@
  *   1. Picture Description   2. Scenario Description   3. Pre-defined Questions
  * plus the shared stepper that leads to step 4, "Analyse".
  */
-import { useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CheckCircle2, Mic, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Heart, Mic, Sparkles } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useAssessment } from "../../context/AssessmentContext";
+import ListenButton from "../../components/ListenButton";
 import Recorder from "../../components/Recorder";
+import TaskVideo from "../../components/TaskVideo";
 import { ErrorBox, SceneVisual, Spinner, StepBadge } from "../../components/ui";
+import { themeNameForBracket } from "../../utils/age";
 import type { TaskType } from "../../types";
+
+/** Ages 6–11 get "🔊 Listen" on every prompt and larger recorder controls. */
+function usePlayful(): boolean {
+  const { activePatient } = useAuth();
+  return themeNameForBracket(activePatient?.age_bracket?.id) === "playful";
+}
+
+export function Reassurance() {
+  return (
+    <p className="mt-4 flex items-start gap-2 rounded-xl bg-canvas p-3 text-xs text-ink-soft">
+      <Heart size={14} className="mt-0.5 shrink-0 text-lav-500" />
+      There are no wrong answers. Stumbles, repeats and pauses are completely fine – just talk the way you normally do.
+    </p>
+  );
+}
 
 // =========================================================================== stepper
 const STEPS = [
@@ -78,6 +96,7 @@ function TaskFrame({ step, title, subtitle, children, recorder, back, next }: {
         <aside className="card flex flex-col p-6">
           <h3 className="mb-4 flex items-center gap-2 font-bold"><Mic size={17} className="text-lav-500" /> Your recording</h3>
           {recorder}
+          <Reassurance />
         </aside>
       </div>
       <div className="flex items-center justify-between">
@@ -90,12 +109,17 @@ function TaskFrame({ step, title, subtitle, children, recorder, back, next }: {
   );
 }
 
-function SingleRecorder({ keyName, taskType, taskId, maxSeconds }: { keyName: string; taskType: TaskType; taskId: string; maxSeconds: number }) {
+function SingleRecorder({ keyName, taskType, taskId, maxSeconds, onStart }: {
+  keyName: string; taskType: TaskType; taskId: string; maxSeconds: number; onStart?: () => void;
+}) {
   const { session, saveRecording, removeRecording } = useAssessment();
+  const playful = usePlayful();
   const saved = session?.recordings[keyName];
   return (
     <Recorder
       key={keyName}
+      big={playful}
+      onStart={onStart}
       maxSeconds={maxSeconds}
       saved={saved}
       onSave={(a) => saveRecording({ key: keyName, taskType, taskId, ...a })}
@@ -107,8 +131,10 @@ function SingleRecorder({ keyName, taskType, taskId, maxSeconds }: { keyName: st
 // =========================================================================== 1. picture
 export function PicturePage() {
   const { node, a } = useReady();
+  const playful = usePlayful();
   if (node) return node;
   const t = a.taskSet!.tasks.picture;
+  const mention = "Try to say who is in the picture, what they are doing, where they are, and what might happen next.";
   return (
     <TaskFrame step={1} title="Picture Description" subtitle={t.instructions}
       back={{ to: "/assessment", label: "All tasks" }}
@@ -116,6 +142,7 @@ export function PicturePage() {
       recorder={<SingleRecorder keyName="picture" taskType="picture" taskId={t.id} maxSeconds={t.max_seconds} />}>
       <div className="mb-3 text-sm font-semibold text-navy">{t.title}</div>
       <SceneVisual visual={t.visual} imageUrl={t.image_url} tone="park" className="h-72" />
+      {playful && <div className="mt-4"><ListenButton text={`${t.instructions} ${mention}`} big /></div>}
       <div className="mt-4 rounded-xl bg-lav-50 p-4 text-sm text-ink-soft">
         <b className="text-ink">Try to mention:</b> who is in the picture, what they are doing, where they are, and what might happen next.
         Speak for as long as you like, up to {Math.round(t.max_seconds / 60 * 10) / 10} minutes.
@@ -127,16 +154,28 @@ export function PicturePage() {
 // =========================================================================== 2. scenario
 export function ScenarioPage() {
   const { node, a } = useReady();
+  const playful = usePlayful();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  // the video's sound must never be recorded: pause it the moment recording (and the mic check) starts
+  const pauseVideo = useCallback(() => videoRef.current?.pause(), []);
   if (node) return node;
   const t = a.taskSet!.tasks.scenario;
   return (
     <TaskFrame step={2} title="Scenario Description" subtitle={t.instructions}
       back={{ to: "/assessment/picture", label: "Picture" }}
       next={{ to: "/assessment/questions", label: "Questions", ready: !!a.session!.recordings.scenario }}
-      recorder={<SingleRecorder keyName="scenario" taskType="scenario" taskId={t.id} maxSeconds={t.max_seconds} />}>
+      recorder={<SingleRecorder keyName="scenario" taskType="scenario" taskId={t.id} maxSeconds={t.max_seconds} onStart={pauseVideo} />}>
       <div className="mb-3 text-sm font-semibold text-navy">{t.title}</div>
-      <SceneVisual visual={t.visual} imageUrl={t.image_url} alt={t.title} tone="indoor" className="h-56" />
-      <blockquote className="mt-4 rounded-xl border-l-4 border-lav-500 bg-lav-50 p-4 text-[15px] leading-relaxed text-ink">{t.prompt}</blockquote>
+      {t.video_url ? (
+        <>
+          <TaskVideo ref={videoRef} src={t.video_url} title={t.title} className="max-h-80" />
+          <p className="mt-2 text-xs muted">Watch the video first – you can play it again. It pauses automatically when you start recording.</p>
+        </>
+      ) : (
+        <SceneVisual visual={t.visual} imageUrl={t.image_url} alt={t.title} tone="indoor" className="h-56" />
+      )}
+      <blockquote className={`mt-4 rounded-xl border-l-4 border-lav-500 bg-lav-50 p-4 leading-relaxed text-ink ${playful ? "text-lg" : "text-[15px]"}`}>{t.prompt}</blockquote>
+      {playful && <div className="mt-3"><ListenButton text={t.prompt} big /></div>}
     </TaskFrame>
   );
 }
@@ -144,6 +183,7 @@ export function ScenarioPage() {
 // =========================================================================== 3. pre-defined questions
 export function QuestionsPage() {
   const { node, a } = useReady();
+  const playful = usePlayful();
   const [index, setIndex] = useState(0);
   const navigate = useNavigate();
   if (node) return node;
@@ -182,12 +222,14 @@ export function QuestionsPage() {
           <div className="rounded-2xl bg-gradient-to-br from-lav-50 to-lav-100 p-6">
             <div className="text-xs font-bold uppercase tracking-wider text-lav-600">Question {index + 1} of {t.items.length}</div>
             <p className="mt-2 text-2xl font-bold leading-snug text-ink">{q.prompt}</p>
-            <p className="mt-3 text-xs text-ink-soft">Answer in full sentences. Up to {q.max_seconds} seconds.</p>
+            {playful && <div className="mt-3"><ListenButton key={q.id} text={q.prompt} big /></div>}
+            <p className="mt-3 text-xs text-ink-soft">Answer in your own words, in full sentences if you can. Take your time.</p>
           </div>
         </section>
         <aside className="card flex flex-col p-6">
           <h3 className="mb-4 flex items-center gap-2 font-bold"><Mic size={17} className="text-lav-500" /> Your answer</h3>
           <SingleRecorder keyName={q.id} taskType="questions" taskId={q.id} maxSeconds={q.max_seconds} />
+          <Reassurance />
         </aside>
       </div>
       <div className="flex items-center justify-between">

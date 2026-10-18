@@ -2,6 +2,7 @@
  * AssistantPage – the category-aware AI practice assistant (Component 4).
  * Answers come from the patient's own plan and results (intent classifier); open questions go to
  * an optional Claude model with a focus-specific prompt. Never shows a diagnosis.
+ * The backend sets the tone by age bracket (ages 6–9 playful … 21+ respectful); the chat's look follows it.
  */
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
@@ -58,25 +59,28 @@ export default function AssistantPage() {
     </div>
   );
   if (!brief) return <Spinner />;
+  const playful = brief.tone === "playful";
+  const bubble = playful ? "text-base" : "text-sm";
 
   return (
+    // ★ NOVELTY (Component 4): category-aware AI assistant – answers use the patient's own therapy focus
     <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
       <section className="card flex min-h-[560px] flex-col">
         <header className="flex items-center gap-3 border-b border-line p-5">
-          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-navy text-white"><Bot size={22} /></span>
+          <span className={`grid h-11 w-11 place-items-center rounded-2xl text-white ${playful ? "bg-sun text-2xl" : "bg-navy"}`}>{playful ? "🦉" : <Bot size={22} />}</span>
           <div>
-            <h1 className="text-lg font-extrabold">Practice assistant</h1>
+            <h1 className="text-lg font-extrabold">{playful ? "Your practice buddy" : "Practice assistant"}</h1>
             <p className="text-xs muted">Coaching for “{brief.focus.name}” {brief.llm_enabled && <span className="chip ml-1 bg-lav-100 px-2 py-0 text-[10px] text-lav-600"><Sparkles size={10} /> AI</span>}</p>
           </div>
         </header>
         <div className="flex-1 space-y-3 overflow-y-auto p-5 scrollbar-thin" aria-live="polite">
-          <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-lav-50 p-4 text-sm text-ink">
+          <div className={`max-w-[85%] rounded-2xl rounded-tl-sm bg-lav-50 p-4 text-ink ${bubble}`}>
             <p className="font-bold">{brief.greeting}</p>
             {brief.summary.map((l) => <p key={l} className="mt-1">{l}</p>)}
           </div>
           {msgs.map((m, i) => (
             <div key={i} className={`flex ${m.who === "me" ? "justify-end" : ""}`}>
-              <div className={`max-w-[85%] rounded-2xl p-3 text-sm ${m.who === "me" ? "rounded-tr-sm bg-navy text-white" : "rounded-tl-sm bg-lav-50 text-ink"}`}>
+              <div className={`max-w-[85%] rounded-2xl p-3 ${bubble} ${m.who === "me" ? "rounded-tr-sm bg-navy text-white" : "rounded-tl-sm bg-lav-50 text-ink"}`}>
                 {m.text}
                 {m.action && (
                   <Link to={m.action.href ?? `/therapy/exercise/${m.action.exercise_id}`} className="mt-2 flex items-center gap-1 text-xs font-semibold text-brand hover:underline">
@@ -91,7 +95,7 @@ export default function AssistantPage() {
         </div>
         <div className="border-t border-line p-4">
           <div className="mb-3 flex flex-wrap gap-2">
-            {suggestions.map((s) => <button key={s} className="btn-lav px-3 py-1.5 text-xs" onClick={() => void ask(s)} disabled={busy}>{s}</button>)}
+            {suggestions.map((s) => <button key={s} className={`btn-lav ${playful ? "px-4 py-2.5 text-sm" : "px-3 py-1.5 text-xs"}`} onClick={() => void ask(s)} disabled={busy}>{s}</button>)}
           </div>
           <form className="flex gap-2" onSubmit={(e: FormEvent) => { e.preventDefault(); void ask(text); }}>
             <input className="input" value={text} maxLength={500} onChange={(e) => setText(e.target.value)} placeholder="Ask about your practice…" aria-label="Message" />

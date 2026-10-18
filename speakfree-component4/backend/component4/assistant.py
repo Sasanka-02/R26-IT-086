@@ -14,9 +14,13 @@ AI Therapy Assistant - one coach, four personalities.
 #    4. otherwise a safe fallback listing what the assistant can do                        #
 #  Every reply reports its route (classifier / llm / fallback) and confidence.             #
 #  The assistant never names a disorder or severity level - only the friendly focus name.  #
+#  Tone follows the learner's AGE bracket (brackets.py): 1-2 very short + cheerful emoji,  #
+#  3-4 simple + encouraging, 5-7 friendly + motivating, 8 respectful + professional.       #
 ###########################################################################################
 """
 from __future__ import annotations
+
+import re
 
 from . import llm
 from .categories import FOCI
@@ -36,13 +40,38 @@ EXPLAIN = {
     "daf": "Delayed Auditory Feedback plays your voice back with a tiny delay. It naturally slows and smooths speech. Use headphones and speak at a relaxed pace.",
     "pacing": "Pacing exercises highlight one word at a time at a target speed. Follow the highlight without rushing - the speed adapts to how you do.",
     "picture": "Picture description is free speech practice: describe what you see in your own words, in full sentences, pausing between ideas.",
-    "reading": "Reading has three levels. Two strong readings in a row unlock the next one; two hard ones move you back so practice stays comfortable.",
+    "reading": "Your reading passage matches your level (Level 1-8, chosen from your age). Two strong readings in a row unlock the next level; two hard ones move you back so practice stays comfortable.",
     "drill": "Sound practice goes from words, to phrases, to sentences. Say each item slowly, then tick it if it felt clear. Two strong drills unlock the next step.",
 }
 
 
+GREETINGS = {"playful": "Hi {name}! 👋", "simple": "Hi {name}!", "friendly": "Hey {name}!", "respectful": "Hello {name}."}
+ENCOURAGEMENT = {"simple": "You're doing great!", "friendly": "Keep it up! 💪"}
+
+
 def _first(name: str) -> str:
     return (name or "there").split()[0]
+
+
+def _tone(plan: dict) -> str:
+    return (plan.get("learner") or {}).get("tone", "respectful")
+
+
+def _sentences(text: str, n: int) -> str:
+    return " ".join(re.split(r"(?<=[.!?])\s+", text.strip())[:n])
+
+
+def styled(text: str, tone: str) -> str:
+    """Age-appropriate delivery of an offline reply (the content itself never changes)."""
+    if not text:
+        return text
+    if tone == "playful":
+        return f"🌟 {_sentences(text, 2)} 😊"
+    if tone == "simple":
+        return f"{_sentences(text, 3)} {ENCOURAGEMENT['simple']}"
+    if tone == "friendly":
+        return f"{text} {ENCOURAGEMENT['friendly']}"
+    return text
 
 
 def _focus(profile: dict) -> dict:
@@ -62,23 +91,28 @@ def build_briefing(name: str, profile: dict, plan: dict) -> dict:
     focus = _focus(profile)
     prog = plan["progress"]
     level = plan["level"]
+    tone = _tone(plan)
     lines = [f"Your plan focuses on {focus['patient_name'].lower()}: {focus['tagline']}"]
     if prog["has_data"]:
         lines.append(f"You've completed {prog['total_sessions']} exercise{'s' if prog['total_sessions'] != 1 else ''} "
                      f"with an average score of {prog['average_score']}. {prog['trend']['detail']}")
     else:
         lines.append("Complete your first exercise and I'll start adapting your plan to you.")
-    lines.append(f"Level: {level['label']}. {level['progress_text']}")
+    lines.append(level.get("dashboard_text") or f"Level: {level['label']}. {level['progress_text']}")
     if prog["streak_days"] >= 2:
         lines.append(f"You're on a {prog['streak_days']}-day practice streak. Nice!")
     if plan["rescreen"]["recommended"]:
         lines.append("It's a good time for a new screening - it will update your plan.")
+    if tone == "playful":  # very short for ages 6-9: the focus, the level and one more line at most
+        lines = [_sentences(lines[0], 1)] + [_sentences(line, 2) for line in lines[1:3]]
     first = plan["today"][0]
+    tip = focus["tips"]["core"] if profile.get("focus") != "speech_sounds" else _sound_tip(profile)
     return {
-        "greeting": f"Hi {_first(name)}!",
+        "greeting": GREETINGS.get(tone, GREETINGS["simple"]).format(name=_first(name)),
         "focus": {"name": focus["patient_name"], "tagline": focus["tagline"], "techniques": focus["techniques"]},
         "summary": lines,
-        "tip": focus["tips"]["core"] if profile.get("focus") != "speech_sounds" else _sound_tip(profile),
+        "tip": styled(tip, tone) if tone in ("playful", "simple") else tip,
+        "tone": tone,
         "next_step": {"exercise_id": first["id"], "title": first["title"], "reason": first["reason"]},
         "suggestions": SUGGESTIONS[focus["key"]],
         "llm_enabled": llm.is_enabled(),
@@ -96,7 +130,13 @@ def _handle(intent: str, name: str, profile: dict, plan: dict, attempts: list[di
     if intent == "explain_focus":
         return (f"Your plan focuses on {focus['patient_name'].lower()}. It was built from your screening and "
                 f"adapts after every exercise. We'll work on: {'; '.join(focus['techniques'][:3]).lower()}."), None
-    if intent in ("next", "level"):
+    if intent == "level":
+        reply = level.get("dashboard_text") or f"You're at {level['label']}. {level['progress_text']}"
+        skill = plan.get("skill_level")
+        if skill:
+            reply += f" Your skill step is {skill['label']}: {skill['progress_text']}"
+        return reply, None
+    if intent == "next":
         others = ", ".join(e["title"] for e in plan["today"][1:])
         reply = f"Start with \"{first['title']}\". {first['reason']}"
         if others:
@@ -158,7 +198,11 @@ FALLBACK = ("I'm not sure about that one. I can tell you how you're doing, what 
 
 
 def _llm_context(plan: dict, attempts: list[dict]) -> dict:
+    learner = plan.get("learner") or {}
     return {
+        "age_group": learner.get("age_label"),
+        "age_bracket": learner.get("age_bracket"),
+        "practice_level": plan["level"].get("dashboard_text") or plan["level"]["label"],
         "level": plan["level"]["label"],
         "level_progress": plan["level"]["progress_text"],
         "exercises_completed": plan["progress"]["total_sessions"],
@@ -172,7 +216,8 @@ def _llm_context(plan: dict, attempts: list[dict]) -> dict:
 
 def answer(message: str, name: str, profile: dict, plan: dict, attempts: list[dict]) -> dict:
     focus = _focus(profile)
-    base = {"suggestions": SUGGESTIONS[focus["key"]], "action": None}
+    tone = _tone(plan)
+    base = {"suggestions": SUGGESTIONS[focus["key"]], "action": None, "tone": tone}
     text = message.strip()
     if not text:
         return {**base, "reply": "Ask me anything about your practice - for example, \"How am I doing?\"",
@@ -181,9 +226,9 @@ def answer(message: str, name: str, profile: dict, plan: dict, attempts: list[di
     if confidence >= CONFIDENCE_THRESHOLD:
         reply, action = _handle(intent, name, profile, plan, attempts)
         if reply:
-            return {**base, "reply": reply, "action": action, "intent": intent,
+            return {**base, "reply": styled(reply, tone), "action": action, "intent": intent,
                     "confidence": round(confidence, 2), "source": "classifier"}
-    llm_reply = llm.ask(text, _first(name), focus, _llm_context(plan, attempts))
+    llm_reply = llm.ask(text, _first(name), focus, _llm_context(plan, attempts), tone=tone)
     if llm_reply:
         return {**base, "reply": llm_reply, "intent": intent, "confidence": round(confidence, 2), "source": "llm"}
-    return {**base, "reply": FALLBACK, "intent": intent, "confidence": round(confidence, 2), "source": "fallback"}
+    return {**base, "reply": styled(FALLBACK, tone), "intent": intent, "confidence": round(confidence, 2), "source": "fallback"}

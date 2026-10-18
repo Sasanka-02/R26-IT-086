@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .adaptive import attempt_feedback, level_change_message, level_state
-from .categories import FOCI
+from .adaptive import attempt_feedback, learner_bracket, level_change_message
 from .exercises import get_exercise, syllables_per_word
+from .plan import skill_state
 from .scoring import score_with_breakdown, verdict
 
 
@@ -33,6 +33,8 @@ def build_attempt(profile: dict, payload: dict, live_summary: dict | None = None
         "focus": profile.get("focus"),
         "title": exercise["title"],
         "level": exercise.get("level"),
+        "bracket": exercise.get("bracket"),
+        "task_type": exercise.get("task_type"),
         "difficulty": exercise.get("difficulty", 1),
         "duration_seconds": round(duration, 1),
         "speaking_ratio": round(float(speaking_ratio), 3) if speaking_ratio is not None else None,
@@ -53,11 +55,15 @@ def build_attempt(profile: dict, payload: dict, live_summary: dict | None = None
     return {**attempt, "score": score, "score_breakdown": breakdown}
 
 
-def attempt_result(profile: dict, records_before: list[dict], stored: dict) -> dict:
-    ladder = FOCI[profile["focus"]]["ladder_type"]
-    args = (ladder, profile.get("start_level", "beginner"), profile.get("created_at"))
-    before = level_state(records_before, *args)
-    after = level_state(records_before + [stored], *args)
+def attempt_result(profile: dict, records_before: list[dict], stored: dict, learner: dict | None = None) -> dict:
+    """Score + feedback + the level change this attempt caused (age-bracket ladder, then skill ladder)."""
+    records_after = records_before + [stored]
+    before = learner_bracket(profile, records_before, learner)
+    after = learner_bracket(profile, records_after, learner)
+    skill_before, skill_after = skill_state(profile, records_before), skill_state(profile, records_after)
+    message = level_change_message(before, after)
+    if message is None and skill_after:
+        message = level_change_message(skill_before, skill_after)
     return {
         "record": stored,
         "score": stored["score"],
@@ -65,5 +71,6 @@ def attempt_result(profile: dict, records_before: list[dict], stored: dict) -> d
         "feedback": attempt_feedback(stored),
         "breakdown": stored["score_breakdown"],
         "level": after,
-        "level_message": level_change_message(before, after),
+        "skill_level": skill_after,
+        "level_message": message,
     }

@@ -67,10 +67,27 @@ def pick_tasks(db: Session, patient_id: str, bracket: int, rng: random.Random | 
 
 
 # --------------------------------------------------------------------------- serialisation
-def image_url(task: AssessmentTask, base_url: str) -> str | None:
-    if not task.image_path:
-        return None
+VIDEO_EXTENSIONS = (".mp4", ".webm")  # scenario tasks may use a short video instead of a picture
+
+
+def is_video(path: str | None) -> bool:
+    return bool(path) and path.lower().endswith(VIDEO_EXTENSIONS)
+
+
+def _media_url(task: AssessmentTask, base_url: str) -> str:
     return f"{base_url.rstrip('/')}/static/{task.image_path.lstrip('/')}"
+
+
+def image_url(task: AssessmentTask, base_url: str) -> str | None:
+    """URL of the task's picture (None when it has none, or when its media is a video)."""
+    if not task.image_path or is_video(task.image_path):
+        return None
+    return _media_url(task, base_url)
+
+
+def video_url(task: AssessmentTask, base_url: str) -> str | None:
+    """URL of the task's short video (scenario tasks), or None."""
+    return _media_url(task, base_url) if is_video(task.image_path) else None
 
 
 def task_payload(task: AssessmentTask, base_url: str) -> dict:
@@ -82,7 +99,8 @@ def task_payload(task: AssessmentTask, base_url: str) -> dict:
         visual = task.visual_json or {"kind": "emoji", "emojis": ["🖼️"], "caption": task.content_text}
         return {**base, "visual": visual, "image_url": image_url(task, base_url), "keywords": list(task.keywords or [])}
     if task.task_type == "scenario":
-        return {**base, "prompt": task.content_text, "visual": task.visual_json, "image_url": image_url(task, base_url)}
+        return {**base, "prompt": task.content_text, "visual": task.visual_json, "image_url": image_url(task, base_url),
+                "video_url": video_url(task, base_url)}
     return {"id": task.id, "prompt": task.content_text, "max_seconds": task.max_seconds}  # one question item
 
 

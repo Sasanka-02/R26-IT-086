@@ -113,7 +113,7 @@ export default function SettingsPage() {
                 {user.patients.map((p) => (
                   <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
                     <span><b className="text-ink">{p.full_name}</b> <span className="muted">· {p.id}</span></span>
-                    <span className="muted">Age {p.age}{p.age_bracket ? ` · ${p.age_bracket.label}` : ""}</span>
+                    <span className="muted">Age {p.age ?? "not set"}{p.age_bracket ? ` · ${p.age_bracket.label}` : ""}</span>
                   </li>
                 ))}
               </ul>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="t">
+  <title id="t">Two rivers side by side: a clean river with fish, trees and birds, and a polluted river beside a factory with waste pipes and plastic</title>
+  <!-- left: clean -->
+  <rect width="320" height="400" fill="#CFF3FF"/>
+  <rect y="150" width="320" height="250" fill="#81C784"/>
+  <path d="M120 150 C80 230 200 280 140 400 H250 C300 290 180 230 220 150Z" fill="#29B6F6"/>
+  <g fill="#2E7D32"><circle cx="40" cy="150" r="30"/><circle cx="80" cy="132" r="26"/><circle cx="280" cy="140" r="30"/></g>
+  <g fill="#6D4C41"><rect x="36" y="170" width="8" height="40"/><rect x="276" y="160" width="8" height="40"/></g>
+  <g fill="#FF7043"><path d="M170 250 q14 -10 28 0 q-14 10 -28 0z"/><polygon points="170,250 160,242 160,258"/><path d="M190 320 q14 -10 28 0 q-14 10 -28 0z"/><polygon points="190,320 180,312 180,328"/></g>
+  <g fill="none" stroke="#37474F" stroke-width="3"><path d="M90 70 q10 -10 20 0 q10 -10 20 0"/><path d="M200 50 q8 -8 16 0 q8 -8 16 0"/></g>
+  <circle cx="270" cy="50" r="24" fill="#FFD54F"/>
+  <!-- divider -->
+  <rect x="316" width="8" height="400" fill="#FFFFFF"/>
+  <!-- right: polluted -->
+  <rect x="324" width="316" height="400" fill="#CFD8DC"/>
+  <rect x="324" y="150" width="316" height="250" fill="#A1887F"/>
+  <path d="M440 150 C400 230 520 280 460 400 H570 C620 290 500 230 540 150Z" fill="#6D6A4F"/>
+  <!-- factory -->
+  <rect x="560" y="70" width="70" height="80" fill="#78909C"/>
+  <rect x="580" y="30" width="16" height="40" fill="#607D8B"/><rect x="604" y="40" width="14" height="30" fill="#607D8B"/>
+  <g fill="#9E9E9E" opacity="0.8"><circle cx="588" cy="22" r="12"/><circle cx="600" cy="10" r="10"/><circle cx="612" cy="30" r="10"/></g>
+  <rect x="520" y="140" width="50" height="10" fill="#455A64"/>
+  <path d="M520 150 q-8 20 6 30" fill="none" stroke="#4E342E" stroke-width="8"/>
+  <!-- waste -->
+  <g fill="#E0E0E0" stroke="#9E9E9E"><rect x="470" y="230" width="10" height="22" rx="3" transform="rotate(30 475 241)"/><rect x="500" y="300" width="10" height="22" rx="3" transform="rotate(-20 505 311)"/></g>
+  <path d="M480 340 q10 -6 20 0 q-6 8 -20 0z" fill="#EC407A"/>
+  <!-- bare tree -->
+  <g stroke="#5D4037" stroke-width="6" fill="none"><path d="M370 170 v-70"/><path d="M370 120 l-20 -20"/><path d="M370 110 l18 -22"/></g>
+</svg>

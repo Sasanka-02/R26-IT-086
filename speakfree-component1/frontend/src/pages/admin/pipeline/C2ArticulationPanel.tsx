@@ -47,7 +47,8 @@ export default function C2ArticulationPanel({ c2 }: { c2: C2Report }) {
           </div>
         </Card>
 
-        <Card title="★ Articulation-score equations (Component 2 novelty)" icon={<Sigma size={18} className="text-navy" />}>
+        {/* ★ NOVELTY (Component 2): the articulation-score equations C2-Eq.2–5, shown with this session's numbers */}
+        <Card title="Articulation-score equations" icon={<Sigma size={18} className="text-navy" />}>
           <div className="grid gap-3 md:grid-cols-2">
             <EquationCard id="C2-Eq.2" name="Kept-token confidence" formula="C = (1/M) · Σ P(tⱼ)">
               Fillers {"{um, uh, er, …}"} removed first · pooled C = {n(s.pooled_confidence_C, 4)}

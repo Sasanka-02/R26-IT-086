@@ -125,7 +125,7 @@ export default function AdminPatients() {
                   className="cursor-pointer transition hover:bg-lav-50 focus:bg-lav-50 focus:outline-none">
                   <td className="px-5 py-3">
                     <div className="font-semibold text-ink">{r.full_name}</div>
-                    <div className="text-xs muted">{r.id} · age {r.age}{r.age_bracket ? ` · bracket ${r.age_bracket.id}` : ""}</div>
+                    <div className="text-xs muted">{r.id} · age {r.age ?? "not set"}{r.age_bracket ? ` · bracket ${r.age_bracket.id} (${r.age_bracket.label})` : ""}{r.age_bracket_override ? ` · pinned to level ${r.age_bracket_override}` : ""}</div>
                   </td>
                   <td className="px-5 py-3 text-ink-soft">{fmtDate(r.last_session_at)}</td>
                   <td className="px-5 py-3 text-right font-mono">{r.total_sessions}</td>

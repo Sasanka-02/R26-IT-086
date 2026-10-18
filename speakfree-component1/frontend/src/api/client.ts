@@ -76,10 +76,18 @@ export interface RegisterPayload {
   full_name: string;
   email: string;
   password: string;
+  age?: number | null; // role = patient (6–100)
   date_of_birth?: string | null;
   child_full_name?: string | null;
+  child_age?: number | null; // role = guardian
   child_date_of_birth?: string | null;
+  guardian_consent?: boolean; // required when the person practising is under 18
   consent: boolean;
+}
+
+export interface TherapistSettings {
+  age_bracket_override?: number | null;
+  assigned_exercise_ids?: string[];
 }
 
 export interface AnalyzePayload {
@@ -114,6 +122,8 @@ export const api = {
   login: (email: string, password: string) =>
     request<TokenResponse>("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => request<User>("/api/v1/auth/me"),
+  setMyAge: (age: number, guardian_consent: boolean, patient_id?: string) =>
+    request<User>("/api/v1/auth/me/age", { method: "PUT", body: JSON.stringify({ age, guardian_consent, patient_id }) }),
   updateMe: (full_name: string) => request<{ full_name: string }>("/api/v1/auth/me", { method: "PATCH", body: JSON.stringify({ full_name }) }),
   changePassword: (current_password: string, new_password: string) =>
     request<null>("/api/v1/auth/change-password", { method: "POST", body: JSON.stringify({ current_password, new_password }) }),
@@ -160,6 +170,9 @@ export const api = {
       request<{ status: string; error: string | null }>(`/api/v1/admin/pipeline/${encodeURIComponent(sessionId)}/rerun`, { method: "POST" }),
     models: () => request<ModelsInfo>("/api/v1/admin/models"),
     therapy: (patientId: string) => request<AdminTherapy>(`/api/v1/admin/patients/${encodeURIComponent(patientId)}/therapy`),
+    therapySettings: (patientId: string, body: TherapistSettings) =>
+      request<AdminTherapy["patient"]>(`/api/v1/admin/patients/${encodeURIComponent(patientId)}/therapy-settings`,
+        { method: "PATCH", body: JSON.stringify(body) }),
   },
   // Component 4 – patient-safe therapy plan, exercises and AI assistant
   therapy: {

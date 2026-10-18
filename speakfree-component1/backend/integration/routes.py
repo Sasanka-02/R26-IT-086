@@ -8,6 +8,9 @@ Admin only (technical, C2/C3 internals):
   GET  /api/v1/admin/models                      C3 model card + health, C2 formulas, C4 engine settings
   GET  /api/v1/admin/patients/{id}/therapy       C4 monitor: profile history, plan engine, attempts, chat log
 
+Therapist (admin, or the clinician who owns the patient):
+  PATCH /api/v1/admin/patients/{id}/therapy-settings   pin the practice bracket (1-8) / assign exercises
+
 Patient / guardian / clinician (own patients only, patient-safe - no disorder or severity):
   GET  /api/v1/therapy/{patient_id}/plan                 adaptive plan (today, week, goals, progress)
   POST /api/v1/therapy/{patient_id}/attempts             save an exercise result -> score + level change
@@ -24,10 +27,11 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from age_brackets import age_from_dob
+from age_brackets import bracket_for_age, bracket_info, patient_age
 from auth import decode_token, get_current_user, get_owned_patient, require_admin
 from database import (
     AssistantMessage,
@@ -49,7 +53,8 @@ from .pipeline import run_session_pipeline
 log = logging.getLogger("speakfree.integration")
 router = APIRouter()
 
-PATIENT_PLAN_KEYS = ("focus", "dose", "level", "today", "week", "goals", "rescreen", "progress", "library")
+PATIENT_PLAN_KEYS = ("learner", "focus", "dose", "level", "skill_level", "today", "week", "goals", "rescreen", "progress",
+                     "library")
 
 
 # ============================================================================= helpers
@@ -76,10 +81,30 @@ def _require_profile(db: Session, patient_id: str) -> dict:
     return profile
 
 
-def _plan(profile: dict, records: list[dict]) -> dict:
+def _learner(patient: Patient) -> dict:
+    """What C4 needs to know about the person practising: age bracket + the therapist's settings."""
+    age = patient_age(patient)
+    return {
+        "age": age,
+        "age_bracket": bracket_for_age(age),
+        "bracket_override": patient.age_bracket_override,
+        "assigned": list(patient.assigned_exercises or []),
+    }
+
+
+def _patient_summary(patient: Patient) -> dict:
+    age = patient_age(patient)
+    b = bracket_for_age(age)
+    return {"id": patient.id, "full_name": patient.full_name, "age": age,
+            "age_bracket": bracket_info(b) if b else None,
+            "age_bracket_override": patient.age_bracket_override,
+            "assigned_exercises": list(patient.assigned_exercises or [])}
+
+
+def _plan(profile: dict, records: list[dict], patient: Patient) -> dict:
     from component4 import build_plan
 
-    return build_plan(profile, records)
+    return build_plan(profile, records, learner=_learner(patient))
 
 
 def _patient_plan(plan: dict) -> dict:
@@ -136,7 +161,7 @@ def admin_pipeline_run(session_id: str, _: User = Depends(require_admin), db: Se
     p = run.patient
     return {
         "session_id": session_id, "status": run.status, "error": run.error, "created_at": _iso(run.created_at),
-        "patient": {"id": p.id, "full_name": p.full_name, "age": age_from_dob(p.date_of_birth)},
+        "patient": {"id": p.id, "full_name": p.full_name, "age": patient_age(p)},
         "stage_timings": json.loads(run.stage_timings_json or "{}"),
         "c1_summary": json.loads(session.summary_json),
         "c2": json.loads(run.c2_json) if run.c2_json else None,
@@ -158,7 +183,7 @@ def admin_models(_: User = Depends(require_admin)):
     from component2.articulation_score import CLEAR_WORD_WEIGHT, CONFIDENCE_WEIGHT, FILLERS, LEVEL_BANDS
     from component3 import health
     from component3._models import get_model_card
-    from component4 import bandit, categories, scoring
+    from component4 import bandit, brackets, categories, scoring
     from component4.intent_classifier import leave_one_out_accuracy
 
     return {
@@ -181,6 +206,7 @@ def admin_models(_: User = Depends(require_admin)):
                        "difficulty_penalty": bandit.DIFFICULTY_PENALTY, "context_dim": bandit.CONTEXT_DIM},
             "dose_by_severity": categories.DOSE_BY_SEVERITY,
             "start_level_by_severity": categories.START_LEVEL_BY_SEVERITY,
+            "age_brackets": brackets.BRACKETS,
             "foci": {k: {"admin_name": v["admin_name"], "patient_name": v["patient_name"],
                          "ladder_type": v["ladder_type"], "c3_disorder": v["c3_disorder"]}
                      for k, v in categories.FOCI.items()},
@@ -201,19 +227,50 @@ def admin_patient_therapy(patient_id: str, _: User = Depends(require_admin), db:
     chats = db.scalars(select(AssistantMessage).where(AssistantMessage.patient_id == patient_id)
                        .order_by(AssistantMessage.created_at.desc()).limit(50)).all()
     return {
-        "patient": {"id": patient.id, "full_name": patient.full_name, "age": age_from_dob(patient.date_of_birth)},
+        "patient": _patient_summary(patient),
         "profile": profile,
         "profile_history": [
             {"session_id": p.session_id, "focus": p.focus, "severity_level": p.severity_level, "created_at": _iso(p.created_at)}
             for p in profiles
         ],
-        "plan": _plan(profile, records) if profile else None,
+        "plan": _plan(profile, records, patient) if profile else None,
         "attempts": list(reversed(records)),
         "assistant_log": [
             {"question": c.question, "reply": c.reply, "intent": c.intent, "confidence": c.confidence,
              "source": c.source, "created_at": _iso(c.created_at)} for c in chats
         ],
     }
+
+
+class TherapySettings(BaseModel):
+    age_bracket_override: int | None = Field(default=None, ge=1, le=8)   # null -> follow the adaptive ladder
+    assigned_exercise_ids: list[str] | None = Field(default=None, max_length=10)
+
+
+@router.patch("/api/v1/admin/patients/{patient_id}/therapy-settings", tags=["admin: pipeline"])
+def therapist_settings(patient_id: str, body: TherapySettings, user: User = Depends(get_current_user),
+                       db: Session = Depends(get_db)):
+    """A therapist pins the practice bracket and/or assigns exercises. Only fields sent are changed."""
+    from component4.exercises import get_exercise
+
+    if user.role == "admin":
+        patient = db.get(Patient, patient_id)
+        if patient is None:
+            raise HTTPException(status_code=404, detail="Patient not found")
+    elif user.role == "clinician":
+        patient = get_owned_patient(db, user, patient_id)
+    else:
+        raise HTTPException(status_code=403, detail="Only a therapist can change the practice level")
+    if "age_bracket_override" in body.model_fields_set:
+        patient.age_bracket_override = body.age_bracket_override
+    if "assigned_exercise_ids" in body.model_fields_set:
+        ids = list(dict.fromkeys(body.assigned_exercise_ids or []))
+        unknown = [i for i in ids if get_exercise(i) is None]
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"Unknown exercise(s): {', '.join(unknown)}")
+        patient.assigned_exercises = ids or None
+    db.commit()
+    return _patient_summary(patient)
 
 
 # ============================================================================= patient therapy
@@ -223,7 +280,7 @@ def therapy_plan(patient_id: str, user: User = Depends(get_current_user), db: Se
     profile = _active_profile(db, patient.id)
     if profile is None:
         return {"has_profile": False}
-    return _patient_plan(_plan(profile, _records(db, patient.id)))
+    return _patient_plan(_plan(profile, _records(db, patient.id), patient))
 
 
 @router.post("/api/v1/therapy/{patient_id}/attempts", tags=["therapy"])
@@ -252,8 +309,8 @@ def therapy_attempt(patient_id: str, body: dict, user: User = Depends(get_curren
                           score=stored["score"], record_json=json.dumps(stored),
                           completed_at=datetime.fromisoformat(stored["completed_at"])))
     db.commit()
-    result = attempt_result(profile, records, stored)
-    return {**result, "plan": _patient_plan(_plan(profile, records + [stored]))}
+    result = attempt_result(profile, records, stored, _learner(patient))
+    return {**result, "plan": _patient_plan(_plan(profile, records + [stored], patient))}
 
 
 @router.get("/api/v1/therapy/{patient_id}/assistant", tags=["therapy"])
@@ -262,7 +319,7 @@ def therapy_assistant(patient_id: str, user: User = Depends(get_current_user), d
 
     patient = get_owned_patient(db, user, patient_id)
     profile = _require_profile(db, patient.id)
-    return build_briefing(patient.full_name, profile, _plan(profile, _records(db, patient.id)))
+    return build_briefing(patient.full_name, profile, _plan(profile, _records(db, patient.id), patient))
 
 
 @router.post("/api/v1/therapy/{patient_id}/assistant/chat", tags=["therapy"])
@@ -277,7 +334,7 @@ async def therapy_chat(patient_id: str, body: dict, user: User = Depends(get_cur
     except Exception as exc:
         raise HTTPException(status_code=422, detail="Message must be 1-500 characters") from exc
     records = _records(db, patient.id)
-    plan = _plan(profile, records)
+    plan = _plan(profile, records, patient)
     reply = await run_in_threadpool(answer, req.message, patient.full_name, profile, plan, records)
     db.add(AssistantMessage(patient_id=patient.id, question=req.message[:500], reply=reply["reply"],
                             intent=reply.get("intent"), confidence=float(reply.get("confidence") or 0), source=reply["source"]))

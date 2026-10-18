@@ -4,37 +4,51 @@ Adaptive therapy plan - the main Component 4 output.
 ###########################################################################################
 #  ★ COMPONENT 4 NOVELTY - ADAPTIVE THERAPY PLAN                                          #
 #                                                                                         #
-#  build_plan(profile, attempts) closes the loop C1 -> C2 -> C3 -> C4 -> practice -> C4:  #
+#  build_plan(profile, attempts, learner) closes the loop C1 -> C2 -> C3 -> C4 -> practice:#
 #                                                                                         #
-#   1. FOCUS     C3 disorder -> therapy focus + exercise family   (categories.py)         #
-#   2. DOSE      C3 severity -> sessions/week, minutes, exercises/session                 #
-#   3. LEVEL     C3 severity -> starting rung; attempts move it up / down  (adaptive.py)  #
-#   4. CONTENT   C1 flagged sounds -> generated sound drills         (exercises.py)       #
-#   5. RANKING   LinUCB + C3 category prior picks today's exercises  (bandit.py)          #
-#   6. GOALS     measurable targets from C1/C2/C3 numbers and the patient's own attempts  #
-#   7. RE-SCREEN after 14 days, 12 attempts or a mastered ladder -> a new screening runs  #
+#   1. AGE       learner's age -> clinical bracket 1-8 -> tone, theme   (brackets.py)     #
+#   2. FOCUS     C3 disorder -> therapy focus + exercise family   (categories.py)         #
+#   3. DOSE      C3 severity -> sessions/week, minutes, exercises/session                 #
+#   4. LEVEL     age bracket (+ C3 severity) -> starting practice bracket; attempts move  #
+#                it up / down, a therapist override pins it         (adaptive.py)        #
+#   5. CONTENT   the bracket's reading + picture + conversation tasks (bracket_tasks.py)  #
+#                + C1 flagged sounds -> generated sound drills       (exercises.py)       #
+#   6. RANKING   LinUCB + C3 category prior orders the bracket tasks and adds extra       #
+#                practice suited to the bracket (pacing, DAF, breathing ...) (bandit.py)  #
+#   7. GOALS     measurable targets from C1/C2/C3 numbers and the patient's own attempts  #
+#   8. RE-SCREEN after 14 days, 12 attempts or a mastered ladder -> a new screening runs  #
 #                C1->C2->C3 again and re-anchors the plan (new profile, new prior)         #
 #                                                                                         #
-#  Every recomputation is deterministic from (profile, attempts), so the plan the patient  #
-#  sees and the explanation the admin sees always agree.                                  #
+#  Today = therapist-assigned exercises (always first) + the 3 bracket tasks (bandit       #
+#  order) + extra practice, up to the severity dose. Every recomputation is deterministic #
+#  from (profile, attempts, learner), so the plan the patient sees and the explanation    #
+#  the admin sees always agree.                                                            #
 ###########################################################################################
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from .adaptive import level_state, personal_target_wpm
-from .bandit import rank_arms
+from .adaptive import learner_bracket, level_state, personal_target_wpm
+from .bandit import bracket_position, rank_arms
+from .brackets import BRACKETS
 from .categories import DOSE_BY_SEVERITY, FOCI
-from .exercises import exercises_for
+from .exercises import LEVELS, exercises_for, get_exercise, suits_bracket
 from .progress import parse, summary
 from .scoring import THRESHOLDS
 
 RESCREEN_DAYS = 14
 RESCREEN_ATTEMPTS = 12
+CORE_TASKS = 3  # reading + picture + conversation of the current bracket
+SKILL_LADDERS = ("clear_speech", "sound_drill")  # Beginner -> Advanced inside these families
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 ACTIVE_DAY_PATTERNS = {
     3: [0, 2, 4], 4: [0, 1, 3, 5], 5: [0, 1, 2, 3, 5], 6: [0, 1, 2, 3, 4, 5], 7: list(range(7)),
+}
+CORE_REASON = {
+    "reading": "Read the passage for your level at a steady pace.",
+    "picture": "Describe the picture in your own words - free speech practice.",
+    "conversation": "Answer the questions out loud - real-life speaking practice.",
 }
 
 
@@ -46,10 +60,21 @@ def _profile_attempts(profile: dict, records: list[dict]) -> list[dict]:
     return [r for r in records if parse(r["completed_at"]) >= t0]
 
 
-def _ladder_levels(records: list[dict], ladder: str, profile: dict) -> list[int]:
-    """Ladder rung at the moment of each attempt (context for the bandit's replay)."""
-    return [level_state(records[:i], ladder, profile.get("start_level", "beginner"),
-                        profile.get("created_at"))["level_index"] for i in range(len(records))]
+def skill_ladder(profile: dict) -> str | None:
+    ladder = FOCI[profile["focus"]]["ladder_type"]
+    return ladder if ladder in SKILL_LADDERS else None
+
+
+def skill_state(profile: dict, records: list[dict]) -> dict | None:
+    ladder = skill_ladder(profile)
+    if ladder is None:
+        return None
+    return level_state(records, ladder, profile.get("start_level", "beginner"), profile.get("created_at"))
+
+
+def _bracket_positions(records: list[dict], profile: dict, learner: dict | None) -> list[float]:
+    """Practice bracket at the moment of each attempt (context for the bandit's replay)."""
+    return [bracket_position(learner_bracket(profile, records[:i], learner)["bracket"]) for i in range(len(records))]
 
 
 def _ladder_exercise(exercises: list[dict], ladder: str, level: str, records: list[dict]) -> dict:
@@ -115,7 +140,7 @@ def _goals(profile: dict, attempts: list[dict], level: dict, dose: dict, now: da
     return goals
 
 
-def _rescreen(profile: dict, attempts: list[dict], level: dict, now: datetime) -> dict:
+def _rescreen(profile: dict, attempts: list[dict], mastered: bool, now: datetime) -> dict:
     created = parse(profile["created_at"]) if profile.get("created_at") else now
     days = (now - created).days
     reasons = []
@@ -123,7 +148,7 @@ def _rescreen(profile: dict, attempts: list[dict], level: dict, now: datetime) -
         reasons.append(f"{days} days since your last screening")
     if len(attempts) >= RESCREEN_ATTEMPTS:
         reasons.append(f"{len(attempts)} exercises completed")
-    if level["mastered"]:
+    if mastered:
         reasons.append("top level completed")
     return {
         "recommended": bool(reasons),
@@ -135,22 +160,21 @@ def _rescreen(profile: dict, attempts: list[dict], level: dict, now: datetime) -
     }
 
 
-def _weekly_schedule(today_plan: list[dict], ranked: list[dict], dose: dict, attempts: list[dict], now: datetime) -> list[dict]:
+def _weekly_schedule(fixed: list[dict], pool: list[dict], extras_per_day: int, dose: dict,
+                     attempts: list[dict], now: datetime) -> list[dict]:
+    """Every active day: assigned + bracket tasks (fixed), plus extra practice rotating through the bandit's pool."""
     active = ACTIVE_DAY_PATTERNS.get(dose["sessions_per_week"], ACTIVE_DAY_PATTERNS[4])
     week_start = (now - timedelta(days=now.weekday())).date()
-    ladder = today_plan[0]
-    pool = [r for r in ranked if r["id"] != ladder["id"]][:max(4, dose["exercises_per_session"] * 2)]
     days = []
     for d in range(7):
         day = week_start + timedelta(days=d)
         done = [r for r in attempts if parse(r["completed_at"]).date() == day]
         items = []
         if d in active:
-            items = [{"id": ladder["id"], "title": ladder["title"], "type": ladder["type"]}]
-            for k in range(dose["exercises_per_session"] - 1):
-                if pool:
-                    p = pool[(d + k) % len(pool)]
-                    items.append({"id": p["id"], "title": p["title"], "type": p["type"]})
+            items = [{"id": e["id"], "title": e["title"], "type": e["type"]} for e in fixed]
+            for k in range(min(extras_per_day, len(pool))):
+                p = pool[(d + k) % len(pool)]
+                items.append({"id": p["id"], "title": p["title"], "type": p["type"]})
         days.append({
             "date": day.isoformat(), "day": DAY_NAMES[d], "is_today": day == now.date(), "active": d in active,
             "minutes": dose["minutes_per_session"] if d in active else 0, "exercises": items,
@@ -159,73 +183,118 @@ def _weekly_schedule(today_plan: list[dict], ranked: list[dict], dose: dict, att
     return days
 
 
-def build_plan(profile: dict, records: list[dict], now: datetime | None = None) -> dict:
-    """The complete adaptive plan for one patient (patient view + admin explanation)."""
+def build_plan(profile: dict, records: list[dict], now: datetime | None = None, learner: dict | None = None) -> dict:
+    """
+    The complete adaptive plan for one patient (patient view + admin explanation).
+
+    learner = {"age": 10, "age_bracket": 3, "bracket_override": None, "assigned": ["daf"]} comes from the
+    platform's patient record; without it the learner is treated as an adult with no age cap.
+    """
     now = now or datetime.now(timezone.utc)
+    learner = learner or {}
     focus = FOCI[profile["focus"]]
-    ladder = focus["ladder_type"]
-    exercises = exercises_for(profile.get("flagged_sounds"))
+    flagged = profile.get("flagged_sounds")
+    exercises = exercises_for(flagged)
     attempts = _profile_attempts(profile, records)
-    level = level_state(records, ladder, profile.get("start_level", "beginner"), profile.get("created_at"))
+    level = learner_bracket(profile, records, learner)
+    bracket = level["bracket"]
+    age_bracket = level["age_bracket"]
+    skill = skill_state(profile, records)
+    ladder = skill_ladder(profile)
     dose = DOSE_BY_SEVERITY.get(int(profile.get("severity_level") or 1), DOSE_BY_SEVERITY[2])
 
-    # arms: everything except ladder exercises on other rungs
-    arms = [e for e in exercises if e.get("level") in (None, level["level"])]
-    ranked, context = rank_arms(arms, records, profile, level, _ladder_levels(records, ladder, profile))
+    # arms: the current bracket's 3 tasks + extra practice suited to the bracket (skill ladder: current rung only)
+    core = [e for e in exercises if e.get("bracket") == bracket]
+    extras = [e for e in exercises if suits_bracket(e, bracket)
+              and (e["type"] != ladder or e.get("level") in (None, (skill or {}).get("level")))]
+    ranked, context = rank_arms(core + extras, records, profile, bracket, _bracket_positions(records, profile, learner))
+    by_id = {e["id"]: e for e in core + extras}
 
-    ladder_ex = _ladder_exercise(exercises, ladder, level["level"], records)
-    today = [dict(_decorate(ladder_ex, records), source="level",
-                  reason=f"Your main exercise for “{focus['patient_name']}” at {level['label']} level. {level['progress_text']}")]
-    used_types = {ladder_ex["type"]}
-    used_ids = {ladder_ex["id"]}
-    by_id = {e["id"]: e for e in arms}
-    # pass 1: primary-focus exercises of a new type, pass 2: any primary-focus exercise,
-    # pass 3: exercises the C3 probabilities still favour, pass 4: anything (bandit order throughout)
+    # 1. therapist-assigned exercises always come first
+    assigned = []
+    for ex_id in learner.get("assigned") or []:
+        ex = get_exercise(ex_id, flagged)
+        if ex and ex["id"] not in {a["id"] for a in assigned}:
+            assigned.append(dict(_decorate(ex, records), source="therapist", reason="Assigned by your therapist."))
+    used_ids = {a["id"] for a in assigned}
+
+    # 2. the bracket's reading / picture / conversation tasks, in bandit order
+    today = list(assigned)
+    for row in [r for r in ranked if r["bracket"] == bracket]:
+        if row["id"] in used_ids:
+            continue
+        ex = by_id[row["id"]]
+        reason = f"{level['label']} ({level['ages']}): {CORE_REASON[ex['task_type']]}"
+        today.append(dict(_decorate(ex, records), source="bracket", reason=reason, rank=row["rank"]))
+        used_ids.add(row["id"])
+
+    # 3. extra practice up to the dose: the skill-ladder exercise first, then the bandit's picks
+    #    pass 1: primary-focus exercises of a new type, pass 2: any primary-focus exercise,
+    #    pass 3: exercises the C3 probabilities still favour (bandit order throughout). An exercise
+    #    that serves none of these is never added just to fill the dose.
+    n_extra = max(1, dose["exercises_per_session"] - CORE_TASKS - len(assigned))
+    picks: list[dict] = []
+    if skill:
+        ladder_ex = _ladder_exercise(exercises, ladder, skill["level"], records)
+        if ladder_ex["id"] not in used_ids:
+            picks.append(dict(_decorate(ladder_ex, records), source="level",
+                              reason=f"Your skill step for “{focus['patient_name']}”: {skill['label']}. {skill['progress_text']}"))
+            used_ids.add(ladder_ex["id"])
+    used_types = {e["type"] for e in today + picks}
     primary = profile["focus"]
     passes = [lambda r: primary in r["focus"] and r["type"] not in used_types,
               lambda r: primary in r["focus"],
-              lambda r: r["category_fit"] >= 0.25,
-              lambda r: True]
-    picks = []
+              lambda r: r["category_fit"] >= 0.25]
     for accept in passes:
         for row in ranked:
-            if len(today) + len(picks) >= dose["exercises_per_session"]:
+            if len(picks) >= n_extra:
                 break
-            if row["id"] in used_ids or not accept(row):
+            if row["id"] in used_ids or row["bracket"] is not None or not accept(row):
                 continue
-            picks.append(row)
+            if row["predicted_score"] is None:
+                reason = "New for you - trying it helps the plan learn what suits you."
+            else:
+                reason = (f"From {row['times_practised']} attempt{'s' if row['times_practised'] != 1 else ''} the plan "
+                          f"expects about {row['predicted_score']} points here.")
+            picks.append(dict(_decorate(by_id[row["id"]], records), source="bandit", reason=reason, rank=row["rank"]))
             used_ids.add(row["id"])
             used_types.add(row["type"])
-    for row in picks:
-        ex = by_id[row["id"]]
-        if row["predicted_score"] is None:
-            reason = "New for you - trying it helps the plan learn what suits you."
-        else:
-            reason = (f"From {row['times_practised']} attempt{'s' if row['times_practised'] != 1 else ''} the plan "
-                      f"expects about {row['predicted_score']} points here.")
-        today.append(dict(_decorate(ex, records), source="bandit", reason=reason, rank=row["rank"]))
-        used_types.add(row["type"])
+    today += picks
+
+    pool = [r for r in ranked if r["bracket"] is None and r["id"] not in {a["id"] for a in assigned}]
+    pool = pool[:max(4, n_extra * 2)]
+    fixed = [e for e in today if e["source"] in ("therapist", "bracket")]
 
     library = [dict(_decorate(e, records),
-                    locked=bool(e["type"] == ladder and e.get("level") and
-                                ["beginner", "intermediate", "advanced"].index(e["level"]) > level["level_index"]))
-               for e in exercises]
+                    locked=bool(e["type"] == ladder and e.get("level") and skill and
+                                LEVELS.index(e["level"]) > skill["level_index"]))
+               for e in core + [e for e in exercises if suits_bracket(e, bracket)]]
 
     return {
+        "learner": {
+            "age": learner.get("age"),
+            "age_bracket": age_bracket,
+            "age_label": BRACKETS[age_bracket]["label"],
+            "theme": BRACKETS[age_bracket]["theme"],
+            "tone": BRACKETS[age_bracket]["tone"],
+            "practice_bracket": bracket,
+            "override": level["override"],
+        },
         "focus": {k: focus[k] for k in ("key", "patient_name", "tagline", "techniques", "ladder_type")},
         "dose": dose,
         "level": level,
+        "skill_level": skill,
         "today": today,
-        "week": _weekly_schedule(today, ranked, dose, attempts, now),
+        "week": _weekly_schedule(fixed, pool, n_extra, dose, attempts, now),
         "goals": _goals(profile, attempts, level, dose, now),
-        "rescreen": _rescreen(profile, attempts, level, now),
+        "rescreen": _rescreen(profile, attempts, level["mastered"] or bool(skill and skill["mastered"]), now),
         "progress": summary(records, now),
         "library": library,
         # ---- admin-only explanation of the adaptive engine ----
         "engine": {
             "context": {
                 "vector": [round(float(v), 4) for v in context],
-                "labels": ["bias", "level", "avg_score", "trend", "comfort", "severity", "c3_confidence"],
+                "labels": ["bias", "bracket", "avg_score", "trend", "comfort", "severity", "c3_confidence"],
             },
             "arms": ranked,
             "focus_probabilities": profile.get("focus_probabilities"),

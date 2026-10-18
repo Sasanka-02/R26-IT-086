@@ -6,9 +6,15 @@ exercises, a `level`. The bandit (bandit.py) may recommend any exercise, but the
 prior steers it towards the patient's focus; sound drills are generated for the exact sounds
 Component 1 flagged.
 
+The core of every plan is the 24 age-bracket exercises (bracket_tasks.py: `bracket` 1-8 x
+`task_type` reading | picture | conversation). The exercises below are the extra practice the
+bandit adds around them; `min_bracket` keeps an exercise away from learners who are too young
+for it. `legacy` exercises were superseded by the bracket tasks - they are never planned, but
+still resolve so old attempts keep their titles and scores.
+
 Exercise types and what the browser measures (never raw audio):
   reading / pacing / clear_speech  highlighted passage at a target speed + live metrics
-  picture                          free description + live metrics
+  picture / conversation           free description / spontaneous answer + live metrics
   loudness                         phrases read with a loudness meter + live metrics
   sustained_vowel                  hold "ahh" - longest continuous voicing (max_phonation_sec)
   sound_drill                      target-sound words / phrases / sentences + self-check
@@ -18,13 +24,15 @@ from __future__ import annotations
 
 import re
 
+from .bracket_tasks import BRACKET_EXERCISES, bracket_exercises
+
 LEVELS = ["beginner", "intermediate", "advanced"]
 
 # ------------------------------------------------------------------------------- static bank
 EXERCISE_BANK: list[dict] = [
     # ---------------- fluency (stuttering) + maintenance: graded reading ladder ----------------
     {
-        "id": "reading-beginner", "type": "reading", "level": "beginner", "difficulty": 1,
+        "id": "reading-beginner", "type": "reading", "level": "beginner", "difficulty": 1, "legacy": True,
         "focus": ["fluency", "maintenance"],
         "title": "Reading - Beginner: Sam and Max",
         "description": "Short, simple sentences. Read slowly and follow the highlight. Start each sentence with a soft, easy breath.",
@@ -34,7 +42,7 @@ EXERCISE_BANK: list[dict] = [
                     "They play until lunch time. Then they walk home together, happy and tired."),
     },
     {
-        "id": "reading-intermediate", "type": "reading", "level": "intermediate", "difficulty": 2,
+        "id": "reading-intermediate", "type": "reading", "level": "intermediate", "difficulty": 2, "legacy": True,
         "focus": ["fluency", "maintenance"],
         "title": "Reading - Intermediate: Sunday Bread",
         "description": "Longer sentences with commas. Use the commas as natural places to pause and breathe.",
@@ -45,7 +53,7 @@ EXERCISE_BANK: list[dict] = [
                     "wonderful. When we arrive, the loaves are golden and still warm."),
     },
     {
-        "id": "reading-advanced", "type": "reading", "level": "advanced", "difficulty": 3,
+        "id": "reading-advanced", "type": "reading", "level": "advanced", "difficulty": 3, "legacy": True,
         "focus": ["fluency", "maintenance"],
         "title": "Reading - Advanced: Speaking with Confidence",
         "description": "The final reading stage: long sentences and a natural conversational pace. Pause on purpose between ideas.",
@@ -55,7 +63,7 @@ EXERCISE_BANK: list[dict] = [
                     "confidence; instead, they prepare thoroughly, breathe steadily, and accept that small hesitations "
                     "are a natural part of communication. Listeners generally value clarity and sincerity far more than speed."),
     },
-    # ---------------- fluency: pacing + DAF ----------------
+    # ---------------- fluency: pacing + DAF + breathing (extra practice around the bracket tasks) ----------------
     {
         "id": "pacing-easy", "type": "pacing", "difficulty": 1, "focus": ["fluency"],
         "title": "Gentle Pacing - The Garden",
@@ -65,7 +73,7 @@ EXERCISE_BANK: list[dict] = [
                     "A gentle breeze passed through the leaves, and everything felt calm."),
     },
     {
-        "id": "pacing-standard", "type": "pacing", "difficulty": 2, "focus": ["fluency", "maintenance"],
+        "id": "pacing-standard", "type": "pacing", "difficulty": 2, "focus": ["fluency", "maintenance"], "min_bracket": 4,
         "title": "Standard Pacing - The Market",
         "description": "Read at a natural conversational pace, staying with the highlighted word.",
         "target_wpm": 130,
@@ -73,10 +81,17 @@ EXERCISE_BANK: list[dict] = [
                     "while children weave between the stalls, chasing the smell of fresh bread and roasted nuts."),
     },
     {
-        "id": "daf", "type": "daf", "difficulty": 2, "focus": ["fluency"],
+        "id": "daf", "type": "daf", "difficulty": 2, "focus": ["fluency"], "min_bracket": 3,
         "title": "Delayed Auditory Feedback",
         "description": ("Speak while hearing your own voice played back with a short delay. Many people find it naturally "
                         "slows and smooths their rhythm. Use headphones."),
+    },
+    {
+        "id": "calm-breathing", "type": "sustained_vowel", "difficulty": 1, "focus": ["fluency", "maintenance"],
+        "title": "Calm Breathing - Easy Onset",
+        "description": ("Breathe in slowly through your nose, then let the air out on a soft, gentle 'haaa'. "
+                        "Keep it relaxed and smooth - no pushing. Repeat three times."),
+        "target_seconds": 6,
     },
     # ---------------- motor speech (dysarthria): clear-speech ladder + loudness + phonation ----------------
     {
@@ -116,9 +131,9 @@ EXERCISE_BANK: list[dict] = [
         "description": "Take a deep breath and say 'ahh' in a strong, steady voice for as long as you comfortably can. Repeat three times.",
         "target_seconds": 10,
     },
-    # ---------------- shared: picture description ----------------
+    # ---------------- shared: picture description (legacy - replaced by the bracket picture tasks) ----------------
     {
-        "id": "picture-park", "type": "picture", "difficulty": 1,
+        "id": "picture-park", "type": "picture", "difficulty": 1, "legacy": True,
         "focus": ["fluency", "speech_sounds", "maintenance", "motor_speech"],
         "title": "Picture Description - A Day at the Park",
         "description": "Look at the picture and describe what's happening in your own words. No rush.",
@@ -127,7 +142,7 @@ EXERCISE_BANK: list[dict] = [
                     "What are the children playing?", "What is the weather like?"],
     },
     {
-        "id": "picture-kitchen", "type": "picture", "difficulty": 2,
+        "id": "picture-kitchen", "type": "picture", "difficulty": 2, "legacy": True,
         "focus": ["fluency", "speech_sounds", "maintenance"],
         "title": "Picture Description - Cooking Together",
         "description": "Describe the kitchen scene: who is there, what each person is doing, and what they are making.",
@@ -136,7 +151,7 @@ EXERCISE_BANK: list[dict] = [
                     "What food can you see?", "What do you think will happen next?"],
     },
     {
-        "id": "picture-beach", "type": "picture", "difficulty": 2,
+        "id": "picture-beach", "type": "picture", "difficulty": 2, "legacy": True,
         "focus": ["fluency", "motor_speech", "maintenance"],
         "title": "Picture Description - At the Beach",
         "description": "Describe the beach scene in as much detail as you can, in full sentences.",
@@ -209,8 +224,20 @@ def sound_drills(flagged_sounds: list[str] | None) -> list[dict]:
 
 
 def exercises_for(flagged_sounds: list[str] | None) -> list[dict]:
-    """The full bank a patient can use: static exercises + drills for their flagged sounds."""
-    return EXERCISE_BANK + sound_drills(flagged_sounds)
+    """The full bank a patient can use: bracket tasks + static exercises + drills for their flagged sounds."""
+    return BRACKET_EXERCISES + EXERCISE_BANK + sound_drills(flagged_sounds)
+
+
+def exercises_for_bracket(bracket: int) -> list[dict]:
+    """The bracket's three core tasks (reading, picture, conversation)."""
+    return bracket_exercises(bracket)
+
+
+def suits_bracket(exercise: dict, bracket: int) -> bool:
+    """Extra practice the bandit may add at this practice bracket (bracket tasks and legacy items excluded)."""
+    if exercise.get("legacy") or exercise.get("bracket") is not None:
+        return False
+    return exercise.get("min_bracket", 1) <= bracket
 
 
 def get_exercise(exercise_id: str, flagged_sounds: list[str] | None = None) -> dict | None:

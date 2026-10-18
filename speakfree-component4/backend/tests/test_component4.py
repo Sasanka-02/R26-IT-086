@@ -59,24 +59,28 @@ def test_scoring_goal_gap_for_drills():
     assert good > poor
 
 
-def test_ladder_moves_up_after_two_strong_attempts():
-    p = profile(disorder="stuttering", level=3)
-    _, result = practise(p, "reading-beginner", 2, duration_seconds=60, speaking_ratio=0.8, syllables=120,
+def test_skill_ladder_moves_up_after_two_strong_attempts():
+    p = profile(disorder="dysarthria", level=3)  # skill ladder starts at Beginner
+    _, result = practise(p, "clear-beginner", 2, duration_seconds=60, speaking_ratio=0.8, syllables=120,
                          self_rating="easy")
-    assert result["level"]["level"] == "intermediate"
+    assert result["skill_level"]["level"] == "intermediate"
     assert result["level_message"].startswith("Level up")
 
 
-def test_ladder_moves_down_after_two_hard_attempts():
-    p = profile(disorder="stuttering", level=2)  # starts intermediate
-    _, result = practise(p, "reading-intermediate", 2, duration_seconds=20, speaking_ratio=0.2, self_rating="hard")
-    assert result["level"]["level"] == "beginner"
+def test_skill_ladder_moves_down_after_two_hard_attempts():
+    p = profile(disorder="dysarthria", level=2)  # starts intermediate
+    _, result = practise(p, "clear-intermediate", 2, duration_seconds=20, speaking_ratio=0.2, self_rating="hard")
+    assert result["skill_level"]["level"] == "beginner"
 
 
 def test_first_plan_follows_c3_category_prior():
-    for disorder, ladder in (("stuttering", "reading"), ("dysarthria", "clear_speech"), ("articulation", "sound_drill")):
+    for disorder, family in (("stuttering", {"pacing", "daf", "sustained_vowel"}), ("dysarthria", {"clear_speech"}),
+                             ("articulation", {"sound_drill"})):
         plan = build_plan(profile(disorder=disorder, sounds=("/s/",)), [])
-        assert plan["today"][0]["type"] == ladder
+        core = [e for e in plan["today"] if e["source"] == "bracket"]
+        assert {e["task_type"] for e in core} == {"reading", "picture", "conversation"}
+        extras = plan["today"][len(core):]
+        assert family & {e["type"] for e in extras}, (disorder, [e["id"] for e in extras])
         assert all(set(e["focus"]) & {plan["focus"]["key"]} for e in plan["today"])
 
 

@@ -1,14 +1,15 @@
 /**
- * AuthFlow – Login and Sign-up (role, details with DOB → age → bracket, privacy consent).
+ * AuthFlow – Login and Sign-up (role, details with age → clinical age bracket, privacy consent).
  *
  * Layout: one centred card on the landing-page background (no side panel).
  * Interactive helpers: show/hide password, Caps Lock warning, live e-mail check, password-strength
  * meter, "passwords match" indicator, live age/bracket preview, clickable stepper, review step.
  *
  * Sign-up is a 3-step wizard:
- *   1. Role      – Patient | Parent/Guardian (registering a minor) | Clinician
- *   2. Details   – name, email, password, Date of Birth (patient or child) -> live age + bracket
- *   3. Consent   – review + privacy consent (raw audio never stored on the server)
+ *   1. Role      – Patient | Parent/Guardian | Clinician
+ *   2. Details   – name, email, password, AGE (patient or child, 6–100; therapists are not asked)
+ *                  -> live bracket preview. Under 6: "This app is for ages 6 and above".
+ *   3. Consent   – review + privacy consent; under 18 also "A parent or guardian has agreed to this account"
  */
 import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -16,7 +17,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  CalendarDays,
+  Cake,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -30,7 +31,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { bracketForAge, calculateAge, MAX_AGE, MIN_AGE } from "../utils/age";
+import { ADULT_AGE, ageError, bracketForAge, MAX_AGE, MIN_AGE } from "../utils/age";
 import type { Role } from "../types";
 import SiteFooter from "./SiteFooter";
 import { ErrorBox, Logo } from "./ui";
@@ -221,25 +222,40 @@ function LoginForm() {
 
 // =========================================================================== sign-up
 const ROLES: { id: Role; title: string; desc: string; icon: ReactNode }[] = [
-  { id: "patient", title: "Patient", desc: "I am 6–20 years old and doing my own screening.", icon: <UserIcon size={22} /> },
-  { id: "guardian", title: "Parent / Guardian", desc: "I am registering my child (a minor) for screening.", icon: <Users size={22} /> },
+  { id: "patient", title: "Student / Patient", desc: "I am 6 or older and practising for myself.", icon: <UserIcon size={22} /> },
+  { id: "guardian", title: "Parent / Guardian", desc: "I am registering my child for screening and practice.", icon: <Users size={22} /> },
   { id: "clinician", title: "Clinician", desc: "I am a speech-language professional managing patients.", icon: <Stethoscope size={22} /> },
 ];
 const STEPS = ["Account type", "Your details", "Review & consent"] as const;
 
-function AgePreview({ dob }: { dob: string }) {
-  const age = calculateAge(dob);
+const parseAge = (v: string): number | null => (v.trim() === "" ? null : Number(v));
+
+function AgePreview({ value }: { value: string }) {
+  const age = parseAge(value);
   if (age === null) return null;
-  const bracket = bracketForAge(age);
-  const ok = age >= MIN_AGE && age <= MAX_AGE && bracket;
+  const error = ageError(age);
+  const bracket = error ? null : bracketForAge(age);
   return (
-    <div className={`mt-2 flex items-start gap-2 rounded-xl border px-3 py-2 text-sm ${ok ? "border-ok/30 bg-ok-soft text-ok" : "border-bad/30 bg-bad-soft text-bad"}`} role="status">
-      {ok ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> : <XCircle size={16} className="mt-0.5 shrink-0" />}
+    <div className={`mt-2 flex items-start gap-2 rounded-xl border px-3 py-2 text-sm ${bracket ? "border-ok/30 bg-ok-soft text-ok" : "border-bad/30 bg-bad-soft text-bad"}`} role="status">
+      {bracket ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> : <XCircle size={16} className="mt-0.5 shrink-0" />}
       <span>
-        {ok
-          ? <>Age <b>{age}</b> · Bracket {bracket!.id} ({bracket!.label}) - tasks: {bracket!.focus.toLowerCase()}.</>
-          : <>Calculated age {age}. SpeakFree screening supports ages {MIN_AGE}–{MAX_AGE}.</>}
+        {bracket
+          ? <>Age <b>{age}</b> · Level {bracket.id} ({bracket.label}) – practice: {bracket.focus.toLowerCase()}.
+              {age < ADULT_AGE && <> A parent or guardian will need to agree on the last step.</>}</>
+          : error}
       </span>
+    </div>
+  );
+}
+
+function AgeInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <Field label={label} icon={<Cake size={16} />}>
+        <input className="input pl-9" type="number" inputMode="numeric" min={MIN_AGE} max={MAX_AGE} step={1} value={value}
+          placeholder={`${MIN_AGE}–${MAX_AGE}`} onChange={(e) => onChange(e.target.value)} required />
+      </Field>
+      <AgePreview value={value} />
     </div>
   );
 }
@@ -253,18 +269,18 @@ function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [dob, setDob] = useState("");
+  const [age, setAge] = useState("");
   const [childName, setChildName] = useState("");
-  const [childDob, setChildDob] = useState("");
+  const [childAge, setChildAge] = useState("");
   const [consent, setConsent] = useState(false);
+  const [guardianConsent, setGuardianConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const today = new Date().toISOString().slice(0, 10);
   const emailOk = EMAIL_RE.test(email.trim());
-  const subjectDob = role === "patient" ? dob : role === "guardian" ? childDob : "";
-  const subjectAge = calculateAge(subjectDob);
-  const subjectBracket = bracketForAge(subjectAge);
+  const subjectAge = parseAge(role === "patient" ? age : role === "guardian" ? childAge : "");
+  const subjectBracket = ageError(subjectAge) ? null : bracketForAge(subjectAge);
+  const needsGuardian = subjectBracket !== null && subjectAge !== null && subjectAge < ADULT_AGE;
 
   function validateDetails(): string | null {
     if (fullName.trim().length < 2) return "Please enter your full name.";
@@ -272,10 +288,7 @@ function SignupForm() {
     if (password.length < 8) return "Password must be at least 8 characters.";
     if (password !== confirm) return "Passwords do not match.";
     if (role === "guardian" && childName.trim().length < 2) return "Please enter your child's full name.";
-    if (role === "patient" || role === "guardian") {
-      if (subjectAge === null) return "Date of birth is required.";
-      if (subjectAge < MIN_AGE || subjectAge > MAX_AGE) return `Screening supports ages ${MIN_AGE}–${MAX_AGE} (calculated age: ${subjectAge}).`;
-    }
+    if (role === "patient" || role === "guardian") return ageError(subjectAge);
     return null;
   }
 
@@ -294,6 +307,7 @@ function SignupForm() {
     if (step < 3) return goTo((step + 1) as 2 | 3);
     setError(null);
     if (!consent) return setError("You must accept the privacy consent to continue.");
+    if (needsGuardian && !guardianConsent) return setError("A parent or guardian must agree to this account for anyone under 18.");
     setBusy(true);
     try {
       await register({
@@ -301,9 +315,10 @@ function SignupForm() {
         full_name: fullName.trim(),
         email: email.trim(),
         password,
-        date_of_birth: role === "patient" ? dob : null,
+        age: role === "patient" ? subjectAge : null,
         child_full_name: role === "guardian" ? childName.trim() : null,
-        child_date_of_birth: role === "guardian" ? childDob : null,
+        child_age: role === "guardian" ? subjectAge : null,
+        guardian_consent: needsGuardian && guardianConsent,
         consent,
       });
       navigate("/", { replace: true });
@@ -410,14 +425,7 @@ function SignupForm() {
               </div>
             </div>
 
-            {role === "patient" && (
-              <div>
-                <Field label="Date of birth" icon={<CalendarDays size={16} />}>
-                  <input className="input pl-9" type="date" max={today} value={dob} onChange={(e) => setDob(e.target.value)} required />
-                </Field>
-                <AgePreview dob={dob} />
-              </div>
-            )}
+            {role === "patient" && <AgeInput label="Your age" value={age} onChange={setAge} />}
 
             {role === "guardian" && (
               <div className="space-y-4 rounded-2xl border border-lav-200 bg-lav-50 p-4">
@@ -426,18 +434,15 @@ function SignupForm() {
                   <Field label="Child's full name" icon={<UserIcon size={16} />}>
                     <input className="input pl-9" value={childName} onChange={(e) => setChildName(e.target.value)} required />
                   </Field>
-                  <Field label="Child's date of birth" icon={<CalendarDays size={16} />}>
-                    <input className="input pl-9" type="date" max={today} value={childDob} onChange={(e) => setChildDob(e.target.value)} required />
-                  </Field>
+                  <AgeInput label="Child's age" value={childAge} onChange={setChildAge} />
                 </div>
-                <AgePreview dob={childDob} />
               </div>
             )}
 
             {role === "clinician" && (
               <p className="flex gap-2 rounded-xl border border-line bg-lav-50 px-4 py-3 text-sm text-ink-soft">
                 <Stethoscope size={16} className="mt-0.5 shrink-0 text-navy" />
-                As a clinician you add each patient (name and date of birth) from the top bar, and you can curate the task library.
+                As a clinician you add each patient (name and date of birth) from the top bar, and you can curate the task library. You are not asked for your age.
               </p>
             )}
           </div>
@@ -453,7 +458,7 @@ function SignupForm() {
               <div><dt className="text-xs muted">Email</dt><dd className="truncate font-semibold text-ink">{email.trim()}</dd></div>
               {role === "guardian" && <div><dt className="text-xs muted">Child</dt><dd className="font-semibold text-ink">{childName.trim()}</dd></div>}
               {subjectAge !== null && subjectBracket && (
-                <div><dt className="text-xs muted">Age · tasks</dt><dd className="font-semibold text-ink">{subjectAge} years · Bracket {subjectBracket.id} ({subjectBracket.label})</dd></div>
+                <div><dt className="text-xs muted">Age · practice level</dt><dd className="font-semibold text-ink">{subjectAge} years · Level {subjectBracket.id} ({subjectBracket.label})</dd></div>
               )}
               <div className="sm:col-span-2">
                 <button type="button" onClick={() => goTo(2)} className="text-xs font-semibold text-brand hover:underline">Edit details</button>
@@ -477,6 +482,16 @@ function SignupForm() {
                 {role === "guardian" && " As the parent/guardian, I consent on behalf of my child."}
               </span>
             </label>
+            {needsGuardian && (
+              <label className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition ${guardianConsent ? "border-ok/50 bg-ok-soft" : "border-warn/40 bg-warn-soft"}`}>
+                <input type="checkbox" required className="mt-1 h-5 w-5 accent-[#1E3A8A]" checked={guardianConsent}
+                  onChange={(e) => { setGuardianConsent(e.target.checked); setError(null); }} />
+                <span className="text-sm text-ink">
+                  <b>A parent or guardian has agreed to this account</b>
+                  <span className="block text-xs text-ink-soft">Required because {role === "guardian" ? "your child is" : "you are"} under {ADULT_AGE}.</span>
+                </span>
+              </label>
+            )}
           </div>
         )}
 
@@ -488,7 +503,7 @@ function SignupForm() {
           ) : (
             <Link to="/login" className="text-sm font-medium text-ink-soft hover:text-ink">Already registered? <span className="text-brand">Sign in</span></Link>
           )}
-          <button className="btn-primary px-6" disabled={busy || (step === 1 && !role) || (step === 3 && !consent)}>
+          <button className="btn-primary px-6" disabled={busy || (step === 1 && !role) || (step === 3 && (!consent || (needsGuardian && !guardianConsent)))}>
             {busy && <Loader2 className="animate-spin" size={18} />}
             {step < 3 ? <>Continue <ArrowRight size={16} /></> : "Create account"}
           </button>

@@ -184,16 +184,17 @@ export function ConfusionMatrix({ matrix, labels }: { matrix: number[][]; labels
 }
 
 // --------------------------------------------------------------------------- misc
-/** Highlighted equation card used for the component novelties. */
-export function EquationCard({ id, name, formula, children, novelty = true }: {
-  id: string; name: string; formula: string; children?: ReactNode; novelty?: boolean;
+/**
+ * Highlighted equation card.
+ * ★ NOVELTY (code note only – never shown in the UI): used for the Component 2 articulation-score
+ * equations (C2-Eq.1–5) and the Component 2 formulas on the Models & Methods page.
+ */
+export function EquationCard({ id, name, formula, children }: {
+  id: string; name: string; formula: string; children?: ReactNode;
 }) {
   return (
-    <div className={`rounded-xl border p-4 ${novelty ? "border-lav-200 bg-lav-50" : "border-line bg-white"}`}>
-      <div className="flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-wide text-lav-600">
-        <span>{id} · {name}</span>
-        {novelty && <span className="chip bg-sun-soft px-2 py-0.5 text-[10px] text-[#92400E]">★ Novelty</span>}
-      </div>
+    <div className="rounded-xl border border-lav-200 bg-lav-50 p-4">
+      <div className="text-xs font-bold uppercase tracking-wide text-lav-600">{id} · {name}</div>
       <div className="mt-2 font-mono text-[15px] font-semibold text-ink">{formula}</div>
       {children && <div className="mt-2 font-mono text-xs text-ink-soft">{children}</div>}
     </div>

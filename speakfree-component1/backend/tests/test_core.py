@@ -52,7 +52,8 @@ def test_age_brackets():
 
     assert age_from_dob(date(2016, 10, 15), today=date(2026, 10, 14)) == 9
     assert bracket_for_age(6) == 1 and bracket_for_age(8) == 2 and bracket_for_age(20) == 7
-    assert bracket_for_age(5) is None and bracket_for_age(21) is None
+    assert bracket_for_age(21) == 8 and bracket_for_age(100) == 8  # adults: therapy bracket 8
+    assert bracket_for_age(5) is None and bracket_for_age(101) is None and bracket_for_age(None) is None
 
 
 def test_vad_preserves_significant_pause():

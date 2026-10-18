@@ -5,9 +5,12 @@ Used only when the offline intent classifier is not confident. Switched on by se
 ANTHROPIC_API_KEY (or another Anthropic credential); without it the assistant runs fully
 offline. Server-side refusal fallbacks are enabled (`fallbacks: "default"`).
 
-Privacy: the model receives only the patient's first name, their therapy focus (the friendly
-name - never a diagnosis) and a small summary of their own practice numbers. Never audio,
-e-mail addresses, screening reports or other patients' data.
+Privacy: the model receives only the patient's first name, their age group (bracket), their
+therapy focus (the friendly name - never a diagnosis) and a small summary of their own practice
+numbers. Never audio, e-mail addresses, screening reports or other patients' data.
+
+Tone follows the age bracket (brackets.py "tone"): playful (6-9), simple (10-13),
+friendly (14-20), respectful (21+).
 """
 from __future__ import annotations
 
@@ -26,10 +29,18 @@ Their practice focus is "{focus_name}": {tagline}
 Techniques for this focus: {techniques}
 
 Use only the practice data provided in the user's message. Do not invent scores, dates or exercises. \
-Keep replies under 120 words, warm and plain-spoken, suitable for someone (often a child or teenager) \
-who may feel anxious about speaking. You are not a clinician: never diagnose or name a disorder, and \
+Keep replies under {max_words} words. They are in the "{age_label}" age group, so {tone_instruction} \
+They may feel anxious about speaking. You are not a clinician: never diagnose or name a disorder, and \
 suggest talking to their speech therapist for medical or clinical questions. If the question is \
 unrelated to speech practice, say briefly what you can help with instead."""
+
+TONE_INSTRUCTIONS = {
+    "playful": "use very short, cheerful sentences a young child understands, with one or two friendly emoji.",
+    "simple": "use simple words and short sentences, and be warm and encouraging.",
+    "friendly": "be friendly and motivating, like a supportive coach - no baby talk.",
+    "respectful": "be respectful and professional, as with an adult client - no emoji.",
+}
+MAX_WORDS = {"playful": 40, "simple": 80}
 
 try:
     import anthropic
@@ -50,12 +61,19 @@ def _get_client():
     return _client
 
 
-def ask(question: str, first_name: str, focus: dict, context: dict) -> str | None:
+def system_prompt(focus: dict, context: dict, tone: str = "respectful") -> str:
+    return SYSTEM_TEMPLATE.format(focus_name=focus["patient_name"], tagline=focus["tagline"],
+                                  techniques="; ".join(focus["techniques"]),
+                                  age_label=context.get("age_group") or "adult",
+                                  tone_instruction=TONE_INSTRUCTIONS.get(tone, TONE_INSTRUCTIONS["respectful"]),
+                                  max_words=MAX_WORDS.get(tone, 120))
+
+
+def ask(question: str, first_name: str, focus: dict, context: dict, tone: str = "respectful") -> str | None:
     """Returns the model's reply, or None if unavailable, refused or failed."""
     if not is_enabled():
         return None
-    system = SYSTEM_TEMPLATE.format(focus_name=focus["patient_name"], tagline=focus["tagline"],
-                                    techniques="; ".join(focus["techniques"]))
+    system = system_prompt(focus, context, tone)
     content = (f"First name: {first_name}\nTheir practice data:\n{json.dumps(context, indent=1)}\n\n"
                f"Their question: {question}")
     try:

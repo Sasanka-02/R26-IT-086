@@ -18,9 +18,12 @@ class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     email: EmailStr
     password: str = Field(min_length=8, max_length=64)
-    date_of_birth: date | None = None          # patient's own DOB (role = patient)
+    age: int | None = None                     # patient's own age, 6–100 (role = patient)
+    date_of_birth: date | None = None          # optional alternative to `age` (role = patient)
     child_full_name: str | None = Field(default=None, max_length=120)  # role = guardian
-    child_date_of_birth: date | None = None     # role = guardian
+    child_age: int | None = None                # role = guardian
+    child_date_of_birth: date | None = None     # optional alternative to `child_age`
+    guardian_consent: bool = False             # required when the person practising is under 18
     consent: bool
 
     @field_validator("consent")
@@ -38,7 +41,15 @@ class LoginRequest(BaseModel):
 
 class PatientCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
-    date_of_birth: date
+    date_of_birth: date | None = None
+    age: int | None = None
+
+
+class AgeUpdate(BaseModel):
+    """One-time "How old are you?" for accounts created before age was collected."""
+    age: int
+    patient_id: str | None = None   # default: the account's own patient record
+    guardian_consent: bool = False
 
 
 class AgeBracketOut(BaseModel):
@@ -51,9 +62,11 @@ class AgeBracketOut(BaseModel):
 class PatientOut(BaseModel):
     id: str
     full_name: str
-    date_of_birth: date
-    age: int
-    age_bracket: AgeBracketOut | None
+    date_of_birth: date | None
+    age: int | None                      # None -> the app asks "How old are you?" once
+    age_bracket: AgeBracketOut | None    # clinical age bracket 1–8
+    age_bracket_override: int | None = None  # practice bracket pinned by a therapist
+    guardian_consent: bool = False
     is_self: bool
 
 
@@ -266,8 +279,9 @@ class AdminTaskOut(BaseModel):
     title: str
     instructions: str
     content_text: str
-    image_path: str | None
+    image_path: str | None          # media path: a picture, or a short video for scenario tasks
     image_url: str | None
+    video_url: str | None = None
     keywords: list[str]
     visual_json: dict | None
     max_seconds: int
@@ -281,8 +295,9 @@ class AdminTaskOut(BaseModel):
 class AdminPatientRow(BaseModel):
     id: str
     full_name: str
-    age: int
+    age: int | None
     age_bracket: AgeBracketOut | None
+    age_bracket_override: int | None = None
     registered_at: datetime
     owner_name: str
     owner_email: str
@@ -319,7 +334,7 @@ class AdminSessionRow(BaseModel):
 
 class AdminPatientProfile(BaseModel):
     patient: AdminPatientRow
-    date_of_birth: date
+    date_of_birth: date | None
     is_self: bool
     sessions: list[AdminSessionRow]
 

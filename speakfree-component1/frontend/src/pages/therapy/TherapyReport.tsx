@@ -59,8 +59,8 @@ export default function TherapyReport() {
 
         <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
           {[
-            ["Patient", activePatient.full_name], ["Patient ID", activePatient.id], ["Age", String(activePatient.age)],
-            ["Generated", new Date().toLocaleString()], ["Plan focus", plan.focus.patient_name], ["Current level", plan.level.label],
+            ["Patient", activePatient.full_name], ["Patient ID", activePatient.id], ["Age", activePatient.age === null ? "–" : `${activePatient.age} (${plan.learner.age_label})`],
+            ["Generated", new Date().toLocaleString()], ["Plan focus", plan.focus.patient_name], ["Current level", `${plan.level.label} (${plan.level.ages} tasks)`],
             ["Weekly dose", `${plan.dose.sessions_per_week} × ${plan.dose.minutes_per_session} min`], ["Day streak", String(p.streak_days)],
           ].map(([k, v]) => (
             <div key={k}><dt className="text-[11px] font-semibold uppercase tracking-wide muted">{k}</dt><dd className="font-semibold text-ink">{v}</dd></div>

@@ -8,13 +8,16 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormE
 import { BookOpen, ImagePlus, Library, Loader2, MessagesSquare, Pencil, Plus, Power, Trash2, X } from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import TaskVideo from "../components/TaskVideo";
 import { ErrorBox, SceneVisual, Spinner } from "../components/ui";
 import { TASK_LABEL, type AdminTask, type TaskType } from "../types";
-import { BRACKETS } from "../utils/age";
+import { SCREENING_BRACKETS as BRACKETS } from "../utils/age";
 
 const TYPES: TaskType[] = ["picture", "scenario", "questions", "reading"];
 const MAX_IMAGE_MB = 5;
+const MAX_VIDEO_MB = 25; // short scenario videos (backend MAX_VIDEO_MB)
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const VIDEO_TYPES = ["video/mp4", "video/webm"];
 
 const CONTENT_LABEL: Record<TaskType, string> = {
   reading: "Reading passage",
@@ -39,11 +42,13 @@ function TaskEditor({ task, bracket, onClose, onSaved }: {
   const [maxSeconds, setMaxSeconds] = useState(task?.max_seconds ?? 60);
   const [isActive, setIsActive] = useState(task?.is_active ?? true);
   const [image, setImage] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(task?.image_url ?? null);
+  const [preview, setPreview] = useState<string | null>(task?.video_url ?? task?.image_url ?? null);
+  const [previewIsVideo, setPreviewIsVideo] = useState(!!task?.video_url);
   const [removeImage, setRemoveImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const hasImage = taskType === "picture" || taskType === "scenario";
+  const allowVideo = taskType === "scenario";
 
   useEffect(() => () => { if (image && preview) URL.revokeObjectURL(preview); }, [image, preview]);
 
@@ -51,11 +56,15 @@ function TaskEditor({ task, bracket, onClose, onSaved }: {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    if (!IMAGE_TYPES.includes(f.type)) return setError("Image must be a JPG, PNG or WebP file.");
-    if (f.size > MAX_IMAGE_MB * 1024 * 1024) return setError(`Image must be ${MAX_IMAGE_MB} MB or smaller.`);
+    const video = VIDEO_TYPES.includes(f.type);
+    if (video && !allowVideo) return setError("Videos can only be used for scenario tasks.");
+    if (!video && !IMAGE_TYPES.includes(f.type)) return setError(allowVideo ? "Use a JPG, PNG or WebP picture, or an MP4 / WebM video." : "Image must be a JPG, PNG or WebP file.");
+    const maxMb = video ? MAX_VIDEO_MB : MAX_IMAGE_MB;
+    if (f.size > maxMb * 1024 * 1024) return setError(`${video ? "Video" : "Image"} must be ${maxMb} MB or smaller.`);
     setError(null);
     setImage(f);
     setRemoveImage(false);
+    setPreviewIsVideo(video);
     setPreview(URL.createObjectURL(f));
   }
 
@@ -127,16 +136,23 @@ function TaskEditor({ task, bracket, onClose, onSaved }: {
 
         {hasImage && (
           <div className="rounded-xl border border-line bg-canvas/60 p-4">
-            <div className="mb-2 text-sm font-semibold text-ink-soft">Picture (JPG, PNG or WebP, max {MAX_IMAGE_MB} MB)</div>
+            <div className="mb-2 text-sm font-semibold text-ink-soft">
+              {allowVideo
+                ? `Picture (JPG, PNG or WebP, max ${MAX_IMAGE_MB} MB) or short video (MP4 or WebM, max ${MAX_VIDEO_MB} MB)`
+                : `Picture (JPG, PNG or WebP, max ${MAX_IMAGE_MB} MB)`}
+            </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="h-28 w-44 shrink-0 overflow-hidden rounded-lg border border-line bg-white">
                 {preview && !removeImage
-                  ? <img src={preview} alt="Task" className="h-full w-full object-cover" />
+                  ? (previewIsVideo
+                    ? <video src={preview} controls muted playsInline preload="metadata" className="h-full w-full bg-ink object-contain" />
+                    : <img src={preview} alt="Task" className="h-full w-full object-cover" />)
                   : <div className="grid h-full place-items-center text-xs muted">No picture – emoji illustration is used</div>}
               </div>
               <div className="flex flex-wrap gap-2">
-                <label className="btn-lav cursor-pointer"><ImagePlus size={15} /> {preview && !removeImage ? "Replace" : "Upload"} picture
-                  <input type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" className="hidden" onChange={onPick} />
+                <label className="btn-lav cursor-pointer"><ImagePlus size={15} /> {preview && !removeImage ? "Replace" : "Upload"} {allowVideo ? "picture / video" : "picture"}
+                  <input type="file" className="hidden" onChange={onPick}
+                    accept={allowVideo ? ".png,.jpg,.jpeg,.webp,.mp4,.webm,image/png,image/jpeg,image/webp,video/mp4,video/webm" : ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"} />
                 </label>
                 {preview && !removeImage && (
                   <button type="button" className="btn-ghost py-2" onClick={() => { setImage(null); setPreview(null); setRemoveImage(true); }}>
@@ -168,7 +184,9 @@ function TaskCard({ task, onEdit, onToggle, busy }: { task: AdminTask; onEdit: (
   return (
     <article className={`card flex flex-col p-4 transition ${task.is_active ? "" : "opacity-60"}`}>
       {visual ? (
-        <SceneVisual visual={task.visual_json} imageUrl={task.image_url} alt={task.content_text} tone={task.task_type === "picture" ? "park" : "indoor"} className="h-36" />
+        task.video_url
+          ? <TaskVideo preview src={task.video_url} title={task.title} className="h-36" />
+          : <SceneVisual visual={task.visual_json} imageUrl={task.image_url} alt={task.content_text} tone={task.task_type === "picture" ? "park" : "indoor"} className="h-36" />
       ) : (
         <div className="flex h-36 items-start gap-2 overflow-hidden rounded-xl border border-line bg-lav-50 p-3 text-sm text-ink-soft">
           {task.task_type === "questions" ? <MessagesSquare size={16} className="mt-0.5 shrink-0 text-lav-500" /> : <BookOpen size={16} className="mt-0.5 shrink-0 text-lav-500" />}
@@ -185,7 +203,7 @@ function TaskCard({ task, onEdit, onToggle, busy }: { task: AdminTask; onEdit: (
         <span>{TASK_LABEL[task.task_type]}</span>
         <span>{task.max_seconds}s</span>
         <span>{task.attempt_count} attempt{task.attempt_count === 1 ? "" : "s"}</span>
-        {task.image_path && <span>has picture</span>}
+        {task.image_path && <span>{task.video_url ? "has video" : "has picture"}</span>}
       </div>
       <div className="mt-auto flex gap-2 pt-4">
         <button className="btn-outline flex-1 py-2" onClick={onEdit}><Pencil size={14} /> Edit</button>

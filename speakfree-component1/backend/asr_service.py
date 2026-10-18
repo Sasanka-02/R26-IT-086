@@ -1,5 +1,5 @@
 """
-ASR Confidence Scoring Service  (Component 1 – core novelty)
+ASR Confidence Scoring Service  (Component 1 – )
 ===========================================================
 
 Novelty: the ASR confidence derived from Whisper token log-probabilities is used as an

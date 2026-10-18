@@ -3,7 +3,9 @@ Audio ingestion & pre-processing
 --------------------------------
 1. Decode any browser upload (.webm/opus, .wav, .ogg, .m4a) to 16 kHz mono float32 via FFmpeg.
 2. Spectral-gating noise reduction (noisereduce) – optional, configurable.
-3. Energy-based Voice Activity Detection (VAD).
+3. Voice Activity Detection (VAD): Silero VAD (a small neural model trained on noisy speech,
+   MIT licence, runs offline on CPU) or the adaptive energy VAD. VAD_BACKEND in .env selects
+   it; if Silero is unavailable or fails, the energy VAD is used so a screening never fails.
 4. Silence trimming that ONLY removes leading/trailing silence.
    Internal pauses are preserved exactly, because pauses > 250 ms are
    clinically significant hesitation markers.
@@ -13,7 +15,9 @@ frontend can scrub the user's own local audio blob.
 """
 from __future__ import annotations
 
+import logging
 import subprocess
+import threading
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -24,6 +28,10 @@ HOP_MS = 10
 MICRO_GAP_SEC = 0.25        # gaps shorter than this are normal co-articulation, merged into speech
 MIN_SPEECH_SEC = 0.08       # ignore speech blips shorter than this (clicks, pops)
 EDGE_PADDING_SEC = 0.15     # keep a little audio around the speech when trimming edges
+VAD_BACKENDS = ("silero", "energy")
+SILERO_THRESHOLD = 0.5      # speech probability per 32 ms window
+
+log = logging.getLogger("speakfree.c1.audio")
 
 
 class AudioDecodeError(RuntimeError):
@@ -54,6 +62,7 @@ class PreprocessResult:
     pauses: list[Pause] = field(default_factory=list)  # significant internal pauses (>= 250 ms)
     noise_reduction_applied: bool = False
     noise_floor_db: float = -80.0
+    vad_backend: str = "energy"           # VAD that actually ran (after any fallback)
 
     @property
     def speech_duration_sec(self) -> float:
@@ -127,6 +136,56 @@ def energy_vad(audio: np.ndarray, sr: int = SAMPLE_RATE) -> tuple[list[tuple[flo
     return merge_intervals(intervals), noise_floor
 
 
+_silero_model = None
+_silero_lock = threading.Lock()
+
+
+def load_silero():
+    """Load the bundled Silero VAD model once (thread-safe). Raises ImportError if not installed."""
+    global _silero_model
+    with _silero_lock:
+        if _silero_model is None:
+            from silero_vad import load_silero_vad  # lazy: optional dependency
+
+            _silero_model = load_silero_vad()
+        return _silero_model
+
+
+def silero_vad(audio: np.ndarray, sr: int = SAMPLE_RATE) -> tuple[list[tuple[float, float]], float]:
+    """
+    Neural VAD (Silero): speech probability per 32 ms window, speech where p >= 0.5.
+    Gaps are then merged exactly like the energy VAD (merge_intervals), so the >= 250 ms
+    clinical pause rule is unchanged. The noise floor is still reported from frame energy.
+    """
+    import torch
+    from silero_vad import get_speech_timestamps
+
+    model = load_silero()
+    with _silero_lock:  # the model keeps state between windows - one recording at a time
+        model.reset_states()
+        stamps = get_speech_timestamps(
+            torch.from_numpy(np.ascontiguousarray(audio, dtype=np.float32)), model, threshold=SILERO_THRESHOLD,
+            sampling_rate=sr, min_speech_duration_ms=int(MIN_SPEECH_SEC * 1000), min_silence_duration_ms=100,
+            speech_pad_ms=30, return_seconds=True,
+        )
+    duration = audio.size / sr
+    intervals = [(max(0.0, float(s["start"])), min(duration, float(s["end"]))) for s in stamps]
+    noise_floor = float(np.percentile(to_db(frame_rms(audio, sr)), 10))
+    return merge_intervals(intervals), noise_floor
+
+
+def detect_speech(audio: np.ndarray, sr: int = SAMPLE_RATE, backend: str = "energy") -> tuple[list[tuple[float, float]], float, str]:
+    """Run the selected VAD; fall back to the energy VAD if Silero is missing or fails."""
+    if backend == "silero":
+        try:
+            intervals, noise_floor = silero_vad(audio, sr)
+            return intervals, noise_floor, "silero"
+        except Exception as exc:  # ImportError or a model error - never fail the screening
+            log.warning("Silero VAD unavailable (%s); using the energy VAD", exc)
+    intervals, noise_floor = energy_vad(audio, sr)
+    return intervals, noise_floor, "energy"
+
+
 def merge_intervals(intervals: list[tuple[float, float]]) -> list[tuple[float, float]]:
     """Merge micro-gaps (< 250 ms) and drop tiny blips. Gaps >= 250 ms are kept as pauses."""
     if not intervals:
@@ -168,6 +227,7 @@ def preprocess(
     sr: int = SAMPLE_RATE,
     enable_noise_reduction: bool = True,
     significant_pause_sec: float = 0.25,
+    vad_backend: str = "energy",
 ) -> PreprocessResult:
     duration = raw_audio.size / sr
 
@@ -179,7 +239,7 @@ def preprocess(
     if enable_noise_reduction:
         work, nr_applied = reduce_noise(work, sr)
 
-    intervals, noise_floor = energy_vad(work, sr)
+    intervals, noise_floor, vad_used = detect_speech(work, sr, vad_backend)
     pauses = find_pauses(intervals, significant_pause_sec)
 
     if intervals:
@@ -200,6 +260,7 @@ def preprocess(
         pauses=pauses,
         noise_reduction_applied=nr_applied,
         noise_floor_db=round(noise_floor, 2),
+        vad_backend=vad_used,
     )
 
 

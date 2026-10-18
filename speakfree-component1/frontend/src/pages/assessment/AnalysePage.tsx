@@ -16,12 +16,13 @@ import { AssessmentStepper } from "./TaskPages";
 
 type ItemStatus = "waiting" | "analysing" | "done" | "error";
 
+// Plain language for patients (technical detail lives in the admin dashboards).
 const STAGES = [
-  "Decoding audio and reducing background noise",
-  "Detecting speech and preserving pauses",
-  "Transcribing with Whisper (verbatim)",
-  "Scoring token log-probabilities → word confidence",
-  "Extracting acoustic & prosodic features",
+  "Cleaning up background noise",
+  "Finding where you spoke and paused",
+  "Listening to your words",
+  "Checking how clearly each word came through",
+  "Measuring your speed, pauses and voice",
 ];
 
 export default function AnalysePage() {
@@ -35,6 +36,7 @@ export default function AnalysePage() {
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "recordings" | "finalizing">("idle");
   const [stage, setStage] = useState(0);
+  const [etaSec, setEtaSec] = useState<number | null>(null); // time left, from the recordings analysed so far
   const autostarted = useRef(false);
 
   // cycle the pipeline stage label while a recording is being analysed (purely informative)
@@ -52,6 +54,9 @@ export default function AnalysePage() {
     setPhase("recordings");
     const sessionId = session.sessionId;
     let failed = 0;
+    let left = required.filter((r) => session.recordings[r.key] && !session.recordings[r.key].analysisId).length;
+    const took: number[] = [];
+    setEtaSec(null);
 
     for (const item of required) {
       const rec = session.recordings[item.key];
@@ -62,6 +67,7 @@ export default function AnalysePage() {
       }
       setStatus((s) => ({ ...s, [item.key]: "analysing" }));
       setStage(0);
+      const t0 = performance.now();
       try {
         const res = await api.analyze({
           audio: rec.blob, filename: rec.filename, sessionId, patientId: activePatient.id,
@@ -70,6 +76,11 @@ export default function AnalysePage() {
         localAudio.set(res.analysis_id, rec.blob);
         markAnalysed(item.key, res.analysis_id);
         setStatus((s) => ({ ...s, [item.key]: "done" }));
+        took.push((performance.now() - t0) / 1000);
+        left -= 1;
+        // the first recording includes loading the speech model, so later ones are timed when available
+        const typical = took.length > 1 ? took.slice(1).reduce((a, b) => a + b, 0) / (took.length - 1) : took[0];
+        setEtaSec(Math.round(typical * left));
       } catch (e) {
         failed += 1;
         setStatus((s) => ({ ...s, [item.key]: "error" }));
@@ -128,9 +139,9 @@ export default function AnalysePage() {
             <h2 className="text-xl font-bold">Review &amp; Analyse</h2>
             <p className="text-sm text-ink-soft">
               {running
-                ? "Analysing your recordings. Please keep this page open."
+                ? "Listening to your recordings. Please keep this page open – you can relax while we work."
                 : allRecorded
-                  ? "Every task is recorded. Press Analyse Now to run the Component 1 speech analysis."
+                  ? "Every task is recorded. Press Analyse Now and we'll prepare your results."
                   : `${recordedCount} of ${required.length} recordings captured. Record the remaining tasks before analysing.`}
             </p>
           </div>
@@ -143,8 +154,13 @@ export default function AnalysePage() {
         {(running || done > 0) && (
           <div className="mt-5">
             <div className="mb-1.5 flex justify-between text-xs font-medium text-ink-soft">
-              <span>{phase === "finalizing" ? "Building your Component 1 summary…" : phase === "recordings" ? STAGES[stage] : "Progress"}</span>
-              <span>{done} / {required.length} analysed</span>
+              <span>{phase === "finalizing" ? "Putting your results together…" : phase === "recordings" ? STAGES[stage] : "Progress"}</span>
+              <span>
+                {done} / {required.length} analysed
+                {phase === "recordings" && (etaSec === null
+                  ? " · the first one takes a little longer"
+                  : ` · about ${etaSec < 60 ? `${Math.max(5, etaSec)} seconds` : `${Math.ceil(etaSec / 60)} minute${etaSec > 60 ? "s" : ""}`} left`)}
+              </span>
             </div>
             <div className="h-2.5 rounded-full bg-lav-100">
               <div className="h-2.5 rounded-full bg-gradient-to-r from-navy to-lav-500 transition-all duration-500" style={{ width: `${phase === "finalizing" ? 100 : progress}%` }} />
@@ -181,7 +197,7 @@ export default function AnalysePage() {
           })}
         </ul>
         <p className="mt-4 text-xs muted">
-          The first analysis may take longer while the Whisper speech model loads. Each recording is deleted from the server right after it is analysed.
+          The first analysis may take longer while the speech model starts. Each recording is deleted from the server right after it is analysed.
         </p>
       </section>
     </div>

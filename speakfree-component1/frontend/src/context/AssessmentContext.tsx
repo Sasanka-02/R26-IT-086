@@ -7,9 +7,11 @@
  * recording remembers its analysis_id once analysed, so a failed batch can be retried without
  * re-sending the recordings that succeeded.
  *
- * The task set (served from the database, rotating per patient) is stored WITH the session: the
- * patient keeps the same tasks until the session is analysed, and a fresh set is fetched for the
- * next session.
+ * The task set (served from the database, rotating per patient) is stored WITH the session: once
+ * something is recorded, the patient keeps the same tasks until the session is analysed (or they
+ * press "Start over"), and a fresh set is fetched for the next session. A saved session with no
+ * recordings yet always fetches the current tasks, so new pictures / videos from the Task Library
+ * show up immediately.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../api/client";
@@ -84,7 +86,9 @@ export function AssessmentProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       setSessions((s) => {
         if (s[patientId]) return s;
-        const restored = stored ? { sessionId: stored.sessionId, recordings: stored.recordings, taskSet: stored.taskSet } : newSession();
+        // nothing recorded yet -> drop the saved task snapshot so the current task library is used
+        const keepTasks = stored && Object.keys(stored.recordings).length > 0;
+        const restored = stored ? { sessionId: stored.sessionId, recordings: stored.recordings, taskSet: keepTasks ? stored.taskSet : undefined } : newSession();
         return { ...s, [patientId]: restored };
       });
     });
