@@ -38,7 +38,7 @@ from .bandit import bracket_position, rank_arms
 from .brackets import BRACKETS
 from .categories import DOSE_BY_SEVERITY, FOCI
 from .dashboard import build_dashboard, confidence_label, explain_plan
-from .exercises import LEVELS, exercises_for, get_exercise, suits_bracket
+from .exercises import LEVELS, exercises_for, get_exercise, require_exercise, suits_bracket
 from .extra_exercises import KIDS_MAX_BRACKET
 from .help import help_for
 from .progress import parse, summary
@@ -257,14 +257,14 @@ def build_plan(profile: dict, records: list[dict], now: datetime | None = None, 
     #    that serves none of these is never added just to fill the dose.
     n_extra = max(1, dose["exercises_per_session"] - CORE_TASKS - len(assigned))
     picks: list[dict] = []
-    if skill:
+    if skill and ladder:
         ladder_ex = _ladder_exercise(exercises, ladder, skill["level"], records)
         if ladder_ex["id"] not in used_ids:
             picks.append(dict(_decorate(ladder_ex, records), source="level",
                               reason=f"Your skill step for “{focus['patient_name']}”: {skill['label']}. {skill['progress_text']}"))
             used_ids.add(ladder_ex["id"])
     if words and not words["mastered"] and len(picks) < n_extra and words["exercise_id"] not in used_ids:
-        word_ex = get_exercise(words["exercise_id"])
+        word_ex = require_exercise(words["exercise_id"])
         picks.append(dict(_decorate(word_ex, records), source="words",
                           reason=f"Your word level: {words['label']}. {words['progress_text']}"))
         used_ids.add(word_ex["id"])

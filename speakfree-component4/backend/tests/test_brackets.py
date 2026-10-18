@@ -13,7 +13,7 @@ from component4.bracket_tasks import (  # noqa: E402
     BRACKET1_WORDS_PER_SENTENCE, BRACKET2_SENTENCES, BRACKET_EXERCISES, CONSONANT_BLENDS, READING_WORD_RANGES, word_count,
 )
 from component4.brackets import BRACKETS, TOO_YOUNG_MESSAGE, max_bracket_for, start_bracket  # noqa: E402
-from component4.exercises import exercises_for_bracket, get_exercise  # noqa: E402
+from component4.exercises import exercises_for_bracket, get_exercise, require_exercise  # noqa: E402
 from component4.scoring import score_with_breakdown  # noqa: E402
 from tests.test_component4 import profile  # noqa: E402
 
@@ -28,7 +28,7 @@ def sentences(text: str) -> list[str]:
 
 def attempts(p, learner, exercise_id, n, payload):
     """Attempt records with increasing timestamps (all after the profile was created)."""
-    records, result = [], None
+    records: list[dict] = []; result: dict = {}
     for i in range(n):
         rec = {**build_attempt(p, {"exercise_id": exercise_id, **payload}), "completed_at": f"2026-10-02T10:{i:02d}:00+00:00"}
         result = attempt_result(p, records, rec, learner)
@@ -79,7 +79,7 @@ def test_target_wpm_rises_with_bracket():
 
 
 def test_bracket7_marks_tonal_modulation():
-    reading = get_exercise("b7-reading")
+    reading = require_exercise("b7-reading")
     tones = {h["tone"] for h in reading["tone_hints"]}
     assert {"questioning", "excited"} <= tones
     assert all(h["phrase"] in reading["passage"] for h in reading["tone_hints"])
@@ -220,7 +220,7 @@ def test_one_advanced_picture_per_bracket_with_original_svg():
         assert e["type"] == "picture" and e["level"] == "advanced" and e["max_bracket"] == e["min_bracket"]
         assert 3 <= len(e["prompts"]) <= 4 and e["unlock_after"] == f"b{e['min_bracket']}-picture"
         assert (STIMULI / e["image_url"].lstrip("/")).is_file()
-    assert get_exercise("b8-picture-advanced")["image_url"].endswith("b8-hospital-adv.svg")
+    assert require_exercise("b8-picture-advanced")["image_url"].endswith("b8-hospital-adv.svg")
 
 
 def test_advanced_picture_unlocks_after_the_bracket_picture():

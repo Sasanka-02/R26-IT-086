@@ -43,7 +43,7 @@ TONE_INSTRUCTIONS = {
 MAX_WORDS = {"playful": 40, "simple": 80}
 
 try:
-    import anthropic
+    import anthropic  # pyright: ignore[reportMissingImports]  (optional: pip install anthropic to enable)
 except ImportError:  # optional dependency
     anthropic = None
 
@@ -56,9 +56,12 @@ def is_enabled() -> bool:
 
 def _get_client():
     global _client
+    sdk = anthropic
+    if sdk is None:
+        raise RuntimeError("The anthropic package is not installed")
     if _client is None:
         # one retry: the patient is waiting in the chat, and the offline answer is always available
-        _client = anthropic.Anthropic(timeout=30.0, max_retries=1)
+        _client = sdk.Anthropic(timeout=30.0, max_retries=1)
     return _client
 
 
@@ -72,7 +75,8 @@ def system_prompt(focus: dict, context: dict, tone: str = "respectful") -> str:
 
 def ask(question: str, first_name: str, focus: dict, context: dict, tone: str = "respectful") -> str | None:
     """Returns the model's reply, or None if unavailable, refused or failed."""
-    if not is_enabled():
+    sdk = anthropic
+    if sdk is None or not is_enabled():
         return None
     system = system_prompt(focus, context, tone)
     content = (f"First name: {first_name}\nTheir practice data:\n{json.dumps(context, indent=1)}\n\n"
@@ -87,13 +91,13 @@ def ask(question: str, first_name: str, focus: dict, context: dict, tone: str = 
             system=system,
             messages=[{"role": "user", "content": content}],
         )
-    except anthropic.RateLimitError:
+    except sdk.RateLimitError:
         logger.warning("Assistant LLM rate limited; using offline answer")
         return None
-    except anthropic.APIStatusError as e:
+    except sdk.APIStatusError as e:
         logger.warning("Assistant LLM error %s; using offline answer", e.status_code)
         return None
-    except anthropic.APIConnectionError:
+    except sdk.APIConnectionError:
         logger.warning("Assistant LLM unreachable; using offline answer")
         return None
     except Exception:  # e.g. an SDK too old for these parameters - never break the chat

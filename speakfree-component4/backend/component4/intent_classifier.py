@@ -227,7 +227,7 @@ class NaiveBayesIntentClassifier:
             )
             for i in self.intents
         }
-        best = max(scores, key=scores.get)
+        best = max(scores, key=lambda i: scores[i])
         m = scores[best]
         norm = sum(math.exp(s - m) for s in scores.values())
         return best, 1 / norm

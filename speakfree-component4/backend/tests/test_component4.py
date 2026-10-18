@@ -25,8 +25,8 @@ def profile(**kw):
 
 
 def practise(p, exercise_id, n, **payload):
-    records = []
-    result = None
+    records: list[dict] = []
+    result: dict = {}
     for _ in range(n):
         rec = build_attempt(p, {"exercise_id": exercise_id, **payload})
         result = attempt_result(p, records, rec)

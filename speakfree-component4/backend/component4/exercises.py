@@ -254,6 +254,14 @@ def get_exercise(exercise_id: str, flagged_sounds: list[str] | None = None) -> d
     return None
 
 
+def require_exercise(exercise_id: str, flagged_sounds: list[str] | None = None) -> dict:
+    """get_exercise for ids that must exist (the plan's own ladders, tests) - a missing id is a bug, so fail loudly."""
+    ex = get_exercise(exercise_id, flagged_sounds)
+    if ex is None:
+        raise KeyError(f"Unknown exercise: {exercise_id}")
+    return ex
+
+
 def count_syllables(word: str) -> int:
     word = re.sub(r"[^a-z]", "", word.lower())
     if not word:

@@ -63,7 +63,7 @@ def attempt_result(profile: dict, records_before: list[dict], stored: dict, lear
     after = learner_bracket(profile, records_after, learner)
     skill_before, skill_after = skill_state(profile, records_before), skill_state(profile, records_after)
     message = level_change_message(before, after)
-    if message is None and skill_after:
+    if message is None and skill_before and skill_after:
         message = level_change_message(skill_before, skill_after)
     if message is None and stored.get("exercise_type") == "words":
         message = level_change_message(word_state(records_before), word_state(records_after))

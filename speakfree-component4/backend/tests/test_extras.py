@@ -6,7 +6,7 @@ import numpy as np
 from component4.adaptive import word_state
 from component4.dashboard import badges, best_streak, first_vs_latest, report_card, weekly
 from component4.evaluation import agreement, inter_rater, sus_band, sus_score, weighted_kappa
-from component4.exercises import exercises_for, get_exercise, suits_bracket
+from component4.exercises import exercises_for, require_exercise, suits_bracket
 from component4.privacy import calibrate_daf, fingerprint, release, true_stats
 from component4.scoring import score_with_breakdown
 from component4.therapist import alerts, goal_progress, homework_status
@@ -21,10 +21,11 @@ def rec(exercise_id="words-1", score=80, rating="ok", days_ago=0, **extra):
 
 
 def test_extra_exercises_respect_age_ranges():
-    words, roleplay = get_exercise("words-1"), get_exercise("adult-meeting")
+    words, roleplay = require_exercise("words-1"), require_exercise("adult-meeting")
     assert suits_bracket(words, 3) and not suits_bracket(words, 4)
     assert suits_bracket(roleplay, 7) and not suits_bracket(roleplay, 6)
-    assert suits_bracket(get_exercise("teen-roleplay-interview"), 6) and not suits_bracket(get_exercise("teen-roleplay-interview"), 5)
+    interview = require_exercise("teen-roleplay-interview")
+    assert suits_bracket(interview, 6) and not suits_bracket(interview, 5)
     ids = [e["id"] for e in exercises_for(None)]
     assert len(ids) == len(set(ids))
 

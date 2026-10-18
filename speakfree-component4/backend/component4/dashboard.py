@@ -136,12 +136,12 @@ def report_card(records: list[dict], level: dict, next_ex: dict | None, now: dat
         headline = "A good start - a few more exercises will show which way your scores are going."
 
     if this_week:
-        avg = _avg([r["score"] for r in this_week])
+        avg = _avg([r["score"] for r in this_week]) or 0  # this_week is non-empty here
         minutes = round(sum(r.get("duration_seconds") or 0 for r in this_week) / 60)
         week_text = (f"This week you did {len(this_week)} exercise{'s' if len(this_week) != 1 else ''} "
                      f"({minutes} min) with an average score of {avg}")
         if last_week:
-            before = _avg([r["score"] for r in last_week])
+            before = _avg([r["score"] for r in last_week]) or 0  # last_week is non-empty here
             change = "up from" if avg > before else ("down from" if avg < before else "the same as")
             week_text += f", {change} {before} last week"
         week_text += "."
