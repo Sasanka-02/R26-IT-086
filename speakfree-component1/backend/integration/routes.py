@@ -40,6 +40,8 @@ from database import (
     ScreeningSession,
     SessionLocal,
     TherapyAttempt,
+    TherapyGoal,
+    TherapyHomework,
     TherapyProfile,
     User,
     as_utc,
@@ -53,8 +55,8 @@ from .pipeline import run_session_pipeline
 log = logging.getLogger("speakfree.integration")
 router = APIRouter()
 
-PATIENT_PLAN_KEYS = ("learner", "focus", "dose", "level", "skill_level", "today", "week", "goals", "rescreen", "progress",
-                     "library")
+PATIENT_PLAN_KEYS = ("learner", "focus", "dose", "level", "skill_level", "word_level", "today", "week", "goals",
+                     "homework", "rescreen", "progress", "dashboard", "why", "library")
 
 
 # ============================================================================= helpers
@@ -65,7 +67,7 @@ def _iso(dt: datetime | None) -> str | None:
 def _records(db: Session, patient_id: str) -> list[dict]:
     rows = db.scalars(select(TherapyAttempt).where(TherapyAttempt.patient_id == patient_id)
                       .order_by(TherapyAttempt.completed_at, TherapyAttempt.id)).all()
-    return [json.loads(r.record_json) for r in rows]
+    return [{**json.loads(r.record_json), "attempt_id": r.id} for r in rows]
 
 
 def _active_profile(db: Session, patient_id: str) -> dict | None:
@@ -81,14 +83,23 @@ def _require_profile(db: Session, patient_id: str) -> dict:
     return profile
 
 
-def _learner(patient: Patient) -> dict:
+def _learner(db: Session, patient: Patient) -> dict:
     """What C4 needs to know about the person practising: age bracket + the therapist's settings."""
     age = patient_age(patient)
+    assigned = list(patient.assigned_exercises or [])
+    hw = {h.exercise_id: h for h in db.scalars(select(TherapyHomework).where(TherapyHomework.patient_id == patient.id))}
+    goals = db.scalars(select(TherapyGoal).where(TherapyGoal.patient_id == patient.id).order_by(TherapyGoal.id)).all()
     return {
         "age": age,
         "age_bracket": bracket_for_age(age),
         "bracket_override": patient.age_bracket_override,
-        "assigned": list(patient.assigned_exercises or []),
+        "assigned": assigned,
+        "homework": [{"exercise_id": ex_id,
+                      "assigned_at": _iso(hw[ex_id].assigned_at) if ex_id in hw else None,
+                      "due": hw[ex_id].due.isoformat() if ex_id in hw and hw[ex_id].due else None,
+                      "times": hw[ex_id].times if ex_id in hw else 1} for ex_id in assigned],
+        "goals": [{"id": g.id, "metric": g.metric, "target": g.target} for g in goals],
+        "daf_delay_ms": patient.daf_delay_ms,
     }
 
 
@@ -101,10 +112,10 @@ def _patient_summary(patient: Patient) -> dict:
             "assigned_exercises": list(patient.assigned_exercises or [])}
 
 
-def _plan(profile: dict, records: list[dict], patient: Patient) -> dict:
+def _plan(db: Session, profile: dict, records: list[dict], patient: Patient) -> dict:
     from component4 import build_plan
 
-    return build_plan(profile, records, learner=_learner(patient))
+    return build_plan(profile, records, learner=_learner(db, patient))
 
 
 def _patient_plan(plan: dict) -> dict:
@@ -216,7 +227,7 @@ def admin_models(_: User = Depends(require_admin)):
 
 
 @router.get("/api/v1/admin/patients/{patient_id}/therapy", tags=["admin: pipeline"])
-def admin_patient_therapy(patient_id: str, _: User = Depends(require_admin), db: Session = Depends(get_db)):
+def admin_patient_therapy(patient_id: str, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     patient = db.get(Patient, patient_id)
     if patient is None:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -226,6 +237,9 @@ def admin_patient_therapy(patient_id: str, _: User = Depends(require_admin), db:
     profile = json.loads(profiles[0].profile_json) if profiles else None
     chats = db.scalars(select(AssistantMessage).where(AssistantMessage.patient_id == patient_id)
                        .order_by(AssistantMessage.created_at.desc()).limit(50)).all()
+    from .therapist_routes import rated_records, therapist_panel
+
+    plan = _plan(db, profile, records, patient) if profile else None
     return {
         "patient": _patient_summary(patient),
         "profile": profile,
@@ -233,8 +247,9 @@ def admin_patient_therapy(patient_id: str, _: User = Depends(require_admin), db:
             {"session_id": p.session_id, "focus": p.focus, "severity_level": p.severity_level, "created_at": _iso(p.created_at)}
             for p in profiles
         ],
-        "plan": _plan(profile, records, patient) if profile else None,
-        "attempts": list(reversed(records)),
+        "plan": plan,
+        "attempts": list(reversed(rated_records(db, records, user))),
+        "therapist": therapist_panel(db, patient, records, plan),
         "assistant_log": [
             {"question": c.question, "reply": c.reply, "intent": c.intent, "confidence": c.confidence,
              "source": c.source, "created_at": _iso(c.created_at)} for c in chats
@@ -269,6 +284,14 @@ def therapist_settings(patient_id: str, body: TherapySettings, user: User = Depe
         if unknown:
             raise HTTPException(status_code=422, detail=f"Unknown exercise(s): {', '.join(unknown)}")
         patient.assigned_exercises = ids or None
+        # homework rows follow the assignment: new ones start now (1 attempt, no due date), removed ones go
+        existing = {h.exercise_id: h for h in db.scalars(select(TherapyHomework).where(TherapyHomework.patient_id == patient.id))}
+        for ex_id, row in existing.items():
+            if ex_id not in ids:
+                db.delete(row)
+        for ex_id in ids:
+            if ex_id not in existing:
+                db.add(TherapyHomework(patient_id=patient.id, exercise_id=ex_id, times=1, assigned_by_user_id=user.id))
     db.commit()
     return _patient_summary(patient)
 
@@ -280,7 +303,7 @@ def therapy_plan(patient_id: str, user: User = Depends(get_current_user), db: Se
     profile = _active_profile(db, patient.id)
     if profile is None:
         return {"has_profile": False}
-    return _patient_plan(_plan(profile, _records(db, patient.id), patient))
+    return _patient_plan(_plan(db, profile, _records(db, patient.id), patient))
 
 
 @router.post("/api/v1/therapy/{patient_id}/attempts", tags=["therapy"])
@@ -305,12 +328,18 @@ def therapy_attempt(patient_id: str, body: dict, user: User = Depends(get_curren
         stored = build_attempt(profile, payload.model_dump(), live)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Unknown exercise") from exc
-    db.add(TherapyAttempt(patient_id=patient.id, exercise_id=stored["exercise_id"], exercise_type=stored["exercise_type"],
-                          score=stored["score"], record_json=json.dumps(stored),
-                          completed_at=datetime.fromisoformat(stored["completed_at"])))
+    row = TherapyAttempt(patient_id=patient.id, exercise_id=stored["exercise_id"], exercise_type=stored["exercise_type"],
+                         score=stored["score"], record_json=json.dumps(stored),
+                         completed_at=datetime.fromisoformat(stored["completed_at"]))
+    db.add(row)
     db.commit()
-    result = attempt_result(profile, records, stored, _learner(patient))
-    return {**result, "plan": _patient_plan(_plan(profile, records + [stored], patient))}
+    stored = {**stored, "attempt_id": row.id}
+    plan_before = _plan(db, profile, records, patient)
+    result = attempt_result(profile, records, stored, _learner(db, patient))
+    plan = _plan(db, profile, records + [stored], patient)
+    before = {b["id"] for b in plan_before["dashboard"]["badges"] if b["earned"]}
+    new_badges = [b for b in plan["dashboard"]["badges"] if b["earned"] and b["id"] not in before]
+    return {**result, "new_badges": new_badges, "plan": _patient_plan(plan)}
 
 
 @router.get("/api/v1/therapy/{patient_id}/assistant", tags=["therapy"])
@@ -319,7 +348,7 @@ def therapy_assistant(patient_id: str, user: User = Depends(get_current_user), d
 
     patient = get_owned_patient(db, user, patient_id)
     profile = _require_profile(db, patient.id)
-    return build_briefing(patient.full_name, profile, _plan(profile, _records(db, patient.id), patient))
+    return build_briefing(patient.full_name, profile, _plan(db, profile, _records(db, patient.id), patient))
 
 
 @router.post("/api/v1/therapy/{patient_id}/assistant/chat", tags=["therapy"])
@@ -334,7 +363,7 @@ async def therapy_chat(patient_id: str, body: dict, user: User = Depends(get_cur
     except Exception as exc:
         raise HTTPException(status_code=422, detail="Message must be 1-500 characters") from exc
     records = _records(db, patient.id)
-    plan = _plan(profile, records, patient)
+    plan = _plan(db, profile, records, patient)
     reply = await run_in_threadpool(answer, req.message, patient.full_name, profile, plan, records)
     db.add(AssistantMessage(patient_id=patient.id, question=req.message[:500], reply=reply["reply"],
                             intent=reply.get("intent"), confidence=float(reply.get("confidence") or 0), source=reply["source"]))

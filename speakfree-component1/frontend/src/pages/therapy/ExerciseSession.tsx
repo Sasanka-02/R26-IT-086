@@ -8,26 +8,56 @@
  *                                               (same recording flow as picture – no fixed text)
  *   sustained_vowel                             hold "ahh" – longest steady voicing
  *   sound_drill                                 target-sound words / phrases / sentences + self-check
- *   daf                                         delayed auditory feedback (Web Audio delay node)
+ *   daf                                         delayed auditory feedback (Web Audio delay node), after a
+ *                                               5-trial calibration that finds and saves the best delay
+ *   words                                       picture-card word round (ages 6–11), grown-up marks each word
+ *   roleplay                                    real-life situation: the other person's lines + example answers
  *
+ * Live exercises offer a breathing warm-up first; the result shows why the score is what it is.
  * Only numbers leave the browser (voicing ratio, pauses, syllable count, rating) – never audio.
  * The backend scores the attempt, moves the level ladder and re-ranks the plan.
  * Ages 6–11 (playful theme): big buttons, a "🔊 Listen" model (speechSynthesis), stars and confetti.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CheckCircle2, Frown, Headphones, Loader2, Meh, MessagesSquare, Mic, PartyPopper, Smile, Square, Star, Wind } from "lucide-react";
+import {
+  ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff, Frown, Headphones, Lightbulb, Loader2, Meh, MessagesSquare, Mic, PartyPopper, RotateCcw, Smile,
+  Square, Star, Wind,
+} from "lucide-react";
 import { api } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import ListenButton from "../../components/ListenButton";
 import { COLORS, ErrorBox, ScoreRing, Spinner } from "../../components/ui";
+import BreathingWarmup from "../../components/therapy/BreathingWarmup";
+import DafCalibration, { DAF_PASSAGES } from "../../components/therapy/DafCalibration";
+import { NewBadges } from "../../components/therapy/Badges";
+import WordRound from "../../components/therapy/WordRound";
 import type { AttemptPayload, AttemptResult, Exercise, TherapyPlan, ToneHint } from "../../types/integration";
 import { themeFor } from "../../utils/age";
-import { TYPE_EMOJI, TYPE_LABEL } from "./TherapyPlan";
+import { TYPE_EMOJI, TYPE_LABEL } from "./labels";
 import { useLiveCoach } from "./useLiveCoach";
 
 type Phase = "ready" | "running" | "rate" | "saving" | "done";
-const LIVE_TYPES = ["reading", "pacing", "clear_speech", "loudness", "picture", "conversation", "sustained_vowel", "sound_drill"];
+const LIVE_TYPES = ["reading", "pacing", "clear_speech", "loudness", "picture", "conversation", "roleplay", "sustained_vowel", "sound_drill"];
+const WARMUP_TYPES = ["reading", "pacing", "clear_speech", "loudness", "picture", "conversation", "roleplay", "daf"];
+
+/** Example answers to peek at after trying in your own words (picture + role-play). */
+function Examples({ items }: { items?: string[] }) {
+  const [show, setShow] = useState(false);
+  if (!items?.length) return null;
+  return (
+    <aside className="rounded-xl border border-sun/40 bg-sun-soft p-4" aria-label="Example answers">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-bold text-ink"><Lightbulb size={16} className="text-warn" /> Example answers</p>
+        <button type="button" onClick={() => setShow((v) => !v)} className="chip border border-sun/50 bg-white text-warn">
+          {show ? <EyeOff size={12} /> : <Eye size={12} />}{show ? "Hide" : "Show"}
+        </button>
+      </div>
+      {show ? <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-ink">{items.map((s) => <li key={s}>{s}</li>)}</ol>
+        : <p className="mt-2 text-xs muted">Try your own words first. Peek if you get stuck.</p>}
+    </aside>
+  );
+}
 const TONE_STYLE: Record<ToneHint["tone"], { mark: string; chip: string; icon: string }> = {
   questioning: { mark: "decoration-brand", chip: "bg-brand-soft text-navy", icon: "❓" },
   excited: { mark: "decoration-sun", chip: "bg-sun-soft text-warn", icon: "❗" },
@@ -133,6 +163,9 @@ export default function ExerciseSession() {
   const [clear, setClear] = useState<Record<number, boolean>>({});
   const [delay, setDelay] = useState(150);
   const [result, setResult] = useState<AttemptResult | null>(null);
+  const [warmup, setWarmup] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
+  const [wordResult, setWordResult] = useState<{ got: number; total: number } | null>(null);
 
   useEffect(() => {
     if (!activePatient) return;
@@ -150,6 +183,14 @@ export default function ExerciseSession() {
   const live = !!ex && LIVE_TYPES.includes(ex.type);
   const theme = themeFor(plan?.learner.theme);
   const playful = plan?.learner.theme === "playful";
+  const dafPassage = useMemo(() => DAF_PASSAGES[Math.floor(Math.random() * DAF_PASSAGES.length)], []);
+
+  // DAF: use the saved calibration, or calibrate first
+  useEffect(() => {
+    if (ex?.type !== "daf") return;
+    if (ex.recommended_delay_ms) setDelay(ex.recommended_delay_ms);
+    setCalibrating(!ex.recommended_delay_ms);
+  }, [ex]);
 
   // timer + highlight
   useEffect(() => {
@@ -163,8 +204,14 @@ export default function ExerciseSession() {
     return () => window.clearInterval(t);
   }, [phase, ex, words.length]);
 
+  const finishWords = (got: number, total: number) => {
+    setWordResult({ got, total });
+    setElapsed((Date.now() - startedAt) / 1000);
+    setPhase("rate");
+  };
+
   const begin = useCallback(async () => {
-    setElapsed(0); setWordIndex(0); setClear({});
+    setElapsed(0); setWordIndex(0); setClear({}); setWordResult(null); setWarmup(false);
     if (live) await coach.start();
     setStartedAt(Date.now());
     setPhase("running");
@@ -192,6 +239,10 @@ export default function ExerciseSession() {
       body.items_total = ex.items.length;
       body.items_clear = Object.values(clear).filter(Boolean).length;
     }
+    if (ex.type === "words" && wordResult) {
+      body.items_total = wordResult.total;
+      body.items_clear = wordResult.got;
+    }
     try {
       setResult(await api.therapy.submit(activePatient.id, body));
       setPhase("done");
@@ -205,7 +256,7 @@ export default function ExerciseSession() {
   if (error && !plan) return <ErrorBox message={error} />;
   if (!plan) return <Spinner />;
   if (!ex) return <ErrorBox message="This exercise isn't part of your plan." />;
-  if (ex.locked) return <ErrorBox message="Finish the previous level to unlock this exercise." />;
+  if (ex.locked) return <ErrorBox message={ex.unlock_after ? "Do this level's picture description first to unlock this harder scene." : "Finish the previous level to unlock this exercise."} />;
 
   const next = result?.plan.today.find((e) => e.id !== ex.id);
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -264,8 +315,45 @@ export default function ExerciseSession() {
               <div className="space-y-2">
                 {theme.listen && <ListenButton text={(ex.prompts ?? []).join(" ")} big={playful} />}
                 <ul className="space-y-2">{(ex.prompts ?? []).map((p) => <li key={p} className={`rounded-xl bg-lav-50 p-3 ${playful ? "text-base" : "text-sm"}`}>{p}</li>)}</ul>
+                <Examples items={ex.examples} />
               </div>
             </div>
+          )}
+          {ex.type === "roleplay" && (
+            <div className="space-y-3">
+              <p className="rounded-2xl border border-lav-200 bg-lav-50 p-4 text-base text-ink"><b>Situation:</b> {ex.situation}</p>
+              <div className="grid gap-4 lg:grid-cols-5">
+                <div className="lg:col-span-3">
+                  <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink"><MessagesSquare size={16} className="text-lav-500" /> Answer each line out loud, one at a time</p>
+                  <ol className="space-y-2">
+                    {(ex.prompts ?? []).map((line, i) => {
+                      const [who, ...rest] = line.split(": ");
+                      return (
+                        <li key={line} className="flex gap-3">
+                          <span className="mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-navy text-xs font-bold text-white">{i + 1}</span>
+                          <div className="rounded-2xl rounded-tl-sm border border-line bg-white px-4 py-2.5 text-base text-ink">
+                            {rest.length > 0 && <span className="block text-xs font-bold text-lav-600">{who}</span>}
+                            {rest.length ? rest.join(": ") : line}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+                <div className="lg:col-span-2"><Examples items={ex.examples} /></div>
+              </div>
+              <p className="text-xs muted">Take a calm breath before each answer, start softly and pause between ideas – just like a real conversation.</p>
+            </div>
+          )}
+          {ex.type === "words" && ex.words && (
+            phase === "running" ? <WordRound cards={ex.words} onDone={finishWords} /> : (
+              <div className="flex flex-wrap justify-center gap-3 rounded-2xl bg-sun-soft p-5 text-4xl" aria-hidden>
+                {ex.words.map((w) => <span key={w.text} title={w.text}>{w.emoji}</span>)}
+              </div>
+            )
+          )}
+          {wordResult && phase !== "running" && (
+            <p className="rounded-xl bg-ok-soft p-3 text-center text-lg font-bold text-ink">{"⭐".repeat(wordResult.got)} {wordResult.got} of {wordResult.total} words said well!</p>
           )}
           {ex.type === "conversation" && (
             <div className="space-y-3">
@@ -304,12 +392,23 @@ export default function ExerciseSession() {
               </div>
             </div>
           )}
-          {ex.type === "daf" && (
+          {ex.type === "daf" && calibrating && phase === "ready" && (
+            <DafCalibration patientId={activePatient.id}
+              onCalibrated={(ms) => { setDelay(ms); window.setTimeout(() => setCalibrating(false), 1800); }}
+              onSkip={() => { setDelay(150); setCalibrating(false); }} />
+          )}
+          {ex.type === "daf" && !calibrating && (
             <>
               <DafControls running={phase === "running"} delay={delay} setDelay={setDelay} />
-              <p className="rounded-xl bg-canvas p-4 text-lg">The quick brown fox jumps over the lazy dog. I like to walk to the market on Saturday mornings.</p>
+              {phase === "ready" && (
+                <button type="button" className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline" onClick={() => setCalibrating(true)}>
+                  <RotateCcw size={13} /> {ex.recommended_delay_ms ? `Recalibrate (saved: ${ex.recommended_delay_ms} ms)` : "Calibrate my delay"}
+                </button>
+              )}
+              <div className="rounded-xl bg-canvas p-4"><p className="text-xs font-bold uppercase tracking-wide text-lav-600">{dafPassage.title}</p><p className="mt-1 text-lg">{dafPassage.text}</p></div>
             </>
           )}
+          {warmup && phase === "ready" && <BreathingWarmup playful={playful} onDone={() => setWarmup(false)} />}
 
           {phase === "running" && (ex.type === "loudness" || ex.type === "sustained_vowel") && <LoudnessMeter level={coach.level} />}
           {phase === "running" && coach.message && (
@@ -321,10 +420,15 @@ export default function ExerciseSession() {
 
         {/* controls */}
         <div className="mt-6">
-          {phase === "ready" && (
-            <button className={`btn-primary ${theme.button}`} onClick={() => void begin()}><Mic size={playful ? 22 : 18} /> {playful ? "Start! 🎤" : "Start"}</button>
+          {phase === "ready" && !(ex.type === "daf" && calibrating) && !warmup && (
+            <div className="flex flex-wrap items-center gap-3">
+              <button className={`btn-primary ${theme.button}`} onClick={() => void begin()}><Mic size={playful ? 22 : 18} /> {ex.type === "words" ? (playful ? "Start the cards! 🃏" : "Start the round") : playful ? "Start! 🎤" : "Start"}</button>
+              {WARMUP_TYPES.includes(ex.type) && (
+                <button className="btn-lav" onClick={() => setWarmup(true)}><Wind size={15} /> {playful ? "Balloon breathing first 🎈" : "Breathing warm-up first (36 s)"}</button>
+              )}
+            </div>
           )}
-          {phase === "running" && (
+          {phase === "running" && ex.type !== "words" && (
             <button className={`inline-flex items-center gap-2 rounded-xl bg-bad font-semibold text-white hover:brightness-110 ${theme.button}`} onClick={finish}><Square size={16} /> I'm done</button>
           )}
           {(phase === "rate" || phase === "saving") && (
@@ -354,6 +458,21 @@ export default function ExerciseSession() {
               <ul className="space-y-1.5 text-sm text-ink-soft">{result.feedback.map((f) => <li key={f}>• {f}</li>)}</ul>
             </div>
           </div>
+          {result.new_badges?.length > 0 && <div className="mt-4"><NewBadges badges={result.new_badges} /></div>}
+          {result.breakdown.length > 0 && (
+            <details className="mt-4 rounded-xl bg-canvas p-4 text-sm">
+              <summary className="cursor-pointer font-bold text-ink">Why this score?</summary>
+              <ul className="mt-2 space-y-1">
+                {result.breakdown.map((b) => (
+                  <li key={b.feature} className="flex justify-between gap-3">
+                    <span className="text-ink-soft">{b.label}</span>
+                    <span className={`font-mono font-semibold ${b.points >= 0 ? "text-ok" : "text-bad"}`}>{b.points >= 0 ? "+" : ""}{b.points}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs muted">The points add up to your score (0–100). They come from the numbers measured during the exercise and your rating.</p>
+            </details>
+          )}
           <div className="mt-5 flex flex-wrap gap-3">
             {next && <Link to={`/therapy/exercise/${next.id}`} className="btn-primary" onClick={() => { setPhase("ready"); setResult(null); }}>Next: {next.title} <ArrowRight size={15} /></Link>}
             <button className="btn-ghost" onClick={() => { setResult(null); setPhase("ready"); setElapsed(0); }}>Try again</button>

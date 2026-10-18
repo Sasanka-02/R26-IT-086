@@ -18,8 +18,12 @@ Adaptive therapy plan - the main Component 4 output.
 #   7. GOALS     measurable targets from C1/C2/C3 numbers and the patient's own attempts  #
 #   8. RE-SCREEN after 14 days, 12 attempts or a mastered ladder -> a new screening runs  #
 #                C1->C2->C3 again and re-anchors the plan (new profile, new prior)         #
+#   9. THERAPIST homework with due dates, extra measurable goals and a calibrated DAF     #
+#                delay come from the platform                          (therapist.py)     #
+#  10. DASHBOARD report card, badges, highlights, weekly table, "why this plan" in words  #
+#                (dashboard.py); ages 6-11 also climb the picture-card word ladder         #
 #                                                                                         #
-#  Today = therapist-assigned exercises (always first) + the 3 bracket tasks (bandit       #
+#  Today =therapist-assigned exercises (always first) + the 3 bracket tasks (bandit       #
 #  order) + extra practice, up to the severity dose. Every recomputation is deterministic #
 #  from (profile, attempts, learner), so the plan the patient sees and the explanation    #
 #  the admin sees always agree.                                                            #
@@ -29,13 +33,16 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from .adaptive import learner_bracket, level_state, personal_target_wpm
+from .adaptive import learner_bracket, level_state, personal_target_wpm, word_state
 from .bandit import bracket_position, rank_arms
 from .brackets import BRACKETS
 from .categories import DOSE_BY_SEVERITY, FOCI
+from .dashboard import build_dashboard, confidence_label, explain_plan
 from .exercises import LEVELS, exercises_for, get_exercise, suits_bracket
+from .extra_exercises import KIDS_MAX_BRACKET
 from .progress import parse, summary
 from .scoring import THRESHOLDS
+from .therapist import goal_progress, homework_status, homework_summary
 
 RESCREEN_DAYS = 14
 RESCREEN_ATTEMPTS = 12
@@ -104,39 +111,42 @@ def _goals(profile: dict, attempts: list[dict], level: dict, dose: dict, now: da
     goals = [{
         "id": "weekly_sessions", "text": f"Practise on {dose['sessions_per_week']} days this week",
         "current": days_practised, "target": dose["sessions_per_week"], "unit": "days",
-        "met": days_practised >= dose["sessions_per_week"],
+        "met": days_practised >= dose["sessions_per_week"], "direction": "at_least",
     }, {
         "id": "ladder", "text": f"Unlock the next level ({level['progress_text']})",
         "current": level["strong_in_a_row"], "target": level["needed_to_advance"], "unit": "strong in a row",
-        "met": level["mastered"],
+        "met": level["mastered"], "direction": "at_least",
     }]
     live = [r for r in attempts if r.get("speaking_ratio") is not None][-5:]
     c1 = profile.get("baseline") or {}
     if focus == "fluency":
         pauses = round(sum(r.get("long_pauses", 0) for r in live) / len(live), 1) if live else None
         goals.append({"id": "pauses", "text": "Keep long pauses to 1 or fewer per exercise (last 5)",
-                      "current": pauses, "target": 1, "unit": "pauses", "met": pauses is not None and pauses <= 1})
+                      "current": pauses, "target": 1, "unit": "pauses", "met": pauses is not None and pauses <= 1,
+                      "direction": "at_most"})
     elif focus == "motor_speech":
         best = max((r.get("max_phonation_sec") or 0 for r in attempts if r["exercise_type"] == "sustained_vowel"), default=None)
         goals.append({"id": "phonation", "text": "Hold a steady 'ahh' for 10 seconds",
-                      "current": best, "target": 10, "unit": "s", "met": bool(best and best >= 10)})
+                      "current": best, "target": 10, "unit": "s", "met": bool(best and best >= 10), "direction": "at_least"})
         quiet = round(sum(r.get("quiet_warnings", 0) for r in live) / len(live), 1) if live else None
         goals.append({"id": "volume", "text": "No more than 1 'too quiet' warning per exercise (last 5)",
-                      "current": quiet, "target": 1, "unit": "warnings", "met": quiet is not None and quiet <= 1})
+                      "current": quiet, "target": 1, "unit": "warnings", "met": quiet is not None and quiet <= 1,
+                      "direction": "at_most"})
     elif focus == "speech_sounds":
         drills = [r for r in attempts if r["exercise_type"] == "sound_drill" and r.get("items_total")][-3:]
         acc = round(100 * sum(r["items_clear"] or 0 for r in drills) / sum(r["items_total"] for r in drills)) if drills else None
         goals.append({"id": "sound_accuracy", "text": "Say 80% of drill items clearly (last 3 drills)",
-                      "current": acc, "target": 80, "unit": "%", "met": acc is not None and acc >= 80})
+                      "current": acc, "target": 80, "unit": "%", "met": acc is not None and acc >= 80,
+                      "direction": "at_least"})
     recent = [r["score"] for r in attempts[-5:]]
     avg = round(sum(recent) / len(recent)) if recent else None
     goals.append({"id": "quality", "text": f"Average score of {THRESHOLDS['strong']}+ over your last 5 exercises",
                   "current": avg, "target": THRESHOLDS["strong"], "unit": "points",
-                  "met": avg is not None and avg >= THRESHOLDS["strong"]})
+                  "met": avg is not None and avg >= THRESHOLDS["strong"], "direction": "at_least"})
     if c1.get("target_metric"):
         goals.append({"id": "screening", "text": c1["target_metric"]["text"], "current": c1["target_metric"]["current"],
                       "target": c1["target_metric"]["target"], "unit": "at next screening", "met": False,
-                      "screening_goal": True})
+                      "screening_goal": True, "direction": "at_least"})
     return goals
 
 
@@ -201,12 +211,23 @@ def build_plan(profile: dict, records: list[dict], now: datetime | None = None, 
     age_bracket = level["age_bracket"]
     skill = skill_state(profile, records)
     ladder = skill_ladder(profile)
+    words = word_state(records) if bracket <= KIDS_MAX_BRACKET else None
     dose = DOSE_BY_SEVERITY.get(int(profile.get("severity_level") or 1), DOSE_BY_SEVERITY[2])
 
-    # arms: the current bracket's 3 tasks + extra practice suited to the bracket (skill ladder: current rung only)
+    done_ids = {r["exercise_id"] for r in records}
+
+    def current_rung(e: dict) -> bool:
+        """Ladder families offer only the learner's current rung (skill ladder, word ladder); advanced
+        pictures only once the bracket's own picture task has been done."""
+        if e.get("unlock_after") and e["unlock_after"] not in done_ids:
+            return False
+        if e["type"] == ladder and e.get("level") not in (None, (skill or {}).get("level")):
+            return False
+        return not (e["type"] == "words" and e.get("word_level") and e["word_level"] != (words or {}).get("level"))
+
+    # arms: the current bracket's 3 tasks + extra practice suited to the bracket (ladders: current rung only)
     core = [e for e in exercises if e.get("bracket") == bracket]
-    extras = [e for e in exercises if suits_bracket(e, bracket)
-              and (e["type"] != ladder or e.get("level") in (None, (skill or {}).get("level")))]
+    extras = [e for e in exercises if suits_bracket(e, bracket) and current_rung(e)]
     ranked, context = rank_arms(core + extras, records, profile, bracket, _bracket_positions(records, profile, learner))
     by_id = {e["id"]: e for e in core + extras}
 
@@ -240,6 +261,11 @@ def build_plan(profile: dict, records: list[dict], now: datetime | None = None, 
             picks.append(dict(_decorate(ladder_ex, records), source="level",
                               reason=f"Your skill step for “{focus['patient_name']}”: {skill['label']}. {skill['progress_text']}"))
             used_ids.add(ladder_ex["id"])
+    if words and not words["mastered"] and len(picks) < n_extra and words["exercise_id"] not in used_ids:
+        word_ex = get_exercise(words["exercise_id"])
+        picks.append(dict(_decorate(word_ex, records), source="words",
+                          reason=f"Your word level: {words['label']}. {words['progress_text']}"))
+        used_ids.add(word_ex["id"])
     used_types = {e["type"] for e in today + picks}
     primary = profile["focus"]
     passes = [lambda r: primary in r["focus"] and r["type"] not in used_types,
@@ -265,10 +291,34 @@ def build_plan(profile: dict, records: list[dict], now: datetime | None = None, 
     pool = pool[:max(4, n_extra * 2)]
     fixed = [e for e in today if e["source"] in ("therapist", "bracket")]
 
-    library = [dict(_decorate(e, records),
-                    locked=bool(e["type"] == ladder and e.get("level") and skill and
-                                LEVELS.index(e["level"]) > skill["level_index"]))
+    def locked(e: dict) -> bool:
+        if e.get("unlock_after") and e["unlock_after"] not in done_ids:
+            return True
+        if e["type"] == ladder and e.get("level") and skill and LEVELS.index(e["level"]) > skill["level_index"]:
+            return True
+        return bool(e["type"] == "words" and e.get("word_level") and words and e["word_level"] > words["level"])
+
+    library = [dict(_decorate(e, records), locked=locked(e))
                for e in core + [e for e in exercises if suits_bracket(e, bracket)]]
+
+    # explanation: the bandit's prediction + confidence for each pick, and the context in words
+    rows = {r["id"]: r for r in ranked}
+    for item in today:
+        row = rows.get(item["id"])
+        item["predicted_score"] = row["predicted_score"] if row else None
+        item["confidence"] = confidence_label(row["exploration_bonus"]) if row and row["predicted_score"] is not None else None
+    daf_delay = learner.get("daf_delay_ms")
+    for item in today + library:
+        if item["type"] == "daf" and daf_delay:
+            item["recommended_delay_ms"] = daf_delay
+
+    goals = _goals(profile, attempts, level, dose, now) + goal_progress(learner.get("goals") or [], records, now)
+    titles = {e["id"]: e for e in exercises}
+    homework = homework_status(learner.get("homework") or [], records, now.date(), titles)
+    progress = summary(records, now)
+    plan_types = {e["type"] for e in today + library if not e.get("locked")}
+    dashboard = build_dashboard(records, level, skill, words, today, plan_types,
+                                BRACKETS[age_bracket]["theme"] == "playful", progress["streak_days"], now)
 
     return {
         "learner": {
@@ -284,11 +334,15 @@ def build_plan(profile: dict, records: list[dict], now: datetime | None = None, 
         "dose": dose,
         "level": level,
         "skill_level": skill,
+        "word_level": words,
         "today": today,
         "week": _weekly_schedule(fixed, pool, n_extra, dose, attempts, now),
-        "goals": _goals(profile, attempts, level, dose, now),
+        "goals": goals,
+        "homework": homework_summary(homework),
         "rescreen": _rescreen(profile, attempts, level["mastered"] or bool(skill and skill["mastered"]), now),
-        "progress": summary(records, now),
+        "progress": progress,
+        "dashboard": dashboard,
+        "why": explain_plan([float(v) for v in context], level, focus["patient_name"], len(assigned), records),
         "library": library,
         # ---- admin-only explanation of the adaptive engine ----
         "engine": {

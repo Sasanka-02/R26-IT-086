@@ -9,20 +9,30 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight, Award, Bot, CalendarDays, CheckCircle2, ClipboardList, Flame, Lock, PlayCircle, RotateCcw, Sparkles, Star, Target, TrendingUp, UserCheck,
+  ArrowRight, Award, Bot, CalendarDays, CheckCircle2, ClipboardList, Flame, HelpCircle, Lock, PlayCircle, RotateCcw, ShieldCheck, Sparkles, Star, Target,
+  TrendingUp, UserCheck,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { Bar, COLORS, ErrorBox, Spinner } from "../../components/ui";
 import { TrendLine } from "../../components/charts";
+import { HomeworkCard, TherapistNotesCard } from "../../components/therapy/TherapistCards";
+import UsabilitySurvey from "../../components/therapy/UsabilitySurvey";
 import { BRACKETS, themeFor } from "../../utils/age";
-import type { Exercise, PlanResponse, TherapyPlan as Plan } from "../../types/integration";
+import type { Exercise, Goal, PlanResponse, TherapyPlan as Plan } from "../../types/integration";
+import { TYPE_EMOJI, TYPE_LABEL } from "./labels";
+import { WordLadder } from "./ProgressDashboard";
 
-export const TYPE_LABEL: Record<string, string> = {
-  reading: "Reading", pacing: "Pacing", daf: "Delayed feedback", picture: "Picture talk", conversation: "Conversation",
-  clear_speech: "Clear speech", loudness: "Loud & clear", sustained_vowel: "Breath support", sound_drill: "Sound practice",
-};
-export const TYPE_EMOJI: Record<string, string> = { reading: "📖", picture: "🖼️", conversation: "💬" };
+export { TYPE_EMOJI, TYPE_LABEL };
+
+const CONFIDENCE_TEXT = { low: "still learning", medium: "fairly sure", high: "confident" } as const;
+
+/** Goal bar fill: "at most" goals are full while at or under target and shrink as they go over. */
+function goalFill(g: Goal) {
+  if (g.current === null) return 0;
+  if (g.direction === "at_most") return g.current <= g.target ? 100 : Math.max(10, 100 - (g.current - g.target) * 40);
+  return Math.min(100, (g.current / Math.max(g.target, 1e-9)) * 100);
+}
 const LEVELS = ["beginner", "intermediate", "advanced"];
 const LEVEL_NAME: Record<string, string> = { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced" };
 
@@ -31,18 +41,31 @@ function ExerciseCard({ ex, big = false, playful = false }: { ex: Exercise; big?
     <Link to={ex.locked ? "#" : `/therapy/exercise/${ex.id}`} aria-disabled={ex.locked}
       className={`group flex flex-col bg-white p-4 transition ${playful ? "rounded-3xl border-2" : "rounded-2xl border"} ${ex.locked ? "pointer-events-none border-dashed border-line opacity-60" : "border-line hover:border-brand hover:shadow-lift"}`}>
       {ex.image_url && big && <img src={ex.image_url} alt="" className="mb-3 h-28 w-full rounded-xl bg-canvas object-cover" />}
-      {big && !ex.image_url && ex.task_type && (
-        <div className="mb-3 grid h-28 place-items-center rounded-xl bg-lav-50 text-5xl" aria-hidden>{TYPE_EMOJI[ex.task_type]}</div>
+      {big && !ex.image_url && ex.words && (
+        <div className="mb-3 flex h-28 items-center justify-center gap-3 rounded-xl bg-sun-soft text-4xl" aria-hidden>{ex.words.slice(0, 4).map((w) => <span key={w.text}>{w.emoji}</span>)}</div>
+      )}
+      {big && !ex.image_url && !ex.words && (ex.task_type || TYPE_EMOJI[ex.type]) && (
+        <div className="mb-3 grid h-28 place-items-center rounded-xl bg-lav-50 text-5xl" aria-hidden>{TYPE_EMOJI[ex.task_type ?? ex.type]}</div>
       )}
       <div className="flex flex-wrap gap-1.5">
         {ex.source === "therapist" && <span className="chip bg-ok-soft px-2.5 py-0.5 text-ok"><UserCheck size={11} /> From your therapist</span>}
+        {ex.source === "words" && <span className="chip bg-sun-soft px-2.5 py-0.5 text-warn"><Star size={11} /> Your word level</span>}
         <span className="chip bg-lav-100 px-2.5 py-0.5 text-lav-600">{playful && ex.task_type ? `${TYPE_EMOJI[ex.task_type]} ` : ""}{TYPE_LABEL[ex.type] ?? ex.type}</span>
         {ex.bracket && <span className="chip bg-brand-soft px-2.5 py-0.5 text-navy">Level {ex.bracket}</span>}
         {ex.level && <span className="chip bg-brand-soft px-2.5 py-0.5 text-navy">{LEVEL_NAME[ex.level]}</span>}
         {ex.locked && <span className="chip bg-canvas px-2.5 py-0.5 text-ink-muted"><Lock size={11} /> Locked</span>}
       </div>
       <h3 className={`mt-2 font-bold text-ink ${playful ? "text-lg" : ""}`}>{ex.title}</h3>
-      <p className="mt-1 line-clamp-2 text-sm text-ink-soft">{ex.reason ?? ex.description}</p>
+      <p className="mt-1 line-clamp-2 text-sm text-ink-soft">
+        {ex.locked && ex.unlock_after ? "Do this level's picture description first to unlock this harder scene." : ex.reason ?? ex.description}
+      </p>
+      {big && ex.predicted_score !== undefined && (
+        <p className="mt-2 text-xs font-medium text-lav-600">
+          {ex.predicted_score !== null && ex.confidence
+            ? `Expected score ≈ ${ex.predicted_score} · ${CONFIDENCE_TEXT[ex.confidence]}`
+            : "New for you – the plan is learning what suits you"}
+        </p>
+      )}
       <div className="mt-auto flex items-center justify-between pt-3 text-xs muted">
         <span>{ex.times_practised ? `Practised ${ex.times_practised}× · last ${ex.last_score}` : "New"}</span>
         {!ex.locked && <span className="inline-flex items-center gap-1 font-semibold text-brand">Start <ArrowRight size={13} className="transition group-hover:translate-x-0.5" /></span>}
@@ -112,9 +135,9 @@ export default function TherapyPlan() {
   const { level, progress, learner } = plan;
   const theme = themeFor(learner.theme);
   const playful = learner.theme === "playful";
-  const core = plan.library.filter((e) => e.bracket);
+  const core = plan.library.filter((e) => e.bracket || e.unlock_after);
   const skill = plan.library.filter((e) => !e.bracket && e.type === plan.focus.ladder_type);
-  const extras = plan.library.filter((e) => !e.bracket && e.type !== plan.focus.ladder_type && !e.locked && e.focus.includes(plan.focus.key));
+  const extras = plan.library.filter((e) => !e.bracket && !e.unlock_after && e.type !== plan.focus.ladder_type && !e.locked && e.focus.includes(plan.focus.key));
   const firstName = activePatient.full_name.split(" ")[0];
 
   return (
@@ -153,6 +176,9 @@ export default function TherapyPlan() {
         </div>
       )}
 
+      <TherapistNotesCard patientId={activePatient.id} />
+      <HomeworkCard homework={plan.homework} />
+
       {/* ★ NOVELTY (Component 4): today's exercises – the age bracket's reading / picture / conversation tasks, ordered by the bandit, plus extra practice */}
       <Section title={playful ? "Today's fun practice" : "Today's practice"} icon={<PlayCircle size={18} className="text-navy" />}
         right={<span className="text-xs muted">{plan.today.length} exercises · about {plan.dose.minutes_per_session} minutes</span>}>
@@ -160,7 +186,13 @@ export default function TherapyPlan() {
           {plan.today.map((ex) => <ExerciseCard key={ex.id} ex={ex} big playful={playful} />)}
         </div>
         <p className="mt-3 flex items-center gap-1.5 text-xs muted"><Sparkles size={13} className="text-lav-500" /> Your plan learns from every exercise you finish and picks what helps you most.</p>
+        <details className="mt-4 rounded-xl border border-lav-200 bg-lav-50 px-4 py-3" open={playful ? undefined : true}>
+          <summary className="flex cursor-pointer items-center gap-1.5 text-sm font-bold text-ink"><HelpCircle size={15} className="text-lav-600" /> Why this plan for you?</summary>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink">{plan.why.map((line) => <li key={line}>{line}</li>)}</ul>
+        </details>
       </Section>
+
+      {plan.word_level && <WordLadder words={plan.word_level} />}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* level ladder */}
@@ -204,11 +236,12 @@ export default function TherapyPlan() {
         <Section title="Your goals" icon={<Target size={18} className="text-navy" />}>
           <ul className="space-y-3">
             {plan.goals.map((g) => {
-              const frac = g.current === null ? 0 : g.id === "pauses" || g.id === "volume" ? (g.current <= g.target ? 100 : Math.max(10, 100 - (g.current - g.target) * 40)) : Math.min(100, (g.current / g.target) * 100);
+              const frac = goalFill(g);
               return (
                 <li key={g.id}>
                   <div className="flex justify-between gap-2 text-sm">
-                    <span className={g.met ? "font-semibold text-ok" : "text-ink"}>{g.met && "✓ "}{g.text}</span>
+                    <span className={g.met ? "font-semibold text-ok" : "text-ink"}>{g.met && "✓ "}{g.text}
+                      {g.source === "therapist" && <span className="chip ml-1.5 bg-ok-soft px-2 py-0 text-[10px] text-ok"><UserCheck size={10} /> therapist</span>}</span>
                     <span className="shrink-0 text-xs muted">{g.current ?? "–"} / {g.target} {g.screening_goal ? "" : g.unit}</span>
                   </div>
                   <div className="mt-1"><Bar value={frac} color={g.met ? COLORS.ok : COLORS.lav} className="h-1.5" /></div>
@@ -260,6 +293,15 @@ export default function TherapyPlan() {
           {[...core, ...skill, ...extras].map((ex) => <ExerciseCard key={ex.id} ex={ex} playful={playful} />)}
         </div>
       </Section>
+
+      <UsabilitySurvey />
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs muted">
+        <span className="flex items-center gap-1.5"><ShieldCheck size={14} /> Your voice stays on this device during practice – only numbers are saved.</span>
+        <span className="flex gap-4">
+          <Link to="/progress" className="font-semibold text-brand hover:underline">My progress dashboard →</Link>
+          <Link to="/therapy/privacy" className="font-semibold text-brand hover:underline">Privacy & my data →</Link>
+        </span>
+      </div>
     </div>
   );
 }

@@ -208,3 +208,26 @@ def test_llm_prompt_carries_the_age_group():
 
     prompt = llm.system_prompt(FOCI["fluency"], {"age_group": "Ages 6–7"}, "playful")
     assert "Ages 6–7" in prompt and "emoji" in prompt and "40 words" in prompt
+
+
+# --------------------------------------------------------------------------- advanced picture description
+def test_one_advanced_picture_per_bracket_with_original_svg():
+    from component4.bracket_tasks import ADVANCED_PICTURE_EXERCISES
+
+    assert sorted(e["min_bracket"] for e in ADVANCED_PICTURE_EXERCISES) == list(range(1, 9))
+    assert len(BRACKET_EXERCISES) == 24  # the core 8 x 3 is unchanged
+    for e in ADVANCED_PICTURE_EXERCISES:
+        assert e["type"] == "picture" and e["level"] == "advanced" and e["max_bracket"] == e["min_bracket"]
+        assert 3 <= len(e["prompts"]) <= 4 and e["unlock_after"] == f"b{e['min_bracket']}-picture"
+        assert (STIMULI / e["image_url"].lstrip("/")).is_file()
+    assert get_exercise("b8-picture-advanced")["image_url"].endswith("b8-hospital-adv.svg")
+
+
+def test_advanced_picture_unlocks_after_the_bracket_picture():
+    p, learner = profile(level=2), {"age": 10, "age_bracket": 3}
+    lib = {e["id"]: e for e in build_plan(p, [], learner=learner)["library"]}
+    assert lib["b3-picture-advanced"]["locked"] and "b4-picture-advanced" not in lib
+    records, _ = attempts(p, learner, "b3-picture", 1, {"duration_seconds": 60, "speaking_ratio": 0.6, "self_rating": "ok"})
+    plan = build_plan(p, records, learner=learner)
+    assert not {e["id"]: e for e in plan["library"]}["b3-picture-advanced"]["locked"]
+    assert "b3-picture-advanced" in {a["id"] for a in plan["engine"]["arms"]}

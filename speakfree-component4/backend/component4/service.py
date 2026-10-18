@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .adaptive import attempt_feedback, learner_bracket, level_change_message
+from .adaptive import attempt_feedback, learner_bracket, level_change_message, word_state
 from .exercises import get_exercise, syllables_per_word
 from .plan import skill_state
 from .scoring import score_with_breakdown, verdict
@@ -35,6 +35,7 @@ def build_attempt(profile: dict, payload: dict, live_summary: dict | None = None
         "level": exercise.get("level"),
         "bracket": exercise.get("bracket"),
         "task_type": exercise.get("task_type"),
+        "word_level": exercise.get("word_level"),
         "difficulty": exercise.get("difficulty", 1),
         "duration_seconds": round(duration, 1),
         "speaking_ratio": round(float(speaking_ratio), 3) if speaking_ratio is not None else None,
@@ -56,7 +57,7 @@ def build_attempt(profile: dict, payload: dict, live_summary: dict | None = None
 
 
 def attempt_result(profile: dict, records_before: list[dict], stored: dict, learner: dict | None = None) -> dict:
-    """Score + feedback + the level change this attempt caused (age-bracket ladder, then skill ladder)."""
+    """Score + feedback + the level change this attempt caused (age-bracket ladder, then skill / word ladder)."""
     records_after = records_before + [stored]
     before = learner_bracket(profile, records_before, learner)
     after = learner_bracket(profile, records_after, learner)
@@ -64,6 +65,8 @@ def attempt_result(profile: dict, records_before: list[dict], stored: dict, lear
     message = level_change_message(before, after)
     if message is None and skill_after:
         message = level_change_message(skill_before, skill_after)
+    if message is None and stored.get("exercise_type") == "words":
+        message = level_change_message(word_state(records_before), word_state(records_after))
     return {
         "record": stored,
         "score": stored["score"],

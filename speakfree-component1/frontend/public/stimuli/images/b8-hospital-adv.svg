@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="t">
+  <title id="t">A busy hospital outpatient waiting area: a queue number display shows 47, a receptionist talks on the phone, an elderly man needs help with a form, a nurse calls a patient and a mother comforts a crying child</title>
+  <rect width="640" height="400" fill="#EAF4F4"/>
+  <rect y="320" width="640" height="80" fill="#CFDCDC"/>
+  <!-- signs -->
+  <rect x="30" y="30" width="200" height="40" fill="#0E9F8E"/><text x="46" y="57" font-family="sans-serif" font-size="18" fill="#FFF">OPD · Clinic 3</text>
+  <rect x="270" y="30" width="120" height="60" rx="6" fill="#1B2559"/><text x="282" y="52" font-family="sans-serif" font-size="12" fill="#9AD1FF">NOW SERVING</text>
+  <text x="304" y="82" font-family="monospace" font-size="28" fill="#FFD43B">047</text>
+  <rect x="430" y="30" width="180" height="40" fill="#FFF" stroke="#E8453C" stroke-width="3"/><text x="446" y="56" font-family="sans-serif" font-size="14" fill="#E8453C">Please wear a mask</text>
+  <!-- reception desk -->
+  <rect x="30" y="180" width="200" height="80" fill="#B7C9C9"/><rect x="30" y="170" width="200" height="12" fill="#8FA7A7"/>
+  <circle cx="110" cy="140" r="17" fill="#C68642"/><path d="M94 157 h32 v20 h-32z" fill="#FFF"/>
+  <rect x="124" y="128" width="8" height="22" rx="3" fill="#333"/>
+  <!-- elderly man with form -->
+  <circle cx="200" cy="230" r="16" fill="#8D5524"/><path d="M184 222 q16 -20 32 0" fill="#DDD"/>
+  <path d="M186 246 h28 l6 66 h-40z" fill="#8FA3B8"/><rect x="216" y="252" width="18" height="24" fill="#FFF" stroke="#999"/>
+  <line x1="182" y1="252" x2="168" y2="320" stroke="#5A3A1E" stroke-width="5"/>
+  <text x="236" y="248" font-family="sans-serif" font-size="18" fill="#1B2559">?</text>
+  <!-- nurse calling -->
+  <circle cx="380" cy="160" r="17" fill="#B9773E"/><rect x="368" y="138" width="24" height="8" fill="#FFF"/>
+  <path d="M364 177 h32 l8 80 h-48z" fill="#FFF" stroke="#0E9F8E" stroke-width="2"/>
+  <rect x="396" y="190" width="20" height="26" fill="#9AD1FF" stroke="#555"/>
+  <path d="M400 156 q16 -4 28 -14" stroke="#7A8299" stroke-width="2" fill="none"/>
+  <!-- chairs + patients -->
+  <g fill="#3A86FF"><rect x="440" y="270" width="40" height="10"/><rect x="490" y="270" width="40" height="10"/><rect x="540" y="270" width="40" height="10"/></g>
+  <circle cx="460" cy="236" r="15" fill="#C68642"/><path d="M446 251 h28 v20 h-28z" fill="#F4A259"/>
+  <!-- mother + crying child -->
+  <circle cx="560" cy="226" r="16" fill="#8D5524"/><path d="M544 242 h32 v30 h-32z" fill="#F72585"/>
+  <circle cx="520" cy="250" r="11" fill="#C68642"/><path d="M510 261 h20 v10 h-20z" fill="#FFB703"/>
+  <g fill="#9AD1FF"><ellipse cx="516" cy="254" rx="2" ry="4"/><ellipse cx="525" cy="255" rx="2" ry="4"/></g>
+  <!-- water dispenser -->
+  <rect x="600" y="220" width="26" height="100" fill="#FFF" stroke="#999"/><rect x="603" y="200" width="20" height="24" fill="#9AD1FF"/>
+</svg>

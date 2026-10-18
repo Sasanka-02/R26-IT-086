@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Bot, ClipboardList, Flame, HeartPulse, Image as ImageIcon, MessageSquareText, MessagesSquare, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  ArrowRight, Award, Bot, CalendarCheck, ClipboardList, Clock, Flame, HeartPulse, Image as ImageIcon, MessageSquareText, MessagesSquare, ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useAssessment } from "../context/AssessmentContext";
 import { ScoreRing } from "../components/ui";
+import { DailyActivityChart, KpiTile } from "../components/progressCharts";
+import BadgeShowcase from "../components/therapy/Badges";
+import { HomeworkCard, TherapistNotesCard } from "../components/therapy/TherapistCards";
 import { friendlyStatus } from "../utils/friendlyStatus";
 import type { SessionListItem } from "../types";
 import type { PlanResponse } from "../types/integration";
@@ -108,6 +114,42 @@ export default function DashboardHome() {
             <Link to="/therapy/assistant" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/40 px-4 py-3 text-sm font-semibold hover:bg-white/10"><Bot size={16} /> Assistant</Link>
           </div>
         </section>
+      )}
+
+      {/* Component 4: therapist notes + homework, then the practice summary */}
+      {activePatient && plan?.has_profile && (
+        <>
+          <TherapistNotesCard patientId={activePatient.id} />
+          <HomeworkCard homework={plan.homework} />
+          <div className="grid gap-5 lg:grid-cols-3">
+            <section className="card p-5 lg:col-span-2">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-bold">Practice summary</h2>
+                <span className={`chip ${plan.dashboard.report_card.status === "improving" ? "bg-ok-soft text-ok" : plan.dashboard.report_card.status === "needs_support" ? "bg-bad-soft text-bad" : "bg-sun-soft text-warn"}`}>
+                  {plan.dashboard.report_card.label}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <KpiTile icon={CalendarCheck} value={plan.progress.total_sessions} label="Exercises done" caption={`${plan.dashboard.weekly[0]?.sessions ?? 0} this week`} />
+                <KpiTile icon={Clock} value={`${plan.progress.total_minutes}m`} label="Practice time" caption={`${plan.dashboard.weekly[0]?.minutes ?? 0} min this week`} />
+                <KpiTile icon={Flame} value={plan.progress.streak_days} label="Day streak" caption={`${plan.dashboard.active_days} active days`} />
+                <KpiTile icon={Award} value={plan.progress.average_score ?? "–"} label="Average score" caption={plan.progress.best_score !== null ? `best ${plan.progress.best_score}` : undefined} />
+              </div>
+              <p className="mt-4 text-sm text-ink-soft">{plan.dashboard.report_card.headline}</p>
+            </section>
+            <section className="card p-5">
+              <h2 className="mb-4 font-bold">Daily activity · 14 days</h2>
+              <DailyActivityChart daily={plan.progress.daily} height={150} />
+            </section>
+          </div>
+          <section className="card p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-bold">Your badges</h2>
+              <Link to="/progress" className="text-sm font-semibold text-brand hover:underline">All progress →</Link>
+            </div>
+            <BadgeShowcase badges={plan.dashboard.badges} compact />
+          </section>
+        </>
       )}
 
       <div className="grid gap-5 md:grid-cols-3">

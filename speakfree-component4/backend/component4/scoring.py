@@ -12,14 +12,14 @@ Practice-quality score for one therapy attempt (0-100), fully explainable.
           rating,            self-rating: easy +1, okay 0, hard -1
           short_attempt,     1 if the attempt lasted < 15 s
           goal_gap ]         goal completion - 0.75  (sustained vowel: seconds held / target;
-                             sound drills: words marked clear / words practised)
+                             sound drills + word cards: items marked clear / items practised)
 
 The prior weights come from the original Component 4 viva guide (calibrated against therapist
 ratings there). `goal_gap` is new for the integrated platform: reaching 75 % of an exercise's
 goal is neutral, every 10 % above / below adds / removes 4 points.
 
-Fairness for spontaneous speech: picture and conversation tasks have no fixed text, so there is
-no "right" speed to compare against - their rate_deviation is always 0 (never a penalty).
+Fairness for spontaneous speech: picture, conversation and role-play tasks have no fixed text, so
+there is no "right" speed to compare against - their rate_deviation is always 0 (never a penalty).
 """
 from __future__ import annotations
 
@@ -52,14 +52,15 @@ WEIGHTS = {
 THRESHOLDS = {"strong": 75, "weak": 45}
 SHORT_ATTEMPT_SECONDS = 15
 RATING_VALUE = {"easy": 1.0, "ok": 0.0, "hard": -1.0}
-FREE_SPEECH_TYPES = ("picture", "conversation")  # no target text -> no speed target
+FREE_SPEECH_TYPES = ("picture", "conversation", "roleplay")  # no target text -> no speed target
+ITEM_GOAL_TYPES = ("sound_drill", "words")  # goal = items marked clear / items practised
 
 
 def goal_completion(attempt: dict) -> float | None:
     if attempt.get("exercise_type") == "sustained_vowel" and attempt.get("max_phonation_sec") is not None:
         target = float(attempt.get("target_seconds") or 10)
         return min(1.0, float(attempt["max_phonation_sec"]) / target)
-    if attempt.get("exercise_type") == "sound_drill" and attempt.get("items_total"):
+    if attempt.get("exercise_type") in ITEM_GOAL_TYPES and attempt.get("items_total"):
         return min(1.0, float(attempt.get("items_clear") or 0) / float(attempt["items_total"]))
     return None
 

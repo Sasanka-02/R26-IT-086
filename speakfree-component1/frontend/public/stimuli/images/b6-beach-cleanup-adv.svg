@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="t">
+  <title id="t">A community beach clean-up: volunteers collect plastic into sacks, a sea turtle is tangled in a fishing net, a banner reads Keep Our Coast Clean and a tourist drops a bottle</title>
+  <rect width="640" height="400" fill="#BFE3F5"/>
+  <circle cx="90" cy="70" r="34" fill="#FFD43B"/>
+  <rect y="150" width="640" height="90" fill="#3D8FC6"/>
+  <g stroke="#E6F4FB" stroke-width="3" fill="none"><path d="M0 230 q40 -14 80 0 t80 0 t80 0 t80 0 t80 0 t80 0 t80 0 t80 0"/></g>
+  <rect y="232" width="640" height="168" fill="#F2DDA4"/>
+  <!-- banner -->
+  <rect x="380" y="100" width="230" height="44" fill="#FFF" stroke="#0E9F8E" stroke-width="4"/>
+  <text x="394" y="128" font-family="sans-serif" font-size="17" fill="#0E9F8E">KEEP OUR COAST CLEAN</text>
+  <line x1="384" y1="144" x2="384" y2="240" stroke="#8B5A2B" stroke-width="5"/><line x1="606" y1="144" x2="606" y2="240" stroke="#8B5A2B" stroke-width="5"/>
+  <!-- rubbish -->
+  <g><rect x="140" y="300" width="10" height="24" fill="#2EC4B6" transform="rotate(30 145 312)"/><rect x="300" y="330" width="22" height="10" fill="#E8453C"/>
+     <ellipse cx="360" cy="370" rx="14" ry="6" fill="#FFF"/><rect x="560" y="340" width="10" height="24" fill="#3A86FF" transform="rotate(-40 565 352)"/></g>
+  <!-- turtle in net -->
+  <ellipse cx="220" cy="262" rx="34" ry="20" fill="#5C8D3A"/><circle cx="260" cy="256" r="11" fill="#7BAA52"/>
+  <g stroke="#666" stroke-width="1.5" fill="none"><path d="M180 246 l80 34 M190 282 l70 -36 M200 240 l20 46 M236 240 l-10 46"/></g>
+  <!-- volunteers -->
+  <circle cx="110" cy="250" r="16" fill="#8D5524"/><path d="M96 266 h28 l6 56 h-40z" fill="#FFB703"/>
+  <path d="M74 300 q-10 40 18 46 q28 -6 18 -46z" fill="#EEE" stroke="#999"/>
+  <circle cx="320" cy="260" r="16" fill="#C68642"/><path d="M306 276 h28 l6 56 h-40z" fill="#7C6CF0"/>
+  <line x1="330" y1="290" x2="352" y2="326" stroke="#C68642" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="460" cy="268" r="16" fill="#B9773E"/><path d="M446 284 h28 l6 56 h-40z" fill="#0E9F8E"/>
+  <!-- tourist dropping bottle -->
+  <circle cx="560" cy="262" r="16" fill="#F1C7A0"/><path d="M546 278 h28 l4 56 h-36z" fill="#F72585"/>
+  <rect x="582" y="300" width="8" height="18" fill="#9AD1FF" stroke="#555"/>
+  <path d="M586 322 v16" stroke="#555" stroke-dasharray="3 3"/>
+</svg>

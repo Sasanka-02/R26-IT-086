@@ -27,6 +27,8 @@ import TherapyMonitor from "./pages/admin/pipeline/TherapyMonitor";
 import AssistantPage from "./pages/therapy/AssistantPage";
 import ExerciseSession from "./pages/therapy/ExerciseSession";
 import TherapyPlan from "./pages/therapy/TherapyPlan";
+import PrivacyPage from "./pages/therapy/PrivacyPage";
+import EvidencePage from "./pages/admin/pipeline/EvidencePage";
 import AssessmentOverview from "./pages/assessment/AssessmentOverview";
 import AnalysePage from "./pages/assessment/AnalysePage";
 import { PicturePage, QuestionsPage, ScenarioPage } from "./pages/assessment/TaskPages";
@@ -91,11 +93,13 @@ export default function App() {
         <Route path="admin/pipeline" element={<AdminOnly><PipelineOverview /></AdminOnly>} />
         <Route path="admin/pipeline/:sessionId" element={<AdminOnly><PipelineSession /></AdminOnly>} />
         <Route path="admin/models" element={<AdminOnly><ModelsPage /></AdminOnly>} />
+        <Route path="admin/evidence" element={<AdminOnly><EvidencePage /></AdminOnly>} />
         <Route path="progress" element={<ProgressPage />} />
         <Route path="task-library" element={<TaskLibrary />} />
         <Route path="therapy-plan" element={<NotAdmin><TherapyPlan /></NotAdmin>} />
         <Route path="therapy/exercise/:exerciseId" element={<NotAdmin><ExerciseSession /></NotAdmin>} />
         <Route path="therapy/assistant" element={<NotAdmin><AssistantPage /></NotAdmin>} />
+        <Route path="therapy/privacy" element={<NotAdmin><PrivacyPage /></NotAdmin>} />
         <Route path="reports" element={<NotAdmin><ReportsPage /></NotAdmin>} />
         <Route path="resources" element={<ResourcesPage />} />
         <Route path="appointments" element={<NotAdmin><AppointmentsPage /></NotAdmin>} />

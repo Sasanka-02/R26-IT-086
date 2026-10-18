@@ -19,12 +19,15 @@ Exercise types and what the browser measures (never raw audio):
   sustained_vowel                  hold "ahh" - longest continuous voicing (max_phonation_sec)
   sound_drill                      target-sound words / phrases / sentences + self-check
   daf                              delayed auditory feedback (Web Audio delay node)
+  words                            picture-card word ladder, ages 6-11 (extra_exercises.py)
+  roleplay                         real-life situation answered out loud (extra_exercises.py)
 """
 from __future__ import annotations
 
 import re
 
-from .bracket_tasks import BRACKET_EXERCISES, bracket_exercises
+from .bracket_tasks import ADVANCED_PICTURE_EXERCISES, BRACKET_EXERCISES, bracket_exercises
+from .extra_exercises import EXTRA_EXERCISES
 
 LEVELS = ["beginner", "intermediate", "advanced"]
 
@@ -224,8 +227,8 @@ def sound_drills(flagged_sounds: list[str] | None) -> list[dict]:
 
 
 def exercises_for(flagged_sounds: list[str] | None) -> list[dict]:
-    """The full bank a patient can use: bracket tasks + static exercises + drills for their flagged sounds."""
-    return BRACKET_EXERCISES + EXERCISE_BANK + sound_drills(flagged_sounds)
+    """The full bank a patient can use: bracket tasks + static and extra exercises + drills for their flagged sounds."""
+    return BRACKET_EXERCISES + ADVANCED_PICTURE_EXERCISES + EXERCISE_BANK + EXTRA_EXERCISES + sound_drills(flagged_sounds)
 
 
 def exercises_for_bracket(bracket: int) -> list[dict]:
@@ -237,7 +240,7 @@ def suits_bracket(exercise: dict, bracket: int) -> bool:
     """Extra practice the bandit may add at this practice bracket (bracket tasks and legacy items excluded)."""
     if exercise.get("legacy") or exercise.get("bracket") is not None:
         return False
-    return exercise.get("min_bracket", 1) <= bracket
+    return exercise.get("min_bracket", 1) <= bracket <= exercise.get("max_bracket", 8)
 
 
 def get_exercise(exercise_id: str, flagged_sounds: list[str] | None = None) -> dict | None:

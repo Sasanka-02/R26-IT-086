@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" role="img" aria-labelledby="t">
+  <title id="t">A birthday party: a boy blows out candles on a cake while a girl holds a balloon and a dog waits for cake</title>
+  <rect width="640" height="400" fill="#FFF1D6"/>
+  <rect y="300" width="640" height="100" fill="#E9C99A"/>
+  <!-- bunting -->
+  <path d="M0 40 Q320 90 640 40" fill="none" stroke="#999" stroke-width="2"/>
+  <g><polygon points="60,48 90,52 72,82" fill="#E8453C"/><polygon points="150,60 180,63 162,94" fill="#3A86FF"/><polygon points="240,67 270,69 254,100" fill="#FFB703"/>
+     <polygon points="370,69 400,67 384,100" fill="#7C6CF0"/><polygon points="460,62 490,59 476,92" fill="#2EC4B6"/><polygon points="550,52 580,48 566,80" fill="#F72585"/></g>
+  <!-- table + cake -->
+  <rect x="200" y="250" width="240" height="14" rx="4" fill="#8B5A2B"/>
+  <rect x="215" y="264" width="12" height="70" fill="#8B5A2B"/><rect x="413" y="264" width="12" height="70" fill="#8B5A2B"/>
+  <rect x="260" y="200" width="120" height="50" rx="8" fill="#FFC8DD"/><rect x="260" y="200" width="120" height="14" rx="6" fill="#FFF"/>
+  <g fill="#3A86FF"><rect x="285" y="178" width="6" height="22"/><rect x="315" y="178" width="6" height="22"/><rect x="345" y="178" width="6" height="22"/></g>
+  <g fill="#FFB703"><ellipse cx="288" cy="172" rx="4" ry="7"/><ellipse cx="318" cy="172" rx="4" ry="7"/><ellipse cx="348" cy="172" rx="4" ry="7"/></g>
+  <!-- boy blowing -->
+  <circle cx="170" cy="200" r="24" fill="#B9773E"/><path d="M146 194 q24 -32 48 0 q-4 -26 -24 -28 q-20 2 -24 28z" fill="#2B1B0E"/>
+  <circle cx="186" cy="204" r="6" fill="none" stroke="#222" stroke-width="2.5"/>
+  <path d="M196 204 q20 -6 40 -14" stroke="#9AD1FF" stroke-width="3" stroke-dasharray="4 5" fill="none"/>
+  <path d="M148 226 h44 l10 70 h-64z" fill="#2EC4B6"/>
+  <polygon points="160,176 172,140 184,176" fill="#7C6CF0"/>
+  <!-- girl with balloon -->
+  <line x1="510" y1="110" x2="492" y2="230" stroke="#555" stroke-width="1.5"/>
+  <ellipse cx="510" cy="92" rx="26" ry="32" fill="#E8453C"/>
+  <circle cx="480" cy="218" r="22" fill="#8D5524"/><path d="M458 214 q22 -32 44 0 q0 -24 -22 -26 q-22 2 -22 26z" fill="#1B1B1B"/>
+  <circle cx="473" cy="219" r="2.5" fill="#222"/><circle cx="487" cy="219" r="2.5" fill="#222"/><path d="M472 229 q8 6 16 0" fill="none" stroke="#222" stroke-width="2"/>
+  <path d="M460 242 h40 l14 62 h-68z" fill="#FFB703"/>
+  <!-- dog -->
+  <ellipse cx="560" cy="330" rx="40" ry="20" fill="#C68B59"/><circle cx="600" cy="310" r="17" fill="#C68B59"/>
+  <ellipse cx="610" cy="300" rx="6" ry="11" fill="#8B5A2B"/><circle cx="604" cy="308" r="2.5" fill="#222"/>
+  <path d="M600 318 q6 8 12 2" fill="#F72585"/>
+  <g fill="#FFF"><rect x="532" y="345" width="8" height="16"/><rect x="578" y="345" width="8" height="16"/></g>
+  <!-- presents -->
+  <rect x="60" y="300" width="50" height="40" fill="#3A86FF"/><rect x="81" y="300" width="8" height="40" fill="#FFB703"/>
+  <rect x="115" y="314" width="36" height="26" fill="#F72585"/><rect x="129" y="314" width="8" height="26" fill="#FFF"/>
+</svg>

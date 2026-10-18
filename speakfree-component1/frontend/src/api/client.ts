@@ -1,6 +1,7 @@
 // Thin fetch wrapper around the Component 1 FastAPI backend.
 import type {
-  AdminTherapy, AttemptPayload, AttemptResult, Briefing, ChatReply, ModelsInfo, PipelineDetail, PipelineOverview, PlanResponse,
+  AdminTherapy, AttemptPayload, AttemptResult, Briefing, ChatReply, CohortReport, DafTrial, Evidence, ModelsInfo, PipelineDetail,
+  PipelineOverview, PlanResponse, PrivacyInfo, SurveyStatus, TherapyNote,
 } from "../types/integration";
 import type { AdminPatientProfile, AdminPatientRow, AdminTask, AnalysisSummary, AnalyzeResponse, Patient, Role, SessionListItem, SessionSummary, TaskSet, TokenResponse, User } from "../types";
 
@@ -173,6 +174,27 @@ export const api = {
     therapySettings: (patientId: string, body: TherapistSettings) =>
       request<AdminTherapy["patient"]>(`/api/v1/admin/patients/${encodeURIComponent(patientId)}/therapy-settings`,
         { method: "PATCH", body: JSON.stringify(body) }),
+    // therapist controls (Component 4)
+    addGoal: (patientId: string, metric: string, target: number) =>
+      request<unknown>(`/api/v1/admin/patients/${encodeURIComponent(patientId)}/goals`, { method: "POST", body: JSON.stringify({ metric, target }) }),
+    removeGoal: (patientId: string, goalId: number) =>
+      request<null>(`/api/v1/admin/patients/${encodeURIComponent(patientId)}/goals/${goalId}`, { method: "DELETE" }),
+    addNote: (patientId: string, text: string, shared: boolean) =>
+      request<TherapyNote>(`/api/v1/admin/patients/${encodeURIComponent(patientId)}/notes`, { method: "POST", body: JSON.stringify({ text, shared }) }),
+    setHomework: (patientId: string, exerciseId: string, body: { due: string | null; times: number }) =>
+      request<unknown>(`/api/v1/admin/patients/${encodeURIComponent(patientId)}/homework/${encodeURIComponent(exerciseId)}`,
+        { method: "PATCH", body: JSON.stringify(body) }),
+    rateAttempt: (attemptId: number, rating: number, note?: string) =>
+      request<unknown>(`/api/v1/admin/attempts/${attemptId}/rating`, { method: "PUT", body: JSON.stringify({ rating, note }) }),
+    reviewPlan: (patientId: string, verdict: string, note?: string) =>
+      request<unknown>(`/api/v1/admin/patients/${encodeURIComponent(patientId)}/plan-review`, { method: "POST", body: JSON.stringify({ verdict, note }) }),
+    evidence: () => request<Evidence>("/api/v1/admin/evidence"),
+    cohort: (epsilon: number) => request<CohortReport>(`/api/v1/admin/evidence/cohort?epsilon=${epsilon}`),
+  },
+  survey: {
+    status: () => request<SurveyStatus>("/api/v1/survey"),
+    submit: (answers: number[], comment?: string) =>
+      request<{ score: number; band: string }>("/api/v1/survey", { method: "POST", body: JSON.stringify({ answers, comment }) }),
   },
   // Component 4 – patient-safe therapy plan, exercises and AI assistant
   therapy: {
@@ -182,6 +204,14 @@ export const api = {
     briefing: (patientId: string) => request<Briefing>(`/api/v1/therapy/${encodeURIComponent(patientId)}/assistant`),
     chat: (patientId: string, message: string) =>
       request<ChatReply>(`/api/v1/therapy/${encodeURIComponent(patientId)}/assistant/chat`, { method: "POST", body: JSON.stringify({ message }) }),
+    notes: (patientId: string) => request<{ notes: TherapyNote[]; unread: number }>(`/api/v1/therapy/${encodeURIComponent(patientId)}/notes`),
+    readNotes: (patientId: string) =>
+      request<{ notes: TherapyNote[]; unread: number }>(`/api/v1/therapy/${encodeURIComponent(patientId)}/notes/read`, { method: "POST" }),
+    calibrateDaf: (patientId: string, trials: DafTrial[]) =>
+      request<{ recommended_delay_ms: number; trials_evaluated: number }>(`/api/v1/therapy/${encodeURIComponent(patientId)}/daf/calibrate`,
+        { method: "POST", body: JSON.stringify({ trials }) }),
+    privacy: (patientId: string) => request<PrivacyInfo>(`/api/v1/therapy/${encodeURIComponent(patientId)}/privacy`),
+    exportData: (patientId: string) => request<unknown>(`/api/v1/therapy/${encodeURIComponent(patientId)}/export`),
     liveUrl: (liveId: string, exerciseType: string) =>
       `${API_BASE.replace(/^http/, "ws")}/ws/therapy-live/${encodeURIComponent(liveId)}?token=${encodeURIComponent(tokenStore.get() ?? "")}&exercise_type=${encodeURIComponent(exerciseType)}`,
   },

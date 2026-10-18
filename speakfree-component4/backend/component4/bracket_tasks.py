@@ -279,6 +279,61 @@ def _build() -> list[dict]:
 
 BRACKET_EXERCISES: list[dict] = _build()
 
+# ------------------------------------------------------------------------------- advanced picture description
+# One harder scene per bracket: more people, more going on, more reasoning. It is extra practice for that
+# bracket only (min_bracket = max_bracket) and unlocks once the bracket's own picture task has been done.
+_ADVANCED_PICTURES: dict[int, dict] = {
+    1: {"title": "The Birthday Party", "image": "b1-birthday-adv.svg",
+        "description": "Lots of things are happening at this party. Tell me about each person and the dog.",
+        "prompts": ["What is the boy doing?", "What is the girl holding?", "What does the dog want?",
+                    "What do you think happens after the candles go out?"]},
+    2: {"title": "Oops! The Paint Spill", "image": "b2-classroom-spill-adv.svg",
+        "description": "Something went wrong in the art class. Explain what happened and how everyone is helping.",
+        "prompts": ["What happened to the paint?", "What is the girl running to do?",
+                    "Where is the cat going, and what is it leaving behind?", "How can the class clean up and stop it happening again?"]},
+    3: {"title": "The Flooded Road", "image": "b3-flooded-road-adv.svg",
+        "description": "Look for the causes and the effects in this rainy street scene.",
+        "prompts": ["Why has the road flooded?", "What problem does the tuk-tuk driver have, and who is helping?",
+                    "What is blocking the drain, and how did it get there?", "What could the neighbourhood do before the next big rain?"]},
+    4: {"title": "The Vesak Dansala", "image": "b4-vesak-dansala-adv.svg",
+        "description": "Describe this Vesak night scene in order, from the lanterns to the people in the queue.",
+        "prompts": ["What is a dansala, and what is being served here?", "What jobs are the volunteers and the child doing?",
+                    "Why do you think people give free food at Vesak?", "How would you organise the queue if it got very long?"]},
+    5: {"title": "The Science Fair", "image": "b5-science-fair-adv.svg",
+        "description": "Describe the science fair - the projects, the people and how each of them might be feeling.",
+        "prompts": ["What is the student explaining to the judges?", "Why might the student on the right look nervous?",
+                    "What has happened at the volcano project?", "Which project would you give first prize to, and why?"]},
+    6: {"title": "The Beach Clean-up", "image": "b6-beach-cleanup-adv.svg",
+        "description": "Describe the clean-up and explain what this scene says about people and the ocean.",
+        "prompts": ["What are the volunteers doing, and why?", "What has happened to the turtle?",
+                    "What is the tourist doing, and what does it show?", "What long-term changes would reduce plastic on beaches?"]},
+    7: {"title": "Rainfall and the Reservoir", "image": "b7-rainfall-graph-adv.svg",
+        "description": "Interpret the two measures on this chart and explain how they are connected.",
+        "prompts": ["Which months had the most and the least rain?", "How does the reservoir level change, and why is there a delay?",
+                    "What happens to the reservoir from July, and what might cause that?", "What would you advise a water board based on this chart?"]},
+    8: {"title": "The Hospital Waiting Area", "image": "b8-hospital-adv.svg",
+        "description": "Describe this busy outpatient clinic in an organised way, then say how it could run more smoothly.",
+        "prompts": ["What is happening at the reception desk and on the number display?", "Who needs help, and what kind of help?",
+                    "How might the mother and the child be feeling?", "What two changes would improve this waiting area?"]},
+}
+
+
+def _build_advanced() -> list[dict]:
+    out = []
+    for bracket, c in _ADVANCED_PICTURES.items():
+        out.append({
+            "id": f"b{bracket}-picture-advanced", "type": "picture", "level": "advanced",
+            "difficulty": min(3, _difficulty(bracket) + 1), "focus": list(ALL_FOCI),
+            "min_bracket": bracket, "max_bracket": bracket, "unlock_after": f"b{bracket}-picture",
+            "bracket_label": BRACKETS[bracket]["label"],
+            "title": f"Advanced Picture - {c['title']}", "description": c["description"],
+            "image_url": f"{IMAGE_DIR}/{c['image']}", "prompts": c["prompts"],
+        })
+    return out
+
+
+ADVANCED_PICTURE_EXERCISES: list[dict] = _build_advanced()
+
 
 def bracket_exercises(bracket: int) -> list[dict]:
     """The three core tasks (reading, picture, conversation) of one bracket."""

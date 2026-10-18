@@ -192,7 +192,11 @@ export interface PipelineDetail {
 }
 
 export type ExerciseType =
-  | "reading" | "pacing" | "daf" | "picture" | "conversation" | "clear_speech" | "loudness" | "sustained_vowel" | "sound_drill";
+  | "reading" | "pacing" | "daf" | "picture" | "conversation" | "clear_speech" | "loudness" | "sustained_vowel" | "sound_drill"
+  | "words" | "roleplay";
+
+/** One picture card in a word round (ages 6–11). */
+export interface WordCard { text: string; syllables: number; emoji: string; tip: string | null }
 export type BracketTaskType = "reading" | "picture" | "conversation";
 export type Tone = "playful" | "simple" | "friendly" | "respectful";
 
@@ -219,12 +223,65 @@ export interface Exercise {
   items?: string[];
   sound?: string;
   target_seconds?: number;
+  words?: WordCard[]; // word rounds
+  word_level?: number | null; // 1–10 on the word ladder, null for the bonus set
+  examples?: string[]; // role-play / picture: example answers to peek at
+  recommended_delay_ms?: number; // DAF: calibrated delay
+  unlock_after?: string; // advanced picture: unlocks once this exercise has been done
   times_practised: number;
   last_score: number | null;
   locked?: boolean;
-  source?: "therapist" | "bracket" | "level" | "bandit";
+  source?: "therapist" | "bracket" | "level" | "bandit" | "words";
   reason?: string;
   rank?: number;
+  predicted_score?: number | null; // today's plan: the adaptive planner's expectation
+  confidence?: "low" | "medium" | "high" | null;
+}
+
+export interface LevelEvent { at: string | null; from: string | null; to: string; direction: string; reason: string }
+
+/** The children's word ladder: Word Level 1–7, then Phrase Stage 1–3. */
+export interface WordLevelState {
+  level: number;
+  level_index: number;
+  label: string;
+  exercise_id: string;
+  in_phrase_stage: boolean;
+  word_levels: number;
+  ladder_size: number;
+  strong_in_a_row: number;
+  needed_to_advance: number;
+  mastered: boolean;
+  rounds: number;
+  progress_text: string;
+  history: LevelEvent[];
+}
+
+export interface HomeworkItem {
+  exercise_id: string;
+  title: string;
+  type: ExerciseType | null;
+  assigned_at: string | null;
+  due: string | null;
+  times: number;
+  done_count: number;
+  done: boolean;
+  overdue: boolean;
+  days_left: number | null;
+}
+
+export interface Badge { id: string; title: string; description: string; earned: boolean }
+
+export type ReportStatus = "improving" | "steady" | "needs_support";
+
+export interface Dashboard {
+  report_card: { status: ReportStatus; label: string; headline: string; this_week: string; next_step: string; reasons: string[] };
+  highlights: string[];
+  badges: Badge[];
+  weekly: { label: string; sessions: number; minutes: number; average_score: number | null }[];
+  active_days: number;
+  best_streak: number;
+  first_vs_latest: { exercise_id: string; title: string; attempts: number; first_score: number; latest_score: number; change: number }[];
 }
 
 /** The age-bracket ladder (Level 1–8) – the main practice level. */
@@ -285,6 +342,8 @@ export interface Goal {
   unit: string;
   met: boolean;
   screening_goal?: boolean;
+  direction?: "at_least" | "at_most";
+  source?: "therapist";
 }
 
 export interface AttemptRecord {
@@ -305,6 +364,11 @@ export interface AttemptRecord {
   score: number;
   score_breakdown: { feature: string; label: string; value: number; weight: number; points: number }[];
   completed_at: string;
+  attempt_id?: number;
+  word_level?: number | null;
+  // admin therapy monitor only
+  ratings?: { rating: number; note: string | null; rater: string; mine: boolean; created_at: string }[];
+  my_rating?: number | null;
 }
 
 export interface ProgressSummary {
@@ -328,13 +392,17 @@ export interface TherapyPlan {
   dose: { sessions_per_week: number; minutes_per_session: number; exercises_per_session: number };
   level: BracketState;
   skill_level: LevelState | null; // Beginner → Advanced inside clear speech / sound practice
+  word_level: WordLevelState | null; // ages 6–11
   today: Exercise[];
   week: { date: string; day: string; is_today: boolean; active: boolean; minutes: number; completed: number;
           exercises: { id: string; title: string; type: ExerciseType }[] }[];
   goals: Goal[];
+  homework: { items: HomeworkItem[]; open: number; overdue: number };
   rescreen: { recommended: boolean; reasons: string[]; days_since_screening: number; attempts_since_screening: number;
               due_in_days: number; attempts_until_due: number };
   progress: ProgressSummary;
+  dashboard: Dashboard;
+  why: string[]; // why this plan, in words
   library: Exercise[];
 }
 
@@ -369,7 +437,70 @@ export interface AdminTherapy {
   plan: (TherapyPlan & { engine: { context: { vector: number[]; labels: string[] }; arms: BanditArm[];
     focus_probabilities: Record<Focus, number>; attempts_since_screening: number } }) | null;
   attempts: AttemptRecord[];
+  therapist: TherapistPanel;
   assistant_log: { question: string; reply: string; intent: string | null; confidence: number; source: string; created_at: string }[];
+}
+
+export interface TherapyNote { id: number; text: string; by_name: string; at: string; unread: boolean; shared?: boolean }
+
+export interface TherapistPanel {
+  goal_metrics: { metric: string; label: string; direction: "at_least" | "at_most"; unit: string }[];
+  goals: (Goal & { goal_id: number; metric: string })[];
+  goal_rows: { id: number; metric: string; target: number; created_at: string }[];
+  notes: TherapyNote[];
+  homework: HomeworkItem[];
+  plan_reviews: { id: number; verdict: string; label: string; note: string | null; at: string }[];
+  plan_verdicts: Record<string, string>;
+  alerts: { kind: string; severity: "high" | "medium" | "info"; text: string; detail: string }[];
+  daf_delay_ms: number | null;
+}
+
+export interface DafTrial { delay_ms: number; stutter_events: number; speech_rate_wpm: number }
+
+export interface PrivacyInfo {
+  stored: { label: string; count: number; detail: string }[];
+  never_stored: string[];
+  cohort_privacy: { epsilon_spent: number; epsilon_threshold: number; epsilon_remaining: number; exhausted: boolean; explanation: string };
+  assistant_ai: string;
+}
+
+export interface SurveyStatus { items: string[]; benchmark: number; responded: boolean; score: number | null; band: string | null; invite: boolean }
+
+interface Stats { n: number; mean: number | null; sd: number | null; ci95: [number, number] | null; band: string | null }
+interface AgreementMetrics { mae: number; pearson_r: number | null; within_15: number; strong_agreement: number }
+
+export interface Evidence {
+  agreement: {
+    n: number; attempts: number; min_ratings: number;
+    current: AgreementMetrics | null;
+    calibrated: (AgreementMetrics & { method: string }) | null;
+    weights: { feature: string; label: string; current: number; calibrated: number }[] | null;
+    rating_counts?: Record<string, number>;
+  };
+  inter_rater: { pairs: number; weighted_kappa: number | null; exact_agreement: number | null };
+  scatter: { score: number; rating: number; type: string }[];
+  plan_reviews: {
+    n: number; counts: Record<string, number>; labels: Record<string, string>; appropriate_pct: number | null; acceptable_pct: number | null;
+    recent: { patient: string; verdict: string; note: string | null; at: string; plan: { level: string; today: { title: string; source: string }[] } }[];
+  };
+  usability: {
+    overall: Stats; by_role: Record<string, Stats>; benchmark: number;
+    items: { number: number; text: string; positive: boolean; mean_answer: number | null }[];
+    comments: { role: string; score: number; comment: string; submitted_at: string }[];
+  };
+  scoring: { weights: { feature: string; label: string; weight: number }[]; thresholds: { strong: number; weak: number } };
+  privacy: { epsilon_spent: number; epsilon_threshold: number; epsilon_remaining: number; exhausted: boolean; releases: { epsilon: number; at: string }[] };
+  federated: Record<string, string | boolean>;
+}
+
+export interface CohortReport {
+  epsilon: number; epsilon_per_group: number; patients: number; mean_score: number; note: string;
+  by_type: { key: string; label: string; value: number }[];
+  levels: { key: string; label: string; value: number }[];
+  score_bands: { key: string; label: string; value: number }[];
+  accuracy: { epsilon: number; count_error: number; mean_score_error: number }[];
+  budget: { epsilon_spent: number; epsilon_threshold: number; epsilon_remaining: number; exhausted: boolean };
+  epsilon_options: number[];
 }
 
 export interface AttemptPayload {
@@ -396,6 +527,7 @@ export interface AttemptResult {
   level: BracketState;
   skill_level: LevelState | null;
   level_message: string | null;
+  new_badges: Badge[];
   plan: TherapyPlan;
 }
 

@@ -12,6 +12,7 @@ import { Card, COLORS, ErrorBox, Spinner } from "../../../components/ui";
 import { FOCUS_LABEL, SeverityChip, StatTile, TrendLine } from "../../../components/charts";
 import type { AdminTherapy } from "../../../types/integration";
 import { BRACKETS } from "../../../utils/age";
+import { AlertsCard, HomeworkAndGoals, NotesAndReview, RateAttempt } from "./TherapistControls";
 
 const pctN = (v: number | null | undefined) => (v === null || v === undefined ? "–" : String(v));
 
@@ -23,10 +24,10 @@ export default function TherapyMonitor() {
   const load = useCallback(() => api.admin.therapy(patientId).then(setData).catch((e: Error) => setError(e.message)), [patientId]);
   useEffect(() => { void load(); }, [load]);
 
-  async function saveSettings(body: Parameters<typeof api.admin.therapySettings>[1]) {
+  async function run(fn: () => Promise<unknown>) {
     setSaving(true);
     try {
-      await api.admin.therapySettings(patientId, body);
+      await fn();
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -34,6 +35,7 @@ export default function TherapyMonitor() {
       setSaving(false);
     }
   }
+  const saveSettings = (body: Parameters<typeof api.admin.therapySettings>[1]) => run(() => api.admin.therapySettings(patientId, body));
 
   if (error) return <ErrorBox message={error} />;
   if (!data) return <Spinner />;
@@ -64,6 +66,14 @@ export default function TherapyMonitor() {
             <StatTile label="Practice level" value={`${plan.level.label}${plan.level.override ? " (therapist)" : ""}`} sub={`${plan.level.ages} tasks · ${plan.level.progress_text}`} />
             <StatTile label="Exercises done" value={plan.progress.total_sessions} sub={`avg ${pctN(plan.progress.average_score)} · streak ${plan.progress.streak_days} d`} />
           </section>
+
+          <AlertsCard alerts={data.therapist.alerts} />
+          <p className="rounded-xl bg-lav-50 px-4 py-3 text-sm text-ink-soft">
+            <b className="text-ink">Patient's report card:</b> {plan.dashboard.report_card.label} – {plan.dashboard.report_card.headline}
+            {plan.word_level && <> · <b className="text-ink">Word ladder:</b> {plan.word_level.label} ({plan.word_level.rounds} rounds)</>}
+          </p>
+          <HomeworkAndGoals patientId={patientId} data={data} run={run} />
+          <NotesAndReview patientId={patientId} data={data} run={run} />
 
           <section className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
             <Card title="Score trend" icon={<TrendingUp size={18} className="text-navy" />}>
@@ -182,9 +192,9 @@ export default function TherapyMonitor() {
           <Card title="Attempts">
             {data.attempts.length === 0 ? <p className="text-sm muted">No exercises completed yet.</p> : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="w-full min-w-[920px] text-sm">
                   <thead><tr className="border-b border-line text-left text-xs uppercase tracking-wide muted">
-                    <th className="py-2">When</th><th>Exercise</th><th>Score</th><th>Voice active</th><th>Long pauses</th><th>wpm / target</th><th>Goal</th><th>Felt</th>
+                    <th className="py-2">When</th><th>Exercise</th><th>Score</th><th>Voice active</th><th>Long pauses</th><th>wpm / target</th><th>Goal</th><th>Felt</th><th>Your rating (1–5)</th>
                   </tr></thead>
                   <tbody className="divide-y divide-line">
                     {data.attempts.map((a, i) => (
@@ -197,6 +207,7 @@ export default function TherapyMonitor() {
                         <td className="font-mono">{a.measured_wpm ? `${a.measured_wpm} / ${a.target_wpm}` : "–"}</td>
                         <td className="font-mono">{a.items_total ? `${a.items_clear}/${a.items_total}` : a.max_phonation_sec ? `${a.max_phonation_sec}s` : "–"}</td>
                         <td>{a.self_rating}</td>
+                        <td><RateAttempt attemptId={a.attempt_id} mine={a.my_rating} others={(a.ratings ?? []).filter((r) => !r.mine).length} run={run} /></td>
                       </tr>
                     ))}
                   </tbody>

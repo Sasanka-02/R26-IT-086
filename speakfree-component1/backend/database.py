@@ -122,6 +122,8 @@ class Patient(Base):
     age_bracket_override: Mapped[int | None] = mapped_column(Integer, nullable=True)   # set by a therapist
     assigned_exercises: Mapped[list | None] = mapped_column(JSON, nullable=True)       # set by a therapist
     guardian_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # under 18
+    notes_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # therapist notes seen
+    daf_delay_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)           # DAF calibration result
     is_self: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -298,6 +300,111 @@ class AssistantMessage(Base):
     intent: Mapped[str | None] = mapped_column(String(40), nullable=True)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     source: Mapped[str] = mapped_column(String(20))  # classifier | llm | fallback
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TherapyGoal(Base):
+    """A measurable goal a therapist sets on top of the plan's automatic goals (component4/therapist.py)."""
+
+    __tablename__ = "therapy_goals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id", ondelete="CASCADE"), index=True)
+    metric: Mapped[str] = mapped_column(String(40))  # average_score | sessions_per_week | long_pauses_per_exercise
+    target: Mapped[float] = mapped_column(Float)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TherapyNote(Base):
+    """A clinical note. Shared notes are shown to the patient (new until read); private ones only to therapists."""
+
+    __tablename__ = "therapy_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id", ondelete="CASCADE"), index=True)
+    author_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    author_name: Mapped[str] = mapped_column(String(120))
+    text: Mapped[str] = mapped_column(Text)
+    shared: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TherapyHomework(Base):
+    """Due date and number of attempts for an exercise in Patient.assigned_exercises."""
+
+    __tablename__ = "therapy_homework"
+    __table_args__ = (
+        Index("ix_therapy_homework_patient_exercise", "patient_id", "exercise_id", unique=True),
+        CheckConstraint("times BETWEEN 1 AND 20", name="times_range"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id", ondelete="CASCADE"), index=True)
+    exercise_id: Mapped[str] = mapped_column(String(60))
+    due: Mapped[date | None] = mapped_column(Date, nullable=True)
+    times: Mapped[int] = mapped_column(Integer, default=1)
+    assigned_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AttemptRating(Base):
+    """A therapist's 1-5 rating of one therapy attempt (expert validation of the practice score)."""
+
+    __tablename__ = "therapy_attempt_ratings"
+    __table_args__ = (
+        Index("ix_therapy_attempt_ratings_attempt_rater", "attempt_id", "rater_user_id", unique=True),
+        CheckConstraint("rating BETWEEN 1 AND 5", name="rating_range"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    attempt_id: Mapped[int] = mapped_column(ForeignKey("therapy_attempts.id", ondelete="CASCADE"), index=True)
+    rater_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    rating: Mapped[int] = mapped_column(Integer)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    rater: Mapped[User] = relationship()
+
+
+class PlanReview(Base):
+    """A therapist's verdict on a generated plan, stored with the plan exactly as it was seen."""
+
+    __tablename__ = "therapy_plan_reviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id", ondelete="CASCADE"), index=True)
+    reviewer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    verdict: Mapped[str] = mapped_column(String(20))  # appropriate | partly | not_appropriate
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    plan_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class UsabilitySurvey(Base):
+    """One System Usability Scale response per account (a repeat replaces the earlier one)."""
+
+    __tablename__ = "usability_surveys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    role: Mapped[str] = mapped_column(String(20))
+    answers: Mapped[list] = mapped_column(JSON)
+    score: Mapped[float] = mapped_column(Float)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PrivacyLedgerEntry(Base):
+    """ε spent by one differentially private release (cohort report), for the privacy budget."""
+
+    __tablename__ = "privacy_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ledger_id: Mapped[str] = mapped_column(String(40), index=True)   # e.g. "cohort-report"
+    release_key: Mapped[str] = mapped_column(String(80), unique=True)  # data fingerprint + ε (no double spending)
+    epsilon: Mapped[float] = mapped_column(Float)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

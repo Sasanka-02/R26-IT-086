@@ -52,6 +52,16 @@ attempt summary (incl. longest steady voicing for the breath task).
 ..\..\speakfree-component1\backend\venv\Scripts\python -m pytest -q    # from speakfree-component4\backend
 ```
 
-Not carried over from the stand-alone prototype (originals are in the project backup): its own
-login system and therapist portal (the platform admin replaces it), DAF calibration, usability
-survey, federated-learning design stub and differential-privacy ledger.
+## Carried over from the stand-alone prototype
+- **Patient dashboard** (`dashboard.py`): traffic-light report card, highlights, badges, weekly table,
+  first try vs latest, and "why this plan" in words with the planner's expected score + confidence.
+- **Extra practice** (`extra_exercises.py`): picture-card **word ladder** for ages 6–11 (7 word levels +
+  3 phrase stages, `adaptive.word_state`), **role-plays** for ages 12+, teen/adult picture scenes, kids' pacing.
+- **Therapist controls** (`therapist.py`, platform tables from migration 0005): homework with due dates,
+  measurable goals, shared / private clinical notes, alerts, 1–5 attempt ratings, plan reviews.
+- **Evidence** (`evaluation.py`): score-vs-therapist agreement (MAE, r) with a ridge recalibration
+  (leave-one-out, reported as a proposal), weighted kappa, plan-review stats, System Usability Scale.
+- **Privacy** (`privacy.py`): Laplace-mechanism cohort report with a persisted ε budget ledger,
+  DAF calibration (5 delay trials), federated learning as a documented design only.
+
+The prototype's own login system and therapist portal are replaced by the platform's accounts and admin.

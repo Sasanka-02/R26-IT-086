@@ -20,8 +20,12 @@ Adaptive ladders, replayed from the patient's own attempts.
   * 2 strong attempts on Advanced                    -> family mastered -> re-screen suggested
   * the target speed of every passage adapts +/-10 % per strong / difficult attempt
 
-Only attempts made after the current therapy profile was created are replayed - a new
-screening restarts both ladders at their starting rungs. Nothing extra is stored.
+3. WORD LADDER (word_state) - ages 6-11: picture-card rounds, Word Level 1-7 then Phrase Stage
+   1-3 (extra_exercises.py). Same 2-up / 2-down rule, replayed from every word round the child
+   has done (it is content progression, so a new screening does not reset it).
+
+Only attempts made after the current therapy profile was created are replayed by ladders 1 and 2 -
+a new screening restarts them at their starting rungs. Nothing extra is stored.
 """
 from __future__ import annotations
 
@@ -29,6 +33,7 @@ from datetime import datetime
 
 from .brackets import BRACKETS, MAX_BRACKET, MIN_BRACKET, ages_text, clamp_bracket, max_bracket_for, start_bracket
 from .exercises import LEVELS
+from .extra_exercises import WORD_LADDER_IDS, WORD_LADDER_SIZE, WORD_LEVEL_COUNT, word_stage_label
 from .scoring import FREE_SPEECH_TYPES, THRESHOLDS
 
 DEFAULT_AGE_BRACKET = MAX_BRACKET  # age unknown (old callers): no age cap, adult content
@@ -114,6 +119,78 @@ def level_state(records: list[dict], ladder_type: str, start_level: str = "begin
         "progress_text": progress_text,
         "strong_threshold": THRESHOLDS["strong"],
         "weak_threshold": THRESHOLDS["weak"],
+        "history": history,
+    }
+
+
+def word_state(records: list[dict]) -> dict:
+    """The children's word ladder: Word Level 1-7, then Phrase Stage 1-3 (bonus rounds never move it)."""
+    level = 1
+    strong = weak = rounds = 0
+    mastered = False
+    scores: list[int] = []
+    history: list[dict] = []
+
+    for r in records:
+        if r.get("exercise_type") != "words" or not r.get("word_level"):
+            continue
+        rounds += 1
+        if r["word_level"] != level:
+            continue
+        if is_strong(r):
+            scores = (scores if strong else []) + [r["score"]]
+            strong, weak = strong + 1, 0
+        elif is_weak(r):
+            scores = (scores if weak else []) + [r["score"]]
+            strong, weak = 0, weak + 1
+        else:
+            strong = weak = 0
+        if strong >= STREAK_TO_MOVE:
+            if level < WORD_LADDER_SIZE:
+                history.append({"at": r["completed_at"], "from": word_stage_label(level), "to": word_stage_label(level + 1),
+                                "direction": "up",
+                                "reason": f"{STREAK_TO_MOVE} good rounds in a row (scores {', '.join(map(str, scores))})"})
+                level, strong = level + 1, 0
+            else:
+                if not mastered:
+                    history.append({"at": r["completed_at"], "from": word_stage_label(level), "to": "Word ladder completed",
+                                    "direction": "mastered", "reason": "Every word level and phrase stage completed"})
+                mastered, strong = True, STREAK_TO_MOVE
+        elif weak >= STREAK_TO_MOVE and level > 1:
+            history.append({"at": r["completed_at"], "from": word_stage_label(level), "to": word_stage_label(level - 1),
+                            "direction": "down",
+                            "reason": f"{STREAK_TO_MOVE} hard rounds in a row (scores {', '.join(map(str, scores))})"})
+            level, weak = level - 1, 0
+
+    in_phrases = level > WORD_LEVEL_COUNT
+    position = (f"Phrase stage {level - WORD_LEVEL_COUNT} of {WORD_LADDER_SIZE - WORD_LEVEL_COUNT}" if in_phrases
+                else f"Word level {level} of {WORD_LEVEL_COUNT}")
+    if mastered:
+        progress_text = "Every word level and phrase stage completed - brilliant!"
+    else:
+        remaining = STREAK_TO_MOVE - strong
+        if level == WORD_LEVEL_COUNT:
+            target = "unlock the phrase stage"
+        elif level == WORD_LADDER_SIZE:
+            target = "finish the word ladder"
+        elif in_phrases:
+            target = f"unlock phrase stage {level - WORD_LEVEL_COUNT + 1}"
+        else:
+            target = f"unlock level {level + 1}"
+        progress_text = f"{position} - {remaining} more good round{'s' if remaining != 1 else ''} to {target}."
+    return {
+        "level": level,
+        "level_index": level - 1,
+        "label": word_stage_label(level),
+        "exercise_id": WORD_LADDER_IDS[level],
+        "in_phrase_stage": in_phrases,
+        "word_levels": WORD_LEVEL_COUNT,
+        "ladder_size": WORD_LADDER_SIZE,
+        "strong_in_a_row": strong,
+        "needed_to_advance": STREAK_TO_MOVE,
+        "mastered": mastered,
+        "rounds": rounds,
+        "progress_text": progress_text,
         "history": history,
     }
 
@@ -277,6 +354,10 @@ def attempt_feedback(attempt: dict) -> list[str]:
                      f"(goal {attempt.get('target_seconds', 10)} s).")
     if attempt.get("exercise_type") == "sound_drill" and attempt.get("items_total"):
         notes.append(f"You marked {attempt.get('items_clear') or 0} of {attempt['items_total']} items as clear.")
+    if attempt.get("exercise_type") == "words" and attempt.get("items_total"):
+        got = attempt.get("items_clear") or 0
+        notes.append(f"You said {got} of {attempt['items_total']} words well." +
+                     (" Super!" if got >= 0.75 * attempt["items_total"] else " Every round makes them easier."))
     if duration < 15:
         notes.append("That was quite short - try practising for a bit longer next time.")
     if attempt.get("self_rating") == "easy":

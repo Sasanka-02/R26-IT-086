@@ -15,6 +15,8 @@ TYPE_LABELS = {
     "loudness": "Loud & clear voice",
     "sustained_vowel": "Breath support",
     "sound_drill": "Sound practice",
+    "words": "Word practice",
+    "roleplay": "Role-plays & talks",
 }
 
 

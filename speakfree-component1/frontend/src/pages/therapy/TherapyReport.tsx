@@ -11,7 +11,7 @@ import { useAuth } from "../../context/AuthContext";
 import { ErrorBox, Logo, Spinner } from "../../components/ui";
 import { TrendLine } from "../../components/charts";
 import type { TherapyPlan } from "../../types/integration";
-import { TYPE_LABEL } from "./TherapyPlan";
+import { TYPE_LABEL } from "./labels";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -76,6 +76,36 @@ export default function TherapyReport() {
           <p className="mt-3 text-sm text-ink-soft"><b>Trend:</b> {p.trend.label} – {p.trend.detail}</p>
         </Section>
 
+        <Section title="Report card">
+          <p className="text-sm"><b>{plan.dashboard.report_card.label}.</b> {plan.dashboard.report_card.headline}</p>
+          <p className="mt-1 text-sm text-ink-soft">{plan.dashboard.report_card.this_week}</p>
+          {plan.dashboard.report_card.reasons.length > 0 && <ul className="mt-1 list-disc pl-5 text-sm text-ink-soft">{plan.dashboard.report_card.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+          {plan.word_level && <p className="mt-1 text-sm text-ink-soft"><b>Word ladder:</b> {plan.word_level.progress_text}</p>}
+        </Section>
+
+        <Section title="Week by week">
+          <table className="w-full border-collapse text-[13px]">
+            <thead><tr>{["Week", "Exercises", "Minutes", "Average"].map((h, i) => <th key={h} className={`border-b border-line bg-canvas px-2 py-1.5 font-semibold text-ink-soft ${i ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
+            <tbody>{plan.dashboard.weekly.map((w) => (
+              <tr key={w.label}><td className="border-b border-line px-2 py-1.5">{w.label}</td><td className="border-b border-line px-2 py-1.5 text-right font-mono">{w.sessions}</td>
+                <td className="border-b border-line px-2 py-1.5 text-right font-mono">{w.minutes}</td><td className="border-b border-line px-2 py-1.5 text-right font-mono">{w.average_score ?? "–"}</td></tr>
+            ))}</tbody>
+          </table>
+        </Section>
+
+        {plan.dashboard.first_vs_latest.length > 0 && (
+          <Section title="First try vs latest">
+            <table className="w-full border-collapse text-[13px]">
+              <thead><tr>{["Exercise", "Tries", "First", "Latest", "Change"].map((h, i) => <th key={h} className={`border-b border-line bg-canvas px-2 py-1.5 font-semibold text-ink-soft ${i ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
+              <tbody>{plan.dashboard.first_vs_latest.map((r) => (
+                <tr key={r.exercise_id}><td className="border-b border-line px-2 py-1.5">{r.title}</td><td className="border-b border-line px-2 py-1.5 text-right font-mono">{r.attempts}</td>
+                  <td className="border-b border-line px-2 py-1.5 text-right font-mono">{r.first_score}</td><td className="border-b border-line px-2 py-1.5 text-right font-mono">{r.latest_score}</td>
+                  <td className="border-b border-line px-2 py-1.5 text-right font-mono">{r.change > 0 ? "+" : ""}{r.change}</td></tr>
+              ))}</tbody>
+            </table>
+          </Section>
+        )}
+
         <Section title="Score history">
           <TrendLine points={p.history.map((h) => ({ x: String(h.attempt), y: h.score, label: h.title }))} threshold={{ value: plan.level.strong_threshold, label: "strong" }} />
         </Section>
@@ -104,6 +134,10 @@ export default function TherapyReport() {
           <ul className="space-y-1 text-sm">{plan.level.history.map((h, i) => (
             <li key={i}><b>{h.from ? `${h.from} → ` : ""}{h.to}</b> <span className="muted">– {h.reason}{h.at ? ` (${new Date(h.at).toLocaleDateString()})` : ""}</span></li>
           ))}</ul>
+        </Section>
+
+        <Section title="Badges earned">
+          <p className="text-sm">{plan.dashboard.badges.filter((b) => b.earned).map((b) => b.title).join(" · ") || "None yet"}</p>
         </Section>
 
         <footer className="border-t border-line pt-3 text-[11px] leading-relaxed muted">

@@ -118,7 +118,7 @@ def backdate_and_practise(db, pid: str, session_id: str, history: list[str], day
     profile["created_at"] = t0.isoformat(timespec="seconds")
     profile_row.created_at, profile_row.profile_json = t0, json.dumps(profile)
 
-    learner = _learner(db.get(Patient, pid))
+    learner = _learner(db, db.get(Patient, pid))
     records: list[dict] = []
     for i, kind in enumerate(history):
         bracket = learner_bracket(profile, records, learner)["bracket"]

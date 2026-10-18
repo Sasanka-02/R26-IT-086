@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from integration.pipeline import run_session_pipeline
 from integration.routes import router as integration_router
+from integration.therapist_routes import router as therapist_router
 from account_routes import router as account_router
 from age_brackets import ADULT_AGE, age_bracket_for, age_from_dob, bracket_for_age, bracket_info, patient_age, screening_bracket
 from audio_preprocessing import AudioDecodeError, decode_audio, preprocess, waveform_peaks
@@ -123,6 +124,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 # Components 2–4: admin pipeline dashboards, patient therapy plan, AI assistant, live coaching
 app.include_router(integration_router)
+app.include_router(therapist_router)
 # Account settings + appointment requests
 app.include_router(account_router)
 
