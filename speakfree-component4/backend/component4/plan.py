@@ -40,6 +40,7 @@ from .categories import DOSE_BY_SEVERITY, FOCI
 from .dashboard import build_dashboard, confidence_label, explain_plan
 from .exercises import LEVELS, exercises_for, get_exercise, suits_bracket
 from .extra_exercises import KIDS_MAX_BRACKET
+from .help import help_for
 from .progress import parse, summary
 from .scoring import THRESHOLDS
 from .therapist import goal_progress, homework_status, homework_summary
@@ -100,6 +101,7 @@ def _decorate(ex: dict, records: list[dict]) -> dict:
     attempts = [r for r in records if r["exercise_id"] == ex["id"]]
     out["times_practised"] = len(attempts)
     out["last_score"] = attempts[-1]["score"] if attempts else None
+    out["help"] = help_for(ex)
     return out
 
 

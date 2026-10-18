@@ -14,14 +14,15 @@
  *   roleplay                                    real-life situation: the other person's lines + example answers
  *
  * Live exercises offer a breathing warm-up first; the result shows why the score is what it is.
- * Only numbers leave the browser (voicing ratio, pauses, syllable count, rating) – never audio.
+ * Every attempt is recorded and kept in this browser (Need help / My recordings tabs); only numbers leave the
+ * browser (voicing ratio, pauses, syllable count, rating) – never audio.
  * The backend scores the attempt, moves the level ladder and re-ranks the plan.
  * Ages 6–11 (playful theme): big buttons, a "🔊 Listen" model (speechSynthesis), stars and confetti.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff, Frown, Headphones, Lightbulb, Loader2, Meh, MessagesSquare, Mic, PartyPopper, RotateCcw, Smile,
+  ArrowLeft, ArrowRight, CheckCircle2, Frown, Headphones, LifeBuoy, Lightbulb, Loader2, Meh, MessagesSquare, Mic, PartyPopper, RotateCcw, Smile,
   Square, Star, Wind,
 } from "lucide-react";
 import { api } from "../../api/client";
@@ -32,6 +33,10 @@ import BreathingWarmup from "../../components/therapy/BreathingWarmup";
 import DafCalibration, { DAF_PASSAGES } from "../../components/therapy/DafCalibration";
 import { NewBadges } from "../../components/therapy/Badges";
 import WordRound from "../../components/therapy/WordRound";
+import HelpPanel from "../../components/therapy/HelpPanel";
+import RecordingList from "../../components/therapy/RecordingList";
+import { practiceRecordings, type PracticeRecording } from "../../utils/practiceRecordings";
+import { usePracticeRecorder } from "./usePracticeRecorder";
 import type { AttemptPayload, AttemptResult, Exercise, TherapyPlan, ToneHint } from "../../types/integration";
 import { themeFor } from "../../utils/age";
 import { TYPE_EMOJI, TYPE_LABEL } from "./labels";
@@ -41,23 +46,6 @@ type Phase = "ready" | "running" | "rate" | "saving" | "done";
 const LIVE_TYPES = ["reading", "pacing", "clear_speech", "loudness", "picture", "conversation", "roleplay", "sustained_vowel", "sound_drill"];
 const WARMUP_TYPES = ["reading", "pacing", "clear_speech", "loudness", "picture", "conversation", "roleplay", "daf"];
 
-/** Example answers to peek at after trying in your own words (picture + role-play). */
-function Examples({ items }: { items?: string[] }) {
-  const [show, setShow] = useState(false);
-  if (!items?.length) return null;
-  return (
-    <aside className="rounded-xl border border-sun/40 bg-sun-soft p-4" aria-label="Example answers">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-bold text-ink"><Lightbulb size={16} className="text-warn" /> Example answers</p>
-        <button type="button" onClick={() => setShow((v) => !v)} className="chip border border-sun/50 bg-white text-warn">
-          {show ? <EyeOff size={12} /> : <Eye size={12} />}{show ? "Hide" : "Show"}
-        </button>
-      </div>
-      {show ? <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-ink">{items.map((s) => <li key={s}>{s}</li>)}</ol>
-        : <p className="mt-2 text-xs muted">Try your own words first. Peek if you get stuck.</p>}
-    </aside>
-  );
-}
 const TONE_STYLE: Record<ToneHint["tone"], { mark: string; chip: string; icon: string }> = {
   questioning: { mark: "decoration-brand", chip: "bg-brand-soft text-navy", icon: "❓" },
   excited: { mark: "decoration-sun", chip: "bg-sun-soft text-warn", icon: "❗" },
@@ -166,6 +154,22 @@ export default function ExerciseSession() {
   const [warmup, setWarmup] = useState(false);
   const [calibrating, setCalibrating] = useState(false);
   const [wordResult, setWordResult] = useState<{ got: number; total: number } | null>(null);
+  const [tab, setTab] = useState<"exercise" | "help" | "recordings">("exercise");
+  const [take, setTake] = useState<{ blob: Blob; url: string } | null>(null); // this attempt's recording
+  const [recError, setRecError] = useState(false);
+  const [recordings, setRecordings] = useState<PracticeRecording[]>([]);
+  const recorder = usePracticeRecorder();
+
+  const loadRecordings = useCallback(() => {
+    if (activePatient) void practiceRecordings.list(activePatient.id, exerciseId).then(setRecordings);
+  }, [activePatient, exerciseId]);
+  useEffect(() => { loadRecordings(); }, [loadRecordings]);
+  useEffect(() => () => { if (take) URL.revokeObjectURL(take.url); }, [take]);
+
+  async function keepTake() {
+    const blob = await recorder.stop();
+    if (blob) setTake({ blob, url: URL.createObjectURL(blob) });
+  }
 
   useEffect(() => {
     if (!activePatient) return;
@@ -208,19 +212,23 @@ export default function ExerciseSession() {
     setWordResult({ got, total });
     setElapsed((Date.now() - startedAt) / 1000);
     setPhase("rate");
+    void keepTake();
   };
 
   const begin = useCallback(async () => {
-    setElapsed(0); setWordIndex(0); setClear({}); setWordResult(null); setWarmup(false);
+    setElapsed(0); setWordIndex(0); setClear({}); setWordResult(null); setWarmup(false); setTab("exercise");
+    setTake((t) => { if (t) URL.revokeObjectURL(t.url); return null; });
+    setRecError(!(await recorder.start()));
     if (live) await coach.start();
     setStartedAt(Date.now());
     setPhase("running");
-  }, [live, coach]);
+  }, [live, coach, recorder]);
 
   const finish = () => {
     coach.stop();
     setElapsed((Date.now() - startedAt) / 1000);
     setPhase("rate");
+    void keepTake();
   };
 
   async function save(rating: "easy" | "ok" | "hard") {
@@ -244,7 +252,15 @@ export default function ExerciseSession() {
       body.items_clear = wordResult.got;
     }
     try {
-      setResult(await api.therapy.submit(activePatient.id, body));
+      const res = await api.therapy.submit(activePatient.id, body);
+      if (take) {
+        await practiceRecordings.save({
+          id: crypto.randomUUID(), patientId: activePatient.id, exerciseId: ex.id, exerciseTitle: ex.title, exerciseType: ex.type,
+          createdAt: new Date().toISOString(), durationSec: body.duration_seconds, score: res.score, blob: take.blob,
+        });
+        loadRecordings();
+      }
+      setResult(res);
       setPhase("done");
     } catch (e) {
       setError((e as Error).message);
@@ -280,6 +296,26 @@ export default function ExerciseSession() {
           <div className="rounded-2xl bg-canvas px-4 py-2 text-center"><div className="font-mono text-2xl font-bold">{fmt(elapsed)}</div><div className="text-[11px] muted">time</div></div>
         </div>
 
+        <div className="mt-5 flex flex-wrap gap-1 rounded-xl bg-canvas p-1" role="tablist" aria-label="Exercise sections">
+          {([["exercise", "Exercise", <Mic key="m" size={15} />], ["help", "Need help?", <LifeBuoy key="h" size={15} />],
+            ["recordings", `My recordings (${recordings.length})`, <Headphones key="r" size={15} />]] as const).map(([k, label, icon]) => (
+            <button key={k} role="tab" aria-selected={tab === k} disabled={phase === "running" && k !== "exercise"} onClick={() => setTab(k)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition disabled:opacity-40 ${tab === k ? "bg-white text-navy shadow-sm" : "text-ink-soft hover:text-ink"}`}>
+              {icon}{label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "help" && <div className="mt-5"><HelpPanel ex={ex} techniques={plan.focus.techniques} playful={playful} /></div>}
+        {tab === "recordings" && (
+          <div className="mt-5">
+            <p className="mb-3 text-sm text-ink-soft">Every attempt is recorded so you can hear your progress. Recordings stay on this device only. <Link to="/therapy/recordings" className="font-semibold text-brand hover:underline">All my recordings →</Link></p>
+            <RecordingList items={recordings} showTitle={false} onDelete={(id) => void practiceRecordings.remove(id).then(loadRecordings)}
+              empty="No recordings of this exercise yet – press Start and your voice is saved here." />
+          </div>
+        )}
+
+        <div hidden={tab !== "exercise"}>
         <div className="mt-5 space-y-4">
           {/* content by type */}
           {words.length > 0 && (
@@ -315,7 +351,7 @@ export default function ExerciseSession() {
               <div className="space-y-2">
                 {theme.listen && <ListenButton text={(ex.prompts ?? []).join(" ")} big={playful} />}
                 <ul className="space-y-2">{(ex.prompts ?? []).map((p) => <li key={p} className={`rounded-xl bg-lav-50 p-3 ${playful ? "text-base" : "text-sm"}`}>{p}</li>)}</ul>
-                <Examples items={ex.examples} />
+                <button type="button" className="btn-lav" onClick={() => setTab("help")}><Lightbulb size={15} /> Stuck? See example answers</button>
               </div>
             </div>
           )}
@@ -340,7 +376,7 @@ export default function ExerciseSession() {
                     })}
                   </ol>
                 </div>
-                <div className="lg:col-span-2"><Examples items={ex.examples} /></div>
+                <div className="lg:col-span-2"><button type="button" className="btn-lav" onClick={() => setTab("help")}><Lightbulb size={15} /> Stuck? See example answers</button></div>
               </div>
               <p className="text-xs muted">Take a calm breath before each answer, start softly and pause between ideas – just like a real conversation.</p>
             </div>
@@ -433,6 +469,13 @@ export default function ExerciseSession() {
           )}
           {(phase === "rate" || phase === "saving") && (
             <div>
+              {take && (
+                <div className="mb-4 rounded-xl border border-lav-200 bg-lav-50 p-3">
+                  <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink"><Headphones size={15} className="text-lav-600" /> Listen to yourself</p>
+                  <audio controls src={take.url} className="h-9 w-full" />
+                </div>
+              )}
+              {recError && <p className="mb-3 text-xs muted">Your voice couldn't be recorded on this browser, but your result still counts.</p>}
               <p className="mb-3 font-semibold">How did that feel?</p>
               <div className="flex flex-wrap gap-3">
                 {([["easy", "Easy", <Smile key="e" />], ["ok", "Okay", <Meh key="o" />], ["hard", "Hard", <Frown key="h" />]] as const).map(([k, l, icon]) => (
@@ -443,7 +486,8 @@ export default function ExerciseSession() {
             </div>
           )}
         </div>
-        <p className="mt-4 text-xs muted">Privacy: your voice stays on this device. Only practice numbers (time, pauses, speed) and your rating are saved.</p>
+        </div>
+        <p className="mt-4 text-xs muted">Privacy: your recordings are saved on this device only, so you can listen back. Only practice numbers (time, pauses, speed) and your rating are sent to SpeakFree.</p>
       </section>
 
       {phase === "done" && result && (

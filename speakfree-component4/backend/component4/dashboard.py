@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from .progress import parse, trend
+from .progress import best_streak, first_vs_latest, parse, trend, weekly
 
 REPORT_LABELS = {"improving": "Improving", "steady": "Steady", "needs_support": "Needs support"}
 
@@ -43,48 +43,6 @@ WORD_BADGES = ("first_words", "word_master")
 
 def _avg(values: list[float]) -> int | None:
     return int(round(sum(values) / len(values))) if values else None
-
-
-def best_streak(records: list[dict]) -> int:
-    days = sorted({parse(r["completed_at"]).date() for r in records})
-    best = run = 0
-    for i, day in enumerate(days):
-        run = run + 1 if i and (day - days[i - 1]).days == 1 else 1
-        best = max(best, run)
-    return best
-
-
-def weekly(records: list[dict], now: datetime, weeks: int = 4) -> list[dict]:
-    """Rolling 7-day windows, newest first."""
-    labels = ["This week", "Last week", "2 weeks ago", "3 weeks ago"]
-    rows = []
-    for i in range(weeks):
-        end = now - timedelta(days=7 * i)
-        start = end - timedelta(days=7)
-        in_week = [r for r in records if start < parse(r["completed_at"]) <= end]
-        rows.append({
-            "label": labels[i] if i < len(labels) else f"{i} weeks ago",
-            "sessions": len(in_week),
-            "minutes": round(sum(r.get("duration_seconds") or 0 for r in in_week) / 60, 1),
-            "average_score": _avg([r["score"] for r in in_week]),
-        })
-    return rows
-
-
-def first_vs_latest(records: list[dict]) -> list[dict]:
-    seen: dict[str, list[dict]] = {}
-    for r in records:
-        seen.setdefault(r["exercise_id"], []).append(r)
-    rows = []
-    for attempts in seen.values():
-        if len(attempts) < 2:
-            continue
-        first, last = attempts[0], attempts[-1]
-        rows.append({
-            "exercise_id": first["exercise_id"], "title": last["title"], "attempts": len(attempts),
-            "first_score": first["score"], "latest_score": last["score"], "change": last["score"] - first["score"],
-        })
-    return sorted(rows, key=lambda r: r["attempts"], reverse=True)
 
 
 def highlights(records: list[dict], level: dict, words: dict | None, streak: int) -> list[str]:

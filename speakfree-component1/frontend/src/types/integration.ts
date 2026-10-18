@@ -228,6 +228,7 @@ export interface Exercise {
   examples?: string[]; // role-play / picture: example answers to peek at
   recommended_delay_ms?: number; // DAF: calibrated delay
   unlock_after?: string; // advanced picture: unlocks once this exercise has been done
+  help?: ExerciseHelp; // "Need help" tab
   times_practised: number;
   last_score: number | null;
   locked?: boolean;
@@ -236,6 +237,13 @@ export interface Exercise {
   rank?: number;
   predicted_score?: number | null; // today's plan: the adaptive planner's expectation
   confidence?: "low" | "medium" | "high" | null;
+}
+
+export interface ExerciseHelp {
+  steps: string[];
+  examples: string[]; // model answers, one per prompt (or the items / words)
+  model: string; // what "Listen to a model" reads aloud
+  techniques: string[];
 }
 
 export interface LevelEvent { at: string | null; from: string | null; to: string; direction: string; reason: string }
@@ -380,7 +388,8 @@ export interface ProgressSummary {
   streak_days: number;
   trend: { label: string; detail: string; delta: number };
   by_type: { type: string; label: string; attempts: number; average_score: number | null; best_score: number }[];
-  recent: { exercise_id: string; title: string; score: number; verdict: string; completed_at: string; self_rating: string; exercise_type: string }[];
+  recent: { exercise_id: string; title: string; score: number; verdict: string; completed_at: string; self_rating: string; exercise_type: string;
+            duration_seconds: number }[];
   history: { attempt: number; score: number; completed_at: string; title: string; exercise_type: string }[];
   daily: { date: string; sessions: number; average_score: number | null }[];
 }

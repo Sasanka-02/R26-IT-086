@@ -28,6 +28,7 @@ import AssistantPage from "./pages/therapy/AssistantPage";
 import ExerciseSession from "./pages/therapy/ExerciseSession";
 import TherapyPlan from "./pages/therapy/TherapyPlan";
 import PrivacyPage from "./pages/therapy/PrivacyPage";
+import RecordingsPage from "./pages/therapy/RecordingsPage";
 import EvidencePage from "./pages/admin/pipeline/EvidencePage";
 import AssessmentOverview from "./pages/assessment/AssessmentOverview";
 import AnalysePage from "./pages/assessment/AnalysePage";
@@ -100,6 +101,7 @@ export default function App() {
         <Route path="therapy/exercise/:exerciseId" element={<NotAdmin><ExerciseSession /></NotAdmin>} />
         <Route path="therapy/assistant" element={<NotAdmin><AssistantPage /></NotAdmin>} />
         <Route path="therapy/privacy" element={<NotAdmin><PrivacyPage /></NotAdmin>} />
+        <Route path="therapy/recordings" element={<NotAdmin><RecordingsPage /></NotAdmin>} />
         <Route path="reports" element={<NotAdmin><ReportsPage /></NotAdmin>} />
         <Route path="resources" element={<ResourcesPage />} />
         <Route path="appointments" element={<NotAdmin><AppointmentsPage /></NotAdmin>} />

@@ -54,6 +54,43 @@ def trend(records: list[dict]) -> dict:
     return {"label": "Steady", "delta": diff, "detail": f"Your recent scores are consistent, around {last3}."}
 
 
+def best_streak(records: list[dict]) -> int:
+    days = sorted({parse(r["completed_at"]).date() for r in records})
+    best = run = 0
+    for i, day in enumerate(days):
+        run = run + 1 if i and (day - days[i - 1]).days == 1 else 1
+        best = max(best, run)
+    return best
+
+
+def weekly(records: list[dict], now: datetime, weeks: int = 4) -> list[dict]:
+    """Rolling 7-day windows, newest first (weekly practice chart + week-by-week table)."""
+    labels = ["This week", "Last week", "2 weeks ago", "3 weeks ago"]
+    rows = []
+    for i in range(weeks):
+        end = now - timedelta(days=7 * i)
+        start = end - timedelta(days=7)
+        in_week = [r for r in records if start < parse(r["completed_at"]) <= end]
+        rows.append({
+            "label": labels[i] if i < len(labels) else f"{i} weeks ago",
+            "sessions": len(in_week),
+            "minutes": round(sum(r.get("duration_seconds") or 0 for r in in_week) / 60, 1),
+            "average_score": _avg([r["score"] for r in in_week]),
+        })
+    return rows
+
+
+def first_vs_latest(records: list[dict]) -> list[dict]:
+    """First attempt (baseline) against the latest attempt, per exercise tried at least twice."""
+    seen: dict[str, list[dict]] = {}
+    for r in records:
+        seen.setdefault(r["exercise_id"], []).append(r)
+    rows = [{"exercise_id": a[0]["exercise_id"], "title": a[-1]["title"], "attempts": len(a),
+             "first_score": a[0]["score"], "latest_score": a[-1]["score"], "change": a[-1]["score"] - a[0]["score"]}
+            for a in seen.values() if len(a) >= 2]
+    return sorted(rows, key=lambda r: r["attempts"], reverse=True)
+
+
 def summary(records: list[dict], now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     today = now.date()
@@ -67,7 +104,11 @@ def summary(records: list[dict], now: datetime | None = None) -> dict:
         "average_score": _avg([r["score"] for r in records]),
         "best_score": max((r["score"] for r in records), default=None),
         "streak_days": streak_days(records, today),
+        "best_streak": best_streak(records),
+        "active_days": len({parse(r["completed_at"]).date() for r in records}),
         "trend": trend(records),
+        "weekly": weekly(records, now),
+        "first_vs_latest": first_vs_latest(records),
         "by_type": [
             {"type": t, "label": TYPE_LABELS.get(t, t.title()), "attempts": len(rs),
              "average_score": _avg([r["score"] for r in rs]), "best_score": max(r["score"] for r in rs)}
@@ -75,7 +116,8 @@ def summary(records: list[dict], now: datetime | None = None) -> dict:
         ],
         "recent": [
             {"exercise_id": r["exercise_id"], "title": r["title"], "score": r["score"], "verdict": verdict(r["score"]),
-             "completed_at": r["completed_at"], "self_rating": r["self_rating"], "exercise_type": r["exercise_type"]}
+             "completed_at": r["completed_at"], "self_rating": r["self_rating"], "exercise_type": r["exercise_type"],
+             "duration_seconds": r.get("duration_seconds") or 0}
             for r in reversed(records[-8:])
         ],
         "history": [

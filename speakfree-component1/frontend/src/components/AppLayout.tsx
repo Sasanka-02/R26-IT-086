@@ -15,6 +15,7 @@ import {
   ClipboardList,
   FileText,
   FlaskConical,
+  Headphones,
   HeartPulse,
   Home,
   Info,
@@ -48,6 +49,7 @@ const NAV: { to: string; label: string; icon: ReactNode; roles?: Role[] }[] = [
   { to: "/assessment", label: "Assessment Tasks", icon: <ClipboardList size={18} /> },
   { to: "/progress", label: "My Progress", icon: <TrendingUp size={18} /> },
   { to: "/therapy-plan", label: "Therapy Plan", icon: <HeartPulse size={18} /> },
+  { to: "/therapy/recordings", label: "My Recordings", icon: <Headphones size={18} /> },
   { to: "/therapy/assistant", label: "AI Assistant", icon: <Bot size={18} /> },
   { to: "/reports", label: "Reports", icon: <FileText size={18} /> },
   { to: "/resources", label: "Resources", icon: <BookOpen size={18} /> },
@@ -269,7 +271,8 @@ function Shell() {
         </div>
       </header>
       <Sidebar open={open} collapsed={collapsed} onClose={() => setOpen(false)} />
-      <div className={`pt-[76px] transition-[padding] ${collapsed ? "" : "lg:pl-64"}`}>
+      {/* My progress is the one dark-theme page */}
+      <div className={`pt-[76px] transition-[padding] ${collapsed ? "" : "lg:pl-64"} ${pathname === "/progress" ? "min-h-screen bg-[#1B1B21] [color-scheme:dark]" : ""}`}>
         <main className="mx-auto max-w-[1180px] px-4 py-7 sm:px-8">
           {needsAge ? <AgeGate patient={activePatient!} /> : <Outlet />}
         </main>

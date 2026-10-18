@@ -99,3 +99,22 @@ def test_daf_calibration_and_private_release():
     fp = fingerprint([1, 2])
     a, b = release(stats, 1.0, fp, {"words": "Word practice"}), release(stats, 1.0, fp, {"words": "Word practice"})
     assert a["mean_score"] == b["mean_score"] and len(a["accuracy"]) == 5
+
+
+def test_every_exercise_has_help_with_examples_per_prompt():
+    from component4 import build_plan
+    from component4.bracket_tasks import ADVANCED_PICTURE_EXERCISES, BRACKET_EXERCISES
+    from component4.help import EXAMPLES, help_for
+    from tests.test_component4 import profile
+
+    for ex in BRACKET_EXERCISES + ADVANCED_PICTURE_EXERCISES:
+        if ex["type"] in ("picture", "conversation"):
+            assert len(EXAMPLES[ex["id"]]) == len(ex["prompts"]), ex["id"]
+    for bracket in range(1, 9):
+        plan = build_plan(profile(level=2), [], learner={"age_bracket": bracket})
+        for ex in plan["today"] + plan["library"]:
+            h = ex["help"]
+            assert len(h["steps"]) >= 3 and h["model"], ex["id"]
+            if ex["type"] in ("picture", "conversation", "roleplay", "sound_drill", "words"):
+                assert h["examples"], ex["id"]
+    assert help_for({"id": "x", "type": "reading", "passage": "Mum has a map."})["model"] == "Mum has a map."
