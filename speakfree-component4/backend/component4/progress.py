@@ -43,8 +43,9 @@ def trend(records: list[dict]) -> dict:
     if len(records) < 4:
         return {"label": "Just getting started", "delta": 0,
                 "detail": "Complete a few more exercises to see whether your scores are improving."}
-    last3 = _avg([r["score"] for r in records[-3:]])
-    prev3 = _avg([r["score"] for r in records[-6:-3]])
+    # 4+ records -> both windows are non-empty, so neither average is None
+    last3 = _avg([r["score"] for r in records[-3:]]) or 0
+    prev3 = _avg([r["score"] for r in records[-6:-3]]) or 0
     diff = last3 - prev3
     if diff >= 5:
         return {"label": "Improving", "delta": diff, "detail": f"Your last 3 scores average {last3}, up {diff} points."}

@@ -26,13 +26,22 @@ class LiveSessionState:
     syllables: int = 0
     _was_speaking: bool = False
     _voiced_run: int = 0
+    _silent_run: int = 0  # consecutive silent frames (one long pause per silence)
+    _has_spoken: bool = False
     max_voiced_run: int = 0  # longest continuous voicing, in 500 ms frames (sustained-vowel task)
 
 
 _SESSIONS: dict[str, LiveSessionState] = {}
+MAX_AGE_SECONDS = 2 * 60 * 60  # a session never saved as an attempt (exercise abandoned) is dropped after 2 h
+
+
+def _prune(now: float) -> None:
+    for sid in [sid for sid, s in _SESSIONS.items() if now - s.started_at > MAX_AGE_SECONDS]:
+        del _SESSIONS[sid]
 
 
 def start_session(session_id: str, exercise_type: Optional[str] = None) -> LiveSessionState:
+    _prune(time.time())
     state = LiveSessionState(session_id=session_id, exercise_type=exercise_type)
     _SESSIONS[session_id] = state
     return state

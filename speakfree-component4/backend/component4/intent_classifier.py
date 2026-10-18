@@ -233,7 +233,20 @@ class NaiveBayesIntentClassifier:
         return best, 1 / norm
 
 
-def leave_one_out_accuracy(data: dict[str, list[str]] = TRAINING_DATA) -> dict:
+_LOO_CACHE: dict | None = None
+
+
+def leave_one_out_accuracy(data: dict[str, list[str]] | None = None) -> dict:
+    """Leave-one-out accuracy; the result for the built-in training data is computed once (it never changes)."""
+    global _LOO_CACHE
+    if data is None:
+        if _LOO_CACHE is None:
+            _LOO_CACHE = _leave_one_out(TRAINING_DATA)
+        return dict(_LOO_CACHE)
+    return _leave_one_out(data)
+
+
+def _leave_one_out(data: dict[str, list[str]]) -> dict:
     correct = total = 0
     for intent, examples in data.items():
         for i, example in enumerate(examples):

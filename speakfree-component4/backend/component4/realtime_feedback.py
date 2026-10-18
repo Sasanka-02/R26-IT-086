@@ -19,8 +19,10 @@ def process_metric(state: LiveSessionState, metric: LiveMetric) -> FeedbackMessa
     if not metric.is_speaking:
         state._was_speaking = False
         state._voiced_run = 0
-        recent = state.speaking_flags[-LONG_PAUSE_FRAMES:]
-        if len(recent) == LONG_PAUSE_FRAMES and not any(recent):
+        state._silent_run += 1
+        # one long pause per silence (counted when it reaches ~3 s, not again on every later silent frame),
+        # and only after the learner has started speaking - getting ready at the start is not a pause
+        if state._silent_run == LONG_PAUSE_FRAMES and state._has_spoken:
             state.pause_count += 1
             state.feedback_events += 1
             return FeedbackMessage(
@@ -32,6 +34,8 @@ def process_metric(state: LiveSessionState, metric: LiveMetric) -> FeedbackMessa
 
     just_started = not state._was_speaking
     state._was_speaking = True
+    state._has_spoken = True
+    state._silent_run = 0
     state._voiced_run += 1
     state.max_voiced_run = max(state.max_voiced_run, state._voiced_run)
 
@@ -59,10 +63,11 @@ def summarize(state: LiveSessionState) -> dict:
     import time as _time
 
     duration = _time.time() - state.started_at
+    # no frames received (mic blocked, socket dropped) -> no measurement, not "silent the whole time"
     speaking_ratio = (
         sum(1 for f in state.speaking_flags if f) / len(state.speaking_flags)
         if state.speaking_flags
-        else 0.0
+        else None
     )
     avg_energy = (
         sum(state.energy_samples) / len(state.energy_samples)

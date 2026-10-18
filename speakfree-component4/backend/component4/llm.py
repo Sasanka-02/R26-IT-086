@@ -57,7 +57,8 @@ def is_enabled() -> bool:
 def _get_client():
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(timeout=30.0)
+        # one retry: the patient is waiting in the chat, and the offline answer is always available
+        _client = anthropic.Anthropic(timeout=30.0, max_retries=1)
     return _client
 
 
@@ -79,7 +80,7 @@ def ask(question: str, first_name: str, focus: dict, context: dict, tone: str = 
     try:
         response = _get_client().beta.messages.create(
             model=MODEL,
-            max_tokens=2000,
+            max_tokens=16000,  # thinking is always on and counts toward this; replies stay short via the prompt
             output_config={"effort": "low"},
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
@@ -95,8 +96,12 @@ def ask(question: str, first_name: str, focus: dict, context: dict, tone: str = 
     except anthropic.APIConnectionError:
         logger.warning("Assistant LLM unreachable; using offline answer")
         return None
+    except Exception:  # e.g. an SDK too old for these parameters - never break the chat
+        logger.exception("Assistant LLM call failed; using offline answer")
+        return None
 
-    if response.stop_reason == "refusal":
+    # refused by the whole fallback chain, or cut off mid-reply: the offline answer is better than half a sentence
+    if response.stop_reason in ("refusal", "max_tokens"):
         return None
     text = "".join(block.text for block in response.content if block.type == "text").strip()
     return text or None

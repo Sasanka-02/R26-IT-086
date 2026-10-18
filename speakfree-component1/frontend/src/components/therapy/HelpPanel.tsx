@@ -1,5 +1,5 @@
 /**
- * HelpPanel – the "Need help" tab of every therapy exercise:
+ * HelpPanel – the help shown on every therapy exercise page (below the exercise):
  *   1. Listen to a model (speech synthesis reads the passage / model answer aloud)
  *   2. How to do it – step by step
  *   3. Example answers – one per question, each with its own 🔊 Listen
@@ -9,7 +9,7 @@ import { BookOpen, Headphones, Lightbulb, ListChecks, Sparkles } from "lucide-re
 import ListenButton from "../ListenButton";
 import type { Exercise } from "../../types/integration";
 
-export default function HelpPanel({ ex, techniques, playful }: { ex: Exercise; techniques: string[]; playful: boolean }) {
+export default function HelpPanel({ ex, techniques, playful, hideExamples = false }: { ex: Exercise; techniques: string[]; playful: boolean; hideExamples?: boolean }) {
   const help = ex.help;
   if (!help) return <p className="text-sm muted">No help is available for this exercise yet.</p>;
   const prompts = ex.type === "picture" || ex.type === "conversation" || ex.type === "roleplay" ? ex.prompts ?? [] : [];
@@ -35,7 +35,7 @@ export default function HelpPanel({ ex, techniques, playful }: { ex: Exercise; t
         </ol>
       </section>
 
-      {help.examples.length > 0 && (
+      {help.examples.length > 0 && !hideExamples && (
         <section>
           <h3 className="mb-2 flex items-center gap-2 font-bold text-ink"><Lightbulb size={17} className="text-warn" /> {ex.type === "sound_drill" || ex.type === "words" ? "The words to say" : "Example answers"}</h3>
           <ul className="space-y-2">

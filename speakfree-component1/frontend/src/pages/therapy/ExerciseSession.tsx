@@ -34,6 +34,7 @@ import DafCalibration, { DAF_PASSAGES } from "../../components/therapy/DafCalibr
 import { NewBadges } from "../../components/therapy/Badges";
 import WordRound from "../../components/therapy/WordRound";
 import HelpPanel from "../../components/therapy/HelpPanel";
+import QuestionAnswers from "../../components/therapy/QuestionAnswers";
 import RecordingList from "../../components/therapy/RecordingList";
 import { practiceRecordings, type PracticeRecording } from "../../utils/practiceRecordings";
 import { usePracticeRecorder } from "./usePracticeRecorder";
@@ -44,7 +45,8 @@ import { useLiveCoach } from "./useLiveCoach";
 
 type Phase = "ready" | "running" | "rate" | "saving" | "done";
 const LIVE_TYPES = ["reading", "pacing", "clear_speech", "loudness", "picture", "conversation", "roleplay", "sustained_vowel", "sound_drill"];
-const WARMUP_TYPES = ["reading", "pacing", "clear_speech", "loudness", "picture", "conversation", "roleplay", "daf"];
+const QA_TYPES = ["picture", "conversation", "roleplay"]; // example answers sit next to each question
+const WARMUP_TYPES =["reading", "pacing", "clear_speech", "loudness", "picture", "conversation", "roleplay", "daf"];
 
 const TONE_STYLE: Record<ToneHint["tone"], { mark: string; chip: string; icon: string }> = {
   questioning: { mark: "decoration-brand", chip: "bg-brand-soft text-navy", icon: "❓" },
@@ -154,7 +156,7 @@ export default function ExerciseSession() {
   const [warmup, setWarmup] = useState(false);
   const [calibrating, setCalibrating] = useState(false);
   const [wordResult, setWordResult] = useState<{ got: number; total: number } | null>(null);
-  const [tab, setTab] = useState<"exercise" | "help" | "recordings">("exercise");
+  const [tab, setTab] = useState<"exercise" | "recordings">("exercise");
   const [take, setTake] = useState<{ blob: Blob; url: string } | null>(null); // this attempt's recording
   const [recError, setRecError] = useState(false);
   const [recordings, setRecordings] = useState<PracticeRecording[]>([]);
@@ -278,7 +280,7 @@ export default function ExerciseSession() {
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-5">
       <Link to="/therapy-plan" className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-ink"><ArrowLeft size={14} /> My therapy plan</Link>
 
       <section className="card p-6">
@@ -297,7 +299,7 @@ export default function ExerciseSession() {
         </div>
 
         <div className="mt-5 flex flex-wrap gap-1 rounded-xl bg-canvas p-1" role="tablist" aria-label="Exercise sections">
-          {([["exercise", "Exercise", <Mic key="m" size={15} />], ["help", "Need help?", <LifeBuoy key="h" size={15} />],
+          {([["exercise", "Exercise & help", <Mic key="m" size={15} />],
             ["recordings", `My recordings (${recordings.length})`, <Headphones key="r" size={15} />]] as const).map(([k, label, icon]) => (
             <button key={k} role="tab" aria-selected={tab === k} disabled={phase === "running" && k !== "exercise"} onClick={() => setTab(k)}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition disabled:opacity-40 ${tab === k ? "bg-white text-navy shadow-sm" : "text-ink-soft hover:text-ink"}`}>
@@ -306,7 +308,6 @@ export default function ExerciseSession() {
           ))}
         </div>
 
-        {tab === "help" && <div className="mt-5"><HelpPanel ex={ex} techniques={plan.focus.techniques} playful={playful} /></div>}
         {tab === "recordings" && (
           <div className="mt-5">
             <p className="mb-3 text-sm text-ink-soft">Every attempt is recorded so you can hear your progress. Recordings stay on this device only. <Link to="/therapy/recordings" className="font-semibold text-brand hover:underline">All my recordings →</Link></p>
@@ -346,38 +347,18 @@ export default function ExerciseSession() {
             </>
           )}
           {ex.type === "picture" && (
-            <div className="grid gap-4 md:grid-cols-[1.3fr_1fr]">
-              {ex.image_url && <img src={ex.image_url} alt={ex.title} className="w-full rounded-2xl border border-line bg-white object-cover" />}
-              <div className="space-y-2">
+            <div className="grid items-start gap-4 lg:grid-cols-[1.2fr_1fr]">
+              {ex.image_url && <img src={ex.image_url} alt={ex.title} className="w-full rounded-2xl border border-line bg-white object-cover lg:sticky lg:top-24" />}
+              <div className="space-y-3">
                 {theme.listen && <ListenButton text={(ex.prompts ?? []).join(" ")} big={playful} />}
-                <ul className="space-y-2">{(ex.prompts ?? []).map((p) => <li key={p} className={`rounded-xl bg-lav-50 p-3 ${playful ? "text-base" : "text-sm"}`}>{p}</li>)}</ul>
-                <button type="button" className="btn-lav" onClick={() => setTab("help")}><Lightbulb size={15} /> Stuck? See example answers</button>
+                <QuestionAnswers questions={ex.prompts ?? []} answers={ex.help?.examples ?? []} playful={playful} wpm={ex.target_wpm ?? 100} />
               </div>
             </div>
           )}
           {ex.type === "roleplay" && (
             <div className="space-y-3">
               <p className="rounded-2xl border border-lav-200 bg-lav-50 p-4 text-base text-ink"><b>Situation:</b> {ex.situation}</p>
-              <div className="grid gap-4 lg:grid-cols-5">
-                <div className="lg:col-span-3">
-                  <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink"><MessagesSquare size={16} className="text-lav-500" /> Answer each line out loud, one at a time</p>
-                  <ol className="space-y-2">
-                    {(ex.prompts ?? []).map((line, i) => {
-                      const [who, ...rest] = line.split(": ");
-                      return (
-                        <li key={line} className="flex gap-3">
-                          <span className="mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-navy text-xs font-bold text-white">{i + 1}</span>
-                          <div className="rounded-2xl rounded-tl-sm border border-line bg-white px-4 py-2.5 text-base text-ink">
-                            {rest.length > 0 && <span className="block text-xs font-bold text-lav-600">{who}</span>}
-                            {rest.length ? rest.join(": ") : line}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                </div>
-                <div className="lg:col-span-2"><button type="button" className="btn-lav" onClick={() => setTab("help")}><Lightbulb size={15} /> Stuck? See example answers</button></div>
-              </div>
+              <QuestionAnswers speaker questions={ex.prompts ?? []} answers={ex.help?.examples ?? []} playful={playful} wpm={ex.target_wpm ?? 100} />
               <p className="text-xs muted">Take a calm breath before each answer, start softly and pause between ideas – just like a real conversation.</p>
             </div>
           )}
@@ -398,13 +379,7 @@ export default function ExerciseSession() {
                 <p className="text-ink">{ex.situation}</p>
               </div>
               {theme.listen && <ListenButton text={[ex.situation, ...(ex.prompts ?? [])].join(" ")} big={playful} />}
-              <ol className="grid gap-2 sm:grid-cols-2">
-                {(ex.prompts ?? []).map((p, i) => (
-                  <li key={p} className={`flex gap-2 rounded-xl bg-white p-3 ring-1 ring-line ${playful ? "text-base" : "text-sm"}`}>
-                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-navy text-xs font-bold text-white">{i + 1}</span>{p}
-                  </li>
-                ))}
-              </ol>
+              <QuestionAnswers questions={ex.prompts ?? []} answers={ex.help?.examples ?? []} playful={playful} wpm={ex.target_wpm ?? 100} />
               <p className="text-xs muted">Press Start, then answer the questions out loud in your own words. There are no wrong answers – take your time.</p>
             </div>
           )}
@@ -486,6 +461,10 @@ export default function ExerciseSession() {
             </div>
           )}
         </div>
+        <section className="mt-6 border-t border-line pt-5" aria-label="Need help">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-ink"><LifeBuoy size={19} className="text-navy" /> Need help?</h2>
+          <HelpPanel ex={ex} techniques={plan.focus.techniques} playful={playful} hideExamples={QA_TYPES.includes(ex.type)} />
+        </section>
         </div>
         <p className="mt-4 text-xs muted">Privacy: your recordings are saved on this device only, so you can listen back. Only practice numbers (time, pauses, speed) and your rating are sent to SpeakFree.</p>
       </section>

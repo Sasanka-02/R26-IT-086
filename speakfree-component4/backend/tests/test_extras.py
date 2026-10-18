@@ -118,3 +118,96 @@ def test_every_exercise_has_help_with_examples_per_prompt():
             if ex["type"] in ("picture", "conversation", "roleplay", "sound_drill", "words"):
                 assert h["examples"], ex["id"]
     assert help_for({"id": "x", "type": "reading", "passage": "Mum has a map."})["model"] == "Mum has a map."
+
+
+def test_llm_falls_back_offline_on_truncation_refusal_and_errors(monkeypatch):
+    """llm.ask returns the model text, or None (offline answer) when cut off, refused or broken."""
+    import types
+
+    from component4 import llm
+    from component4.categories import FOCI
+
+    class APIError(Exception):
+        pass
+
+    def fake_sdk(result):
+        class Client:
+            def __init__(self, **kw):
+                self.kw = kw
+                self.beta = types.SimpleNamespace(messages=types.SimpleNamespace(create=self.create))
+
+            def create(self, **kw):
+                assert kw["fallbacks"] == "default" and kw["betas"] == ["server-side-fallback-2026-07-01"]
+                if isinstance(result, Exception):
+                    raise result
+                return result
+
+        return types.SimpleNamespace(Anthropic=Client, RateLimitError=APIError, APIStatusError=APIError,
+                                     APIConnectionError=APIError)
+
+    def reply(stop, text="Keep going!"):
+        return types.SimpleNamespace(stop_reason=stop, content=[types.SimpleNamespace(type="thinking"),
+                                                                types.SimpleNamespace(type="text", text=text)])
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    for result, expected in ((reply("end_turn"), "Keep going!"), (reply("max_tokens", "Keep go"), None),
+                             (reply("refusal"), None), (TypeError("unexpected keyword 'fallbacks'"), None)):
+        monkeypatch.setattr(llm, "anthropic", fake_sdk(result))
+        monkeypatch.setattr(llm, "_client", None)
+        assert llm.ask("how am I doing?", "Kavi", FOCI["fluency"], {"age_group": "Ages 6–7"}, "playful") == expected
+    assert llm._get_client().kw == {"timeout": 30.0, "max_retries": 1}
+
+
+def test_live_pauses_counted_once_per_silence_and_not_before_speaking():
+    from component4.realtime_feedback import process_metric, summarize
+    from component4.schemas import LiveMetric
+    from component4.session_store import LiveSessionState
+
+    def run(flags):
+        state = LiveSessionState(session_id="t")
+        for i, speaking in enumerate(flags):
+            process_metric(state, LiveMetric(timestamp_ms=i * 500, rms_energy=0.05 if speaking else 0.001,
+                                             zero_crossing_rate=0.1, is_speaking=speaking))
+        return state
+
+    # 4 s silence while getting ready, speech, a 10 s silence, speech again -> exactly one long pause
+    state = run([False] * 8 + [True] * 6 + [False] * 20 + [True] * 4)
+    assert state.pause_count == 1
+    assert run([True] * 4 + [False] * 6 + [True] + [False] * 6).pause_count == 2
+    assert summarize(LiveSessionState(session_id="empty"))["speaking_ratio"] is None
+
+
+def test_stale_live_sessions_are_dropped():
+    from component4 import session_store
+
+    old = session_store.start_session("old")
+    old.started_at -= session_store.MAX_AGE_SECONDS + 1
+    session_store.start_session("new")
+    assert session_store.get_session("old") is None and session_store.end_session("new") is not None
+
+
+def test_focus_probabilities_fall_back_when_breakdown_is_unusable():
+    from component4.categories import focus_probabilities
+
+    for breakdown in ({"unknown": 0.9}, {"stuttering": 0.0, "normal": 0.0}):
+        assert focus_probabilities(breakdown, "fluency") == {"fluency": 1.0, "motor_speech": 0.0,
+                                                             "speech_sounds": 0.0, "maintenance": 0.0}
+
+
+def test_naive_timestamps_compare_with_aware_ones():
+    from component4.adaptive import level_state
+
+    rec = {"exercise_type": "clear_speech", "level": "beginner", "score": 90, "self_rating": "ok",
+           "completed_at": "2026-10-02T10:00:00"}  # stored without an offset
+    state = level_state([rec, {**rec, "completed_at": "2026-10-02T11:00:00"}], "clear_speech", since="2026-10-01T00:00:00+00:00")
+    assert state["level"] == "intermediate"
+
+
+def test_badge_question_uses_the_real_badges():
+    from component4 import answer, build_plan
+    from tests.test_component4 import profile
+
+    p = profile(level=2)
+    plan = build_plan(p, [], learner={"age_bracket": 5})
+    reply = answer("what badges do i have", "Ravi Kumar", p, plan, [])
+    assert reply["source"] == "classifier" and "0 of" in reply["reply"] and "First step" in reply["reply"]

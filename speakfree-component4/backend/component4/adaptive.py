@@ -29,7 +29,7 @@ a new screening restarts them at their starting rungs. Nothing extra is stored.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .brackets import BRACKETS, MAX_BRACKET, MIN_BRACKET, ages_text, clamp_bracket, max_bracket_for, start_bracket
 from .exercises import LEVELS
@@ -53,7 +53,9 @@ def is_weak(record: dict) -> bool:
 
 
 def _parse(ts: str) -> datetime:
-    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    """Timezone-aware datetime (a stored timestamp without an offset is UTC) - same rule as progress.parse."""
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def level_state(records: list[dict], ladder_type: str, start_level: str = "beginner",

@@ -186,7 +186,15 @@ def _handle(intent: str, name: str, profile: dict, plan: dict, attempts: list[di
         return ("Your practice recordings never leave your browser. Only small numbers (how long you spoke, pauses, "
                 "speed) and your rating are saved. Your clinician can see your results; nobody else can."), None
     if intent == "badges":
-        return f"You've completed {prog['total_sessions']} exercises - keep going to unlock the next level!", None
+        badges = (plan.get("dashboard") or {}).get("badges") or []
+        if not badges:
+            return f"You've completed {prog['total_sessions']} exercises - keep going to unlock the next level!", None
+        earned = [b["title"] for b in badges if b["earned"]]
+        nxt = next((b for b in badges if not b["earned"]), None)
+        reply = f"You've earned {len(earned)} of {len(badges)} badges" + (f": {', '.join(earned)}." if earned else ".")
+        if nxt:
+            reply += f" Next one to unlock: {nxt['title']} - {nxt['description'].lower()}."
+        return reply, {"href": "/progress", "label": "See my badges"}
     if intent.startswith("explain_"):
         kind = intent.split("_", 1)[1]
         return EXPLAIN.get(kind, ""), None

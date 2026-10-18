@@ -133,6 +133,8 @@ def focus_probabilities(disorder_breakdown: dict | None, fallback_focus: str) ->
     """C3 disorder probabilities re-keyed by therapy focus (used by the bandit's category prior)."""
     if not disorder_breakdown:
         return {k: (1.0 if k == fallback_focus else 0.0) for k in FOCI}
-    probs = {DISORDER_TO_FOCUS[d]: float(p) for d, p in disorder_breakdown.items() if d in DISORDER_TO_FOCUS}
-    total = sum(probs.values()) or 1.0
+    probs = {DISORDER_TO_FOCUS[d]: max(0.0, float(p)) for d, p in disorder_breakdown.items() if d in DISORDER_TO_FOCUS}
+    total = sum(probs.values())
+    if total <= 0:  # unknown labels or all-zero probabilities: trust the chosen focus, as with no breakdown
+        return {k: (1.0 if k == fallback_focus else 0.0) for k in FOCI}
     return {k: round(probs.get(k, 0.0) / total, 4) for k in FOCI}
