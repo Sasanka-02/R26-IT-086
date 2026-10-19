@@ -1,5 +1,5 @@
 /**
- * Word ladder card for the (light) therapy plan page. The full progress dashboard is the dark-theme
+ * Word ladder card for the (light) therapy plan page. The full progress dashboard is the
  * My progress page (ProgressDark.tsx).
  */
 import { Card } from "../../components/ui";

@@ -271,8 +271,8 @@ function Shell() {
         </div>
       </header>
       <Sidebar open={open} collapsed={collapsed} onClose={() => setOpen(false)} />
-      {/* My progress is the one dark-theme page */}
-      <div className={`pt-[76px] transition-[padding] ${collapsed ? "" : "lg:pl-64"} ${pathname === "/progress" ? "min-h-screen bg-[#1B1B21] [color-scheme:dark]" : ""}`}>
+
+      <div className={`pt-[76px] transition-[padding] ${collapsed ? "" : "lg:pl-64"}`}>
         <main className="mx-auto max-w-[1180px] px-4 py-7 sm:px-8">
           {needsAge ? <AgeGate patient={activePatient!} /> : <Outlet />}
         </main>

@@ -1,5 +1,5 @@
 /**
- * My progress – the app's one dark-theme page (AppLayout darkens the content area on /progress).
+ * My progress – light theme, like the rest of the app.
  * Therapy practice dashboard first (ProgressDark), then the screening history.
  */
 import { useEffect, useState } from "react";
@@ -34,7 +34,7 @@ function ScreeningTrend({ points }: { points: SessionListItem[] }) {
         ))}
       </svg>
       {h && (
-        <div className="pointer-events-none absolute top-0 rounded-lg border px-3 py-2 text-xs" style={{ left: `${Math.min(70, (x(hover!) / W) * 100)}%`, background: "#1F1F27", borderColor: "#3A3A46" }}>
+        <div className="pointer-events-none absolute top-0 rounded-lg border px-3 py-2 text-xs" style={{ left: `${Math.min(70, (x(hover!) / W) * 100)}%`, background: "#FFFFFF", borderColor: D.line }}>
           <p className="font-semibold" style={{ color: D.ink }}>{Math.round(h.overall_speech_score)} · {friendlyStatus(h.severity_hint).title}</p>
           <p style={{ color: D.soft }}>{new Date(h.created_at).toLocaleDateString()}</p>
         </div>
@@ -77,7 +77,7 @@ export default function ProgressPage() {
       {plan?.has_profile ? <ProgressDark plan={plan} /> : (
         <DCard title="Your therapy dashboard starts after a screening">
           <p className="text-sm" style={{ color: D.soft }}>Complete the three screening tasks – your personal practice plan and these charts appear right after.</p>
-          <Link to="/assessment" className="mt-3 inline-flex rounded-lg px-3 py-2 text-sm font-semibold" style={{ background: D.accent, color: D.page }}>Start the screening</Link>
+          <Link to="/assessment" className="mt-3 inline-flex rounded-lg px-3 py-2 text-sm font-semibold" style={{ background: D.accent, color: "#FFFFFF" }}>Start the screening</Link>
         </DCard>
       )}
 
@@ -94,7 +94,7 @@ export default function ProgressPage() {
                 const st = friendlyStatus(s.severity_hint);
                 return (
                   <li key={s.session_id} style={{ borderColor: D.line }}>
-                    <Link to={`/sessions/${s.session_id}`} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-white/5">
+                    <Link to={`/sessions/${s.session_id}`} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-3 hover:bg-canvas">
                       <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: st.color }} aria-hidden />
                       <div className="flex-1">
                         <div className="text-sm font-semibold" style={{ color: D.ink }}>{st.title}</div>

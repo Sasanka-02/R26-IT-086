@@ -1,12 +1,12 @@
 /**
- * ProgressDark – the dark-theme "My progress" dashboard (Component 4), the only dark page in the app.
+ * ProgressDark – the light-theme "My progress" dashboard (Component 4).
  *
  * Plain language first: report card → level ladder + timeline → highlights + goals; then the numbers:
  * KPI tiles, score trend (area), average-score gauge, weekly practice, daily activity, practice mix,
  * first try vs latest, score by exercise type, badges, recent exercises and a week-by-week table.
  *
- * Colour (validated on the #26262F card surface with the dataviz validator):
- *   single series  mint #A8DED6 · crosshair amber #F5B05E
+ * Colour (on the white #FFFFFF card surface with the dataviz validator):
+ *   single series  brand blue #1D4ED8 · crosshair amber #D97706
  *   first vs latest  blue #3987E5 → aqua #199E70        (CVD ΔE 19.6, contrast ≥ 3:1)
  *   exercise types   8-slot categorical, fixed per plan  (worst adjacent CVD ΔE 8.4, contrast ≥ 3:1)
  * Every multi-series chart has a legend with direct numbers; text always uses the ink tokens.
@@ -20,16 +20,16 @@ import {
 import type { Badge, Goal, LevelEvent, ReportStatus, TherapyPlan } from "../../types/integration";
 import { TYPE_LABEL } from "./labels";
 
-// --------------------------------------------------------------------------- dark tokens
+// --------------------------------------------------------------------------- light tokens
 export const D = {
-  page: "#1B1B21", card: "#26262F", line: "#34343F", track: "#30303B",
-  ink: "#ECECF1", soft: "#B4B4C2", muted: "#8E8E9E",
-  accent: "#A8DED6", cross: "#F5B05E", first: "#3987E5", latest: "#199E70",
+  page: "#F5F6FB", card: "#FFFFFF", line: "#E6E8F2", track: "#EEF0F7",
+  ink: "#1B2559", soft: "#4A5578", muted: "#7A8299",
+  accent: "#1D4ED8", cross: "#D97706", first: "#3987E5", latest: "#199E70",
 };
-const SLOTS = ["#3987E5", "#D95926", "#199E70", "#C98500", "#D55181", "#008300", "#9085E9", "#E66767"];
-const OTHER = "#6B6B7B";
+const SLOTS = ["#3987E5", "#D95926", "#199E70", "#C98500", "#D55181", "#008300", "#9085E9", "#DC2626"];
+const OTHER = "#9AA1B5";
 const TYPE_ORDER = ["reading", "pacing", "daf", "picture", "conversation", "roleplay", "words", "sound_drill", "clear_speech", "loudness", "sustained_vowel"];
-const TONE = { gold: "#F5B05E", mint: "#A8DED6", pink: "#E59BC6", blue: "#6FA8EC" };
+const TONE = { gold: "#D97706", mint: "#0D9488", pink: "#DB2777", blue: "#1D4ED8" };
 
 /** Colour follows the exercise type: slots are given in a fixed type order to the types in this plan. */
 function useTypeColors(plan: TherapyPlan) {
@@ -68,7 +68,7 @@ function Empty({ message }: { message: string }) {
 
 function TipBox({ title, lines, style }: { title: string; lines: string[]; style?: React.CSSProperties }) {
   return (
-    <div className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg border px-3 py-2 text-xs shadow-xl" style={{ background: "#1F1F27", borderColor: "#3A3A46", ...style }}>
+    <div className="pointer-events-none absolute z-10 whitespace-nowrap rounded-lg border px-3 py-2 text-xs shadow-xl" style={{ background: "#FFFFFF", borderColor: D.line, ...style }}>
       <p className="font-semibold" style={{ color: D.ink }}>{title}</p>
       {lines.map((l) => <p key={l} className="mt-0.5" style={{ color: D.soft }}>{l}</p>)}
     </div>
@@ -84,7 +84,7 @@ function Meter({ value, color = D.accent }: { value: number; color?: string }) {
 }
 
 function Pill({ score }: { score: number }) {
-  const c = score >= 65 ? D.accent : score >= 45 ? D.cross : "#E66767";
+  const c = score >= 65 ? D.accent : score >= 45 ? D.cross : "#DC2626";
   return <span className="inline-flex min-w-[3rem] justify-center rounded-md border px-2 py-0.5 text-xs font-bold tabular-nums" style={{ color: c, borderColor: `${c}80`, background: `${c}14` }}>{score}</span>;
 }
 
@@ -139,7 +139,7 @@ export function ScoreTrendArea({ history, strong, height = 260 }: {
         }}>
         <defs>
           <linearGradient id="dkScoreFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={D.accent} stopOpacity={0.4} /><stop offset="100%" stopColor={D.accent} stopOpacity={0.02} />
+            <stop offset="0%" stopColor={D.accent} stopOpacity={0.18} /><stop offset="100%" stopColor={D.accent} stopOpacity={0.02} />
           </linearGradient>
         </defs>
         {[0, 25, 50, 75, 100].map((v) => (
@@ -210,7 +210,7 @@ function BarsAxis({ data, height = 220, track = false, axis = true }: {
             <g key={d.key} onMouseEnter={() => setHover(i)}>
               <rect x={L + slot * i} y={T} width={slot} height={H - T - B} fill="transparent" />
               {track && <rect x={cx - bw / 2} y={T} width={bw} height={H - T - B} rx={bw / 2} fill={D.track} />}
-              {d.value > 0 && <rect x={cx - bw / 2} y={top} width={bw} height={y(0) - top} rx={track ? bw / 2 : 4} fill={hover === i ? "#C6EAE4" : D.accent} />}
+              {d.value > 0 && <rect x={cx - bw / 2} y={top} width={bw} height={y(0) - top} rx={track ? bw / 2 : 4} fill={hover === i ? "#5B7FE8" : D.accent} />}
               <text x={cx} y={H - 6} textAnchor="middle" fontSize={11} fill={D.muted}>{d.label}</text>
             </g>
           );
@@ -328,7 +328,7 @@ function FirstVsLatest({ rows }: { rows: TherapyPlan["dashboard"]["first_vs_late
 
 // --------------------------------------------------------------------------- cards
 const LIGHT: Record<ReportStatus, { dot: string; icon: LucideIcon }> = {
-  improving: { dot: D.accent, icon: TrendingUp }, steady: { dot: D.cross, icon: Minus }, needs_support: { dot: "#E66767", icon: LifeBuoy },
+  improving: { dot: D.accent, icon: TrendingUp }, steady: { dot: D.cross, icon: Minus }, needs_support: { dot: "#DC2626", icon: LifeBuoy },
 };
 
 function ReportCardDark({ card }: { card: TherapyPlan["dashboard"]["report_card"] }) {
@@ -337,9 +337,9 @@ function ReportCardDark({ card }: { card: TherapyPlan["dashboard"]["report_card"
   return (
     <section className="rounded-2xl border p-5 sm:p-6" style={{ background: D.card, borderColor: D.line }} aria-label="Progress report">
       <div className="flex flex-wrap items-start gap-4">
-        <div className="flex flex-col gap-1.5 rounded-full p-2" style={{ background: "#1F1F27" }} aria-hidden>
+        <div className="flex flex-col gap-1.5 rounded-full p-2" style={{ background: D.page }} aria-hidden>
           {(["improving", "steady", "needs_support"] as ReportStatus[]).map((s) => (
-            <span key={s} className="h-4 w-4 rounded-full" style={{ background: s === card.status ? LIGHT[s].dot : "#3A3A46" }} />
+            <span key={s} className="h-4 w-4 rounded-full" style={{ background: s === card.status ? LIGHT[s].dot : D.line }} />
           ))}
         </div>
         <div className="min-w-0 flex-1">
@@ -353,7 +353,7 @@ function ReportCardDark({ card }: { card: TherapyPlan["dashboard"]["report_card"
         {[["This week", card.this_week, CalendarDays], ["Next step", card.next_step, ArrowRight]].map(([t, v, I]) => {
           const Ico = I as LucideIcon;
           return (
-            <div key={t as string} className="rounded-xl px-4 py-3" style={{ background: "#1F1F27" }}>
+            <div key={t as string} className="rounded-xl px-4 py-3" style={{ background: D.page }}>
               <dt className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: D.soft }}><Ico size={14} /> {t as string}</dt>
               <dd className="mt-1 text-sm" style={{ color: D.ink }}>{v as string}</dd>
             </div>
@@ -400,7 +400,7 @@ function Steps({ steps }: { steps: { label: string; state: "done" | "current" | 
       {steps.map((s, i) => (
         <li key={s.label} className="flex items-center gap-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold"
-            style={s.state === "current" ? { background: D.accent, color: "#1B1B21" } : s.state === "done" ? { background: `${D.accent}26`, color: D.accent } : { border: `1px dashed ${D.line}`, color: D.muted }}>
+            style={s.state === "current" ? { background: D.accent, color: "#FFFFFF" } : s.state === "done" ? { background: `${D.accent}26`, color: D.accent } : { border: `1px dashed ${D.line}`, color: D.muted }}>
             {s.state === "done" ? <CheckCircle2 size={17} /> : s.state === "locked" ? <Lock size={14} /> : i + 1}
           </span>
           <div>
@@ -449,7 +449,7 @@ function WordLadderDark({ words }: { words: NonNullable<TherapyPlan["word_level"
           const cur = step === words.level && !words.mastered;
           return (
             <li key={step} className="grid h-9 min-w-[2.25rem] place-items-center rounded-full px-2 text-sm font-semibold"
-              style={cur ? { background: D.cross, color: "#1B1B21" } : done ? { background: `${D.cross}33`, color: D.cross } : { border: `1px dashed ${D.line}`, color: D.muted }}>
+              style={cur ? { background: D.cross, color: "#FFFFFF" } : done ? { background: `${D.cross}33`, color: D.cross } : { border: `1px dashed ${D.line}`, color: D.muted }}>
               {done ? "⭐" : step <= words.word_levels ? step : `P${step - words.word_levels}`}
             </li>
           );
@@ -465,7 +465,7 @@ function GoalsDark({ goals }: { goals: Goal[] }) {
     <DCard title="Your goals">
       <ul className="space-y-2">
         {goals.map((g) => (
-          <li key={g.id} className="flex items-start gap-2.5 rounded-xl px-4 py-3 text-sm" style={{ background: "#1F1F27" }}>
+          <li key={g.id} className="flex items-start gap-2.5 rounded-xl px-4 py-3 text-sm" style={{ background: D.page }}>
             {g.met ? <CheckCircle2 size={18} className="mt-0.5 shrink-0" style={{ color: D.accent }} /> : <Circle size={18} className="mt-0.5 shrink-0" style={{ color: D.muted }} />}
             <span>
               <span className="font-medium" style={{ color: D.ink }}>{g.text}</span>
@@ -493,10 +493,10 @@ function Medal({ badge, size = 52 }: { badge: Badge; size?: number }) {
   return (
     <div className="grid shrink-0 place-items-center rounded-2xl" style={{
       width: size, height: size,
-      background: badge.earned ? `linear-gradient(145deg, ${s.from}, ${s.to})` : "rgba(255,255,255,0.04)",
+      background: badge.earned ? `linear-gradient(145deg, ${s.from}, ${s.to})` : D.page,
       boxShadow: badge.earned ? `0 10px 24px -10px ${s.to}` : undefined, border: badge.earned ? undefined : `1px dashed ${D.line}`,
     }}>
-      <Icon size={size * 0.42} strokeWidth={2.2} style={{ color: badge.earned ? "#1B1B21" : D.muted }} />
+      <Icon size={size * 0.42} strokeWidth={2.2} style={{ color: badge.earned ? "#FFFFFF" : D.muted }} />
     </div>
   );
 }
@@ -517,7 +517,7 @@ export function BadgesDark({ badges, compact = false }: { badges: Badge[]; compa
             <Medal badge={b} /><span className="text-xs font-medium" style={{ color: b.earned ? D.ink : D.muted }}>{b.title}</span>
           </li>
         ) : (
-          <li key={b.id} className="flex items-center gap-3 rounded-xl p-3" style={{ background: b.earned ? "#2C2C36" : "#22222A" }}>
+          <li key={b.id} className="flex items-center gap-3 rounded-xl p-3" style={{ background: b.earned ? "#F7F5FF" : D.page }}>
             <Medal badge={b} size={48} />
             <div className="min-w-0">
               <p className="text-sm font-semibold" style={{ color: b.earned ? D.ink : D.soft }}>{b.title}</p>
@@ -562,7 +562,7 @@ export default function ProgressDark({ plan }: { plan: TherapyPlan }) {
       {!p.has_data ? (
         <DCard title="No results yet">
           <p className="text-sm" style={{ color: D.soft }}>Complete any exercise from your therapy plan and save your result. Your score trend, weekly activity, practice mix and badges will appear here as charts.</p>
-          <Link to="/therapy-plan" className="mt-3 inline-flex rounded-lg px-3 py-2 text-sm font-semibold" style={{ background: D.accent, color: D.page }}>Open my plan</Link>
+          <Link to="/therapy-plan" className="mt-3 inline-flex rounded-lg px-3 py-2 text-sm font-semibold" style={{ background: D.accent, color: "#FFFFFF" }}>Open my plan</Link>
         </DCard>
       ) : (
         <>
